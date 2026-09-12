@@ -3,7 +3,7 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ConfirmedDeleteForm } from '@/components/grid/bulk-confirm'
-import { formatDateTime, relationshipLabel } from '@/components/grid/resource-grid'
+import { formatDateTime, relationshipLabel } from '@/components/grid/format'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { request } from '@/lib/jsonapi/client'
@@ -22,10 +22,19 @@ import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
  * 세 요청(상세 하나 + 선택 목록 둘)을 병행한다 - 서로 의존하지 않는다
  * (app/(admin)/page.tsx 가 다섯 요청을 Promise.all 로 묶는 것과 같은 이유).
  * `detailRequest` 는 `include=category,tags` 를 반드시 싣는다(그 파일
- * 머리말) - `components/grid/resource-grid.tsx` 의 `relationshipLabel` 을
- * 그대로 가져와 그 `included` 를 실제로 읽어 현재 분류·라벨을 이름으로
- * 보여준다. 이것을 빼면 실측된 결함(배지가 UUID 로 그려지거나 조용히
- * "분류 없음"이 됨)이 바로 이 자리에서 재현된다.
+ * 머리말) - `components/grid/format.ts` 의 `relationshipLabel` 을 그대로
+ * 가져와 그 `included` 를 실제로 읽어 현재 분류·라벨을 이름으로 보여준다.
+ * 이것을 빼면 실측된 결함(배지가 UUID 로 그려지거나 조용히 "분류 없음"이
+ * 됨)이 바로 이 자리에서 재현된다.
+ *
+ * **`relationshipLabel`·`formatDateTime` 를 `resource-grid.tsx` 가 아니라
+ * `format.ts` 에서 가져온다.** `resource-grid.tsx` 는 `'use client'` 라 그
+ * 파일의 모든 export(컴포넌트가 아닌 평범한 함수도)가 RSC 클라이언트
+ * 참조가 된다 - 이 화면(서버 컴포넌트)이 거기서 직접 값으로 import 해
+ * 호출하면 "Attempted to call ... from the server" 로 프로덕션 빌드에서
+ * 죽는다(실측, Task 13 - 관계가 있든 없든 상세 화면 전부가 이 자리에서
+ * 죽었었다). `format.ts` 에는 그 지시어가 없어 서버·클라이언트 어느 쪽에서
+ * import 해도 안전하다.
  *
  * 읽기 실패는 던진다(`error.tsx`/`notFound()` 가 받는다) - 이 화면 안에서
  * 사용자가 스스로 고칠 수 있는 것이 없다(examples/page.tsx 와 같은 선택).

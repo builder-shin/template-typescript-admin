@@ -37,8 +37,8 @@ export interface OptionItem {
 
 /**
  * 목록 문서를 선택 목록으로 바꾼다. `name` 이 문자열이 아니면(계약 위반) id
- * 로 대신한다 - components/grid/resource-grid.tsx 의 `relationshipLabel` 과
- * 같은 방어다.
+ * 로 대신한다 - components/grid/format.ts 의 `relationshipLabel` 과 같은
+ * 방어다.
  */
 export function optionsFromDocument(document: CollectionDocument): OptionItem[] {
   return document.data.map((object) => {
