@@ -37,8 +37,18 @@ const HIDE_KEY = 'hide'
  * 결과 집합 안의 위치를 가리키는 page 키만 잡는다. `page[size]`·`page[totals]`
  * 는 위치가 아니라 표현 방식이라 여기 없다 - 앞은 `pageSize` 필드가 이미
  * 맡고, 뒤는 `gridQuery` 가 항상 켠다(query.ts 머리말).
+ *
+ * export 한다 - `components/grid/resource-grid.tsx` 가 커서 페이지 이동에서
+ * 같은 판정을 다시 써야 한다. 예전에는 두 파일이 바이트 그대로 같은 정규식을
+ * 각자 갖고 있었다 - 한쪽만 고치면(예: 백엔드가 새 위치 키를 추가해도) 다른
+ * 쪽이 조용히 낡는다.
+ *
+ * `lib/jsonapi/query.ts` 도 같은 어휘(`number`·`after`·`before`)를 `Set` 으로
+ * 갖고 있지만(`PAGE_KEY_LIST`) 그건 복사해 온 코어라 손대지 않는다 - 그 파일은
+ * 이 저장소에서 실제로 쓰이는 조립기가 아니다(`lib/AGENTS.md` 의 "복사해 온
+ * 코어 안에서, 이 저장소가 실제로 쓰지 않는 자리" 절 참고).
  */
-const PAGE_POSITION_PATTERN = /^page\[(number|after|before)\]$/
+export const PAGE_POSITION_PATTERN = /^page\[(number|after|before)\]$/
 
 /**
  * 상한(`MAX_PAGE_SIZE`)은 `query.ts` 가 정의한다 - 그 파일 머리말이 이유를

@@ -41,11 +41,12 @@ const HANGUL = /[가-힣]/
  * 보호 경로여야 하고(`/login` 을 뺀 전부가 보호된다), `DEFAULT_POST_LOGIN_PATH`
  * (`/`)와 달라야 한다.
  *
- * `/examples`(목록)가 아니라 `/examples/new` 를 쓴다 - 목록 화면은
- * `<ResourceGrid>` 만 그려 고유한 `<h1>` 이 없다(사이드바 셸의 "Dashboard"
- * 뿐이다). "URL 만 맞고 실제로는 다른 것이 그려졌을 가능성"을 막으려면
- * 화면 자신의 제목을 단언해야 하는데, 그러려면 자기 h1(`예제 만들기`)을
- * 가진 화면이어야 한다.
+ * `/examples/new` 를 쓴다 - "URL 만 맞고 실제로는 다른 것이 그려졌을
+ * 가능성"을 막으려면 화면 자신의 제목을 단언해야 한다. 셸 헤더
+ * (site-header.tsx)가 이제 경로마다 다른 제목을 그리므로(`/examples`(목록)
+ * 도 포함해 넷 다) 어느 보호 경로를 골라도 이 목적은 이룰 수 있지만,
+ * `/examples/new` 를 그대로 둔다 - 이 경로가 이미 검증된 값이고 바꿀
+ * 이유가 없다.
  */
 const RETURN_PATH = '/examples/new?probe=e2e-return'
 
@@ -157,6 +158,14 @@ test.describe('가입(프로비저닝) · 로그인 · 로그아웃', () => {
     // next 없이 로그인했으므로 기본 목적지(`/`)로 간다.
     await expect(page).toHaveURL('/')
 
+    // health.ts → page.tsx → section-cards.tsx → healthLabel → DOM 이라는
+    // 사슬 전체를 실제로 렌더까지 덮는 e2e 시나리오가 이전에는 없었다 - 이
+    // 자리가 로그인 직후 `/`에 착지하는 유일한 지점이라 여기 끼운다. 정본
+    // 백엔드가 떠 있으므로 `/health/ready`는 healthy 여야 하고, 카드는
+    // "정상"을 그려야 한다.
+    const healthCard = page.locator('[data-slot="card"]').filter({ hasText: '백엔드 상태' })
+    await expect(healthCard.locator('[data-slot="card-title"]')).toHaveText('정상')
+
     const established = await sessionCookies(context)
     expect(established.map((cookie) => cookie.name)).toEqual(SESSION_COOKIE_NAMES)
 
@@ -220,8 +229,9 @@ test.describe('가입(프로비저닝) · 로그인 · 로그아웃', () => {
     // 살아 있어야 한다 - LOGIN_REDIRECT_PARAM 계약(proxy.ts)의 유일한 왕복
     // 시험이다(단위는 "그 이름으로 붙이는가"까지만 본다).
     await expect(page).toHaveURL(RETURN_PATH)
-    // h1 이 둘이다 - 사이드바 셸의 고정 "Dashboard"(site-header.tsx)가 항상
-    // 먼저 그려지고, 화면 고유의 제목("예제 만들기")이 그 뒤에 온다.
+    // 셸 헤더(site-header.tsx)가 경로별 제목을 그린다 - `/examples/new` 에는
+    // 그것 말고 다른 h1 이 없으므로(화면 자신의 제목을 site-header 하나로
+    // 옮겼다) `.last()` 는 그 하나를 그대로 가리킨다.
     await expect(page.getByRole('heading', { level: 1 }).last()).toHaveText('예제 만들기')
   })
 

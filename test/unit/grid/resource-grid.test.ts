@@ -2,13 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRows,
   extractCell,
-  formatDateTime,
   pageHref,
   readRowCount,
-  relationshipLabel,
   sortingStateFromToken,
   sortTokenFromState,
 } from '@/components/grid/resource-grid'
+import { formatDateTime, relationshipLabel } from '@/components/grid/format'
 import { indexResources } from '@/lib/jsonapi/normalize'
 import type { CollectionDocument, ResourceObject } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'

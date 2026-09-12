@@ -59,8 +59,6 @@ export default async function NewExamplePage() {
         목록으로
       </Button>
 
-      <h1 className="text-xl font-semibold">예제 만들기</h1>
-
       <ExampleForm
         action={createExampleAction}
         categories={optionsFromDocument(categories)}

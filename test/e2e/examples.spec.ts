@@ -150,8 +150,9 @@ test.describe('생성 폼', () => {
 
     // 착지 - 성공하면 상세로 간다(actions.ts 의 createExampleAction).
     await expect(page).toHaveURL(/\/examples\/[^/]+$/)
-    // h1 이 둘이다 - 사이드바 셸의 고정 "Dashboard"(site-header.tsx)가 항상
-    // 먼저 그려지고, 화면 고유의 제목이 그 뒤에 온다. 마지막 것이 화면 것이다.
+    // h1 이 둘이다 - 셸 헤더(site-header.tsx)가 경로별 제목("예제 상세")을
+    // 먼저 그리고, 화면 고유의 제목(이 예제 자신의 title)이 그 뒤에 온다.
+    // 마지막 것이 화면 것이다.
     await expect(page.getByRole('heading', { level: 1 }).last()).toHaveText(title)
 
     // 이 태스크가 갚는 빚 - "제출이 성공했다"가 아니라 "그 분류 이름과 그

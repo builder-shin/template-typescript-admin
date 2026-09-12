@@ -28,7 +28,12 @@ import {
 } from 'lucide-react'
 
 import { serverDrivenTableOptions } from '@/lib/grid/table'
-import { readGridState, writeGridState, type GridState } from '@/lib/grid/state'
+import {
+  PAGE_POSITION_PATTERN,
+  readGridState,
+  writeGridState,
+  type GridState,
+} from '@/lib/grid/state'
 import { runBulk, type BulkOutcome, type BulkReport } from '@/lib/bulk/executor'
 import type { ColumnDef, ColumnKind, ResourceDef } from '@/lib/resources'
 import type { CollectionDocument, ResourceObject } from '@/lib/jsonapi/document'
@@ -59,18 +64,6 @@ import { BulkConfirmPanel } from './bulk-confirm'
 import { BulkProgress, BulkResultTable, mergeRetryReport } from './bulk-result'
 import { formatDateTime, relationshipLabel } from './format'
 import { SelectionBar } from './selection-bar'
-
-/**
- * `relationshipLabel`·`formatDateTime` 을 다시 내보낸다 - 이 파일에
- * 그대로 있으면 서버 컴포넌트(`app/(admin)/examples/[id]/page.tsx`)가 여기서
- * 값으로 import 할 때 이 파일 맨 위의 `'use client'` 때문에 "클라이언트 함수를
- * 서버에서 호출했다"로 죽는다(실측 - `./format.ts` 머리말 참고) - 그래서 실제
- * 정의는 `'use client'` 가 없는 `./format.ts` 로 옮겼다. 이 재수출은 이 파일을
- * 가져다 쓰던 기존 소비자(`test/unit/grid/resource-grid.test.ts`)의 import
- * 경로를 그대로 유지하기 위해서다 - 새 소비자는 `./format` 에서 직접
- * import 해라.
- */
-export { formatDateTime, relationshipLabel }
 
 /**
  * `examples`·`exampleCategories`·`exampleTags` 어느 자원이든 그리는 서버 구동
@@ -235,8 +228,6 @@ function buildColumns(resource: ResourceDef) {
     ),
   ]
 }
-
-const PAGE_POSITION_PATTERN = /^page\[(number|after|before)\]$/
 
 /**
  * 백엔드가 `links.next`/`links.prev` 에 실어 준 커서를 우리 URL 로 옮긴다.
