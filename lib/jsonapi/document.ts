@@ -2,7 +2,7 @@
  * JSON:API 1.1 문서의 타입과 판별.
  *
  * 이 파일은 자원을 모른다 - 'examples' 같은 자원 이름 문자열이 여기 나타나면
- * 계층 위반이다(스펙 4장). 백엔드 템플릿들의 app/jsonapi/ 와 마주 보는 계층이다.
+ * 계층 위반이다. 백엔드 템플릿들의 app/jsonapi/ 와 마주 보는 계층이다.
  *
  * 타입은 실제 정본 응답을 캡처해서 맞췄다(test/fixtures/documents.ts). 특히:
  * - ErrorObject.status 는 숫자가 아니라 문자열이다("422").

@@ -4,7 +4,7 @@ import type { ErrorObject } from './document'
 /**
  * ErrorObject 의 분류와 동작 분기.
  *
- * 문구는 이 파일이 만들지 않는다(스펙 9.2). 백엔드가 Accept-Language 를
+ * 문구는 이 파일이 만들지 않는다. 백엔드가 Accept-Language 를
  * 협상해 title·detail 을 ko/en 으로 내려주므로 그대로 표시한다. 카탈로그를
  * 프론트에 두 벌 유지하면 백엔드가 문구를 고쳐도 화면은 옛 문구를 보여주는
  * 상태가 조용히 생긴다 - 정본은 백엔드다.
@@ -45,7 +45,7 @@ export function placeError(error: ErrorObject): ErrorPlacement {
 
 /**
  * `transport`는 client.ts 가 합성한 오류(NETWORK_ERROR 등, 백엔드가 응답조차
- * 주지 못한 경우)를 위한 갈래다. 스펙 9.2: 이건 JSON:API 오류가 아니라서 화면(배너·폼)이 아니라
+ * 주지 못한 경우)를 위한 갈래다. 이건 JSON:API 오류가 아니라서 화면(배너·폼)이 아니라
  * `app/error.tsx`가 받는다. 나머지 넷과 달리 code 문자열이 아니라
  * `isSyntheticError`(client.ts)로 판정한다 - 아래 actionForCode 참고.
  */

@@ -207,7 +207,7 @@ describe('request — 응답 해석', () => {
   })
 
   it('재시도하지 않는다', async () => {
-    // 스펙 7.2: 회전은 미들웨어에서만 일어난다. 여기서 재시도하면 여러 서버
+    // 회전은 미들웨어에서만 일어난다. 여기서 재시도하면 여러 서버
     // 컴포넌트가 동시에 회전을 시도해 TOKEN_REVOKED 로 로그아웃된다.
     fetchMock.mockResolvedValue(jsonApiResponse(ERROR_NOT_FOUND, 401))
     await request('/api/v1/examples')
@@ -263,8 +263,8 @@ describe('request — 응답 해석', () => {
   it('네트워크 실패의 원문 예외 메시지는 detail 이 아니라 meta 로 간다', async () => {
     // 실측된 결함(수정 전): detail 이 error.message('fetch failed')를 그대로
     // 담아 groupErrors(...).document 가 그 영어 원문을 그대로 사용자 배너에
-    // 띄웠다. detail 은 항상 고정 문구여야 하고(스펙 9.2 가 허용하는, 프론트가
-    // 소유하는 세 문장 중 하나), 원문 예외 메시지는 디버깅을 위해 meta 에만
+    // 띄웠다. detail 은 항상 고정 문구여야 하고(프론트가 소유하는 세 문장 중
+    // 하나), 원문 예외 메시지는 디버깅을 위해 meta 에만
     // 남긴다 - 완전히 버리지는 않는다.
     fetchMock.mockRejectedValue(new TypeError('fetch failed'))
     const result = await request('/api/v1/examples')
@@ -292,7 +292,7 @@ describe('request — 응답 해석', () => {
 describe('request — 조립 중 예외를 던지지 않는다', () => {
   // fetch 호출 전 요청 조립(JSON.stringify·headers.set)이 동기적으로 던질 수
   // 있는데 그 던짐을 감싸는 try/catch 가 없으면 여기서 그대로 던진다.
-  // acceptLanguage 는 스펙 9.2 에 따라 미들웨어가 브라우저의 Accept-Language
+  // acceptLanguage 는 미들웨어가 브라우저의 Accept-Language
   // 헤더를 그대로 전달하는 값이라 공격자가 제어할 수 있는 입력이다 - 여기서
   // 던지면 정확히 이 모듈이 막으려던 흰 페이지가 된다.
   // fetch 는 아예 호출되지 않아야 한다 - 조립에 실패한 요청을 보낼 이유가 없다.

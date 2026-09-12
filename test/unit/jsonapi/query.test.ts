@@ -34,7 +34,7 @@ describe('toBackendQuery — JSON:API 파라미터 문법만 통과시킨다', (
   })
 
   it('자원 정책에 없는 필터 이름도 그대로 보낸다', () => {
-    // 스펙 8.1: 프론트가 미리 걸러내면 백엔드 계약이 실제로 어떻게 반응하는지
+    // 프론트가 미리 걸러내면 백엔드 계약이 실제로 어떻게 반응하는지
     // 이 템플릿에서 볼 수 없게 된다. 백엔드가 INVALID_FILTER 로 거절한다.
     const out = toBackendQuery(q('filter[nope]=1'))
     expect(out.get('filter[nope]')).toBe('1')
@@ -164,7 +164,7 @@ describe('buildQuery — 프로그램으로 조립한다', () => {
   })
 
   it('totals 가 false 면 파라미터를 아예 내지 않는다', () => {
-    // 스펙 8.3: page[totals] 는 기본으로 켜지 않는다. 백엔드가 COUNT 를
+    // page[totals] 는 기본으로 켜지 않는다. 백엔드가 COUNT 를
     // 피하려고 만든 계약이므로 총 개수를 실제로 표시할 때만 켠다.
     expect(buildQuery({ page: { totals: false } }).has('page[totals]')).toBe(false)
   })
@@ -298,7 +298,7 @@ describe('hasFilterParams — filter 가족만 본다', () => {
   })
 
   it('값이 비어 있어도 필터가 걸린 것이다', () => {
-    // 필터 바에서 빈 값을 보내는 것은 백엔드가 판정할 일이고(스펙 8.1),
+    // 필터 바에서 빈 값을 보내는 것은 백엔드가 판정할 일이고,
     // 화면 입장에서는 "사용자가 조건을 걸었다" 가 이미 참이다.
     expect(hasFilterParams(q('filter[probeMode]='))).toBe(true)
   })
@@ -488,8 +488,8 @@ describe('canonicalFilterParameter — 중복 판정 키로 접는다', () => {
   })
 
   it('모르는 연산자는 그대로 둔다', () => {
-    // 화면이 만들 수 있는 이름이 아니므로 소유일 수 없다. 스펙 8.1 대로
-    // 백엔드까지 가서 판정받아야 한다.
+    // 화면이 만들 수 있는 이름이 아니므로 소유일 수 없다. 백엔드까지 가서
+    // 판정받아야 한다.
     expect(canonicalFilterParameter('filter[probeMode][probeNever]')).toBe(
       'filter[probeMode][probeNever]',
     )

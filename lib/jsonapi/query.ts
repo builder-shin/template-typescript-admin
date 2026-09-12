@@ -2,8 +2,8 @@
  * JSON:API 쿼리 파라미터 직렬화.
  *
  * 이 파일이 강제하는 것은 JSON:API 의 파라미터 문법이지 자원의 필터·정렬
- * 정책이 아니다. 스펙 3장("allowlist 강제")과 8.1("허용목록에 없는 파라미터는
- * 그대로 보낸다")은 서로 다른 allowlist 를 말한다.
+ * 정책이 아니다. "allowlist 강제"와 "허용목록에 없는 파라미터는 그대로
+ * 보낸다"는 서로 다른 allowlist 를 말한다.
  *
  * - 문법: filter[...] · sort · include · page[...] 네 가족만 백엔드로 나간다.
  *   utm_source 같은 남의 파라미터는 도달하지 않는다.
@@ -11,10 +11,10 @@
  *   백엔드가 INVALID_FILTER 로 거절하며, 그 오류를 화면이 띄운다. 프론트가
  *   미리 걸러내면 백엔드 계약이 실제로 어떻게 반응하는지 볼 수 없게 된다.
  *
- * lib/jsonapi/ 는 자원 정책을 알 수 없으므로(스펙 4장) 다른 해석이 애초에
+ * lib/jsonapi/ 는 자원 정책을 알 수 없으므로 다른 해석이 애초에
  * 불가능하다.
  *
- * 커서 문자열은 만들지 않는다(스펙 8.3). 백엔드가 links.next·links.prev 를
+ * 커서 문자열은 만들지 않는다. 백엔드가 links.next·links.prev 를
  * opaque 하게 발행하므로 프론트는 링크를 따라가기만 한다.
  */
 
@@ -62,7 +62,7 @@ export function pageParameter(key: PageKey): string {
  * offset 모드의 `number` 와 커서 모드의 `after`·`before` 가 한 집합인 이유:
  * 셋 다 "어떤 결과 집합의 몇 번째" 를 뜻하므로 **그 집합이 달라지면 전부
  * 무의미해진다.** 커서는 특히 그렇다 - base64url 안에 정렬 서명이 들어 있어
- * 정렬이 바뀌면 같은 커서가 400 이 된다(스펙 8.3).
+ * 정렬이 바뀌면 같은 커서가 400 이 된다.
  */
 const PAGE_POSITION_KEYS: ReadonlySet<string> = new Set(['number', 'after', 'before'])
 
@@ -146,7 +146,7 @@ export function hasFilterParams(params: URLSearchParams): boolean {
  * 아니라 **URL 에 있는 필터 전부**를 지워야 한다 - 바가 표현하지 못하는 필터를
  * 남기면 사용자가 지우기를 눌러도 조건이 남고, 그것을 없앨 컨트롤이 화면에
  * 하나도 없다. `filterQuery`(다음 조건으로 이동)와는 판정이 다르다 - 그쪽은
- * 바가 **소유한** 이름만 다시 쓰고 나머지는 그대로 옮긴다(스펙 8.1).
+ * 바가 **소유한** 이름만 다시 쓰고 나머지는 그대로 옮긴다.
  */
 export function isFilterParameter(name: string): boolean {
   return FILTER_PATTERN.test(name)
@@ -172,7 +172,7 @@ export function isFilterParameter(name: string): boolean {
  * 모르는 *page 키* 는 여기서 걸러진다. 근거는 이 파일 머리말의 구분이다 -
  * `filter[...]` 는 **문법이 맞고 정책만 모르는** 이름이라 판정이 백엔드의
  * 것이고, `page[offset]` 은 **문법 자체가 이 계약에 없다**(page 는 키 집합이
- * 닫혀 있다 - 위 `PAGE_KEY_LIST`). 스펙 8.1 의 "허용목록에 없는 파라미터는
+ * 닫혀 있다 - 위 `PAGE_KEY_LIST`). "허용목록에 없는 파라미터는
  * 그대로 보낸다" 는 정책 allowlist 를 말하는 것이지 문법을 말하지 않는다.
  */
 export function isPageParameter(name: string): boolean {
@@ -238,7 +238,7 @@ function isFilterOperator(value: string): value is FilterOperator {
  *
  * 접은 뒤 비교하면 그 별칭이 닫힌다. 모르는 연산자(`filter[f][bogus]`)는 접지
  * 않고 그대로 둔다 - 화면이 만들 수 있는 이름이 아니므로 소유일 수 없고,
- * 스펙 8.1 대로 백엔드까지 가서 판정받아야 한다.
+ * 백엔드까지 가서 판정받아야 한다.
  */
 export function canonicalFilterParameter(parameter: string): string {
   const match = FILTER_PATTERN.exec(parameter)
@@ -319,7 +319,7 @@ export interface SortTerm {
  * 것이 아니다. 자원마다 다른 값이 아니고, 자원을 하나도 몰라도 정의된다 -
  * 이 디렉터리가 가져도 되는 "JSON:API 문법 자체"에 해당한다(AGENTS.md).
  *
- * URL 의 `?sort=` 값과 백엔드가 받는 값이 모두 이 문자열이므로(스펙 8.1)
+ * URL 의 `?sort=` 값과 백엔드가 받는 값이 모두 이 문자열이므로
  * 화면은 URL 조각을 그대로 `parseSortToken` 에 넣고, 고른 정렬을 URL 로
  * 되돌릴 때 `formatSortToken` 을 쓴다.
  *
@@ -392,7 +392,7 @@ export function buildQuery(input: QueryInput): URLSearchParams {
   if (page !== undefined) {
     if (page.number !== undefined) out.set(pageParameter('number'), String(page.number))
     if (page.size !== undefined) out.set(pageParameter('size'), String(page.size))
-    // 켤 때만 낸다 - 백엔드가 COUNT 를 피하려고 만든 계약이다(스펙 8.3).
+    // 켤 때만 낸다 - 백엔드가 COUNT 를 피하려고 만든 계약이다.
     //
     // "=== true" 를 Boolean(page.totals) 같은 truthy 검사로 바꿔도 동작은
     // 같다 - 이 비교는 등가 뮤턴트다. PageInput.totals 의 타입이
@@ -422,7 +422,7 @@ const LINK_PARSE_ORIGIN = 'http://links.invalid'
  * 순회)은 방향이 반대이지만 "링크 문자열에서 쿼리만 뽑는다"는 판단은
  * 하나다. `resourcePath`(`lib/resources/define.ts`)의 주석과 같은 이유로
  * 한 자리에 모았다 - 조립 규칙이 두 곳에 흩어지면 한쪽만 고치는 사고가 난다.
- * 커서 값 자체는 이 함수도 해석하지 않는다(스펙 8.3) - `URLSearchParams`가
+ * 커서 값 자체는 이 함수도 해석하지 않는다 - `URLSearchParams`가
  * 쥐는 것은 여전히 opaque 문자열이다.
  */
 export function linkQuery(link: string): URLSearchParams | null {

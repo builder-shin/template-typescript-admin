@@ -166,7 +166,7 @@ describe('isResourceObject', () => {
   })
 
   it('attributes 없이 links 만 있어도 자원 객체다', () => {
-    // 같은 이유다. 참조 자원에 self 링크가 생기면(스펙 6.5) 실제로 나오는 모양.
+    // 같은 이유다. 참조 자원에 self 링크가 생기면 실제로 나오는 모양.
     expect(
       isResourceObject({ type: 'probeThings', id: 'probe-1', links: { self: '/probe/things/1' } }),
     ).toBe(true)

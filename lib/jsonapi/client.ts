@@ -2,12 +2,12 @@ import { getSettings } from '@/lib/config/settings'
 import { isErrorDocument, type ErrorObject } from './document'
 
 /**
- * 백엔드로 나가는 유일한 문. app/ 에서 fetch 를 직접 부르면 계층 위반이다(스펙 4장).
+ * 백엔드로 나가는 유일한 문. app/ 에서 fetch 를 직접 부르면 계층 위반이다.
  *
  * 재시도하지 않는다. 백엔드는 refresh 회전 시 구 refresh token 을 즉시
  * 폐기하므로, 여기서 401 에 재시도를 붙이면 한 페이지의 여러 서버 컴포넌트가
  * 동시에 회전을 시도해 두 번째부터 TOKEN_REVOKED 로 실패한다. 회전은
- * proxy.ts 에서만 일어난다(스펙 7.2 - 스펙은 middleware.ts 라고 적지만
+ * proxy.ts 에서만 일어난다(스펙은 middleware.ts 라고 적지만
  * Next 16 이 그 컨벤션을 폐기해 proxy.ts 로 옮겼다).
  *
  * 요청마다 달라지는 입력 때문에는 어떤 경우에도 던지지 않는다. 네트워크
@@ -23,7 +23,7 @@ import { isErrorDocument, type ErrorObject } from './document'
  * 예외 없이 `error.tsx`로 강제된다. 반면 지금처럼 `ok:false`로 돌려주면,
  * 호출자는 `actionForErrors`(errors.ts)가 이 셋에 붙이는 `'transport'`
  * 분류를 보고 스스로 정할 수 있다 - 읽기 경로는 던져서 `error.tsx`를 띄우는
- * 쪽을 고를 수도 있고(스펙 9.2), 폼을 다루는 호출자는 화면 전환 없이 다르게
+ * 쪽을 고를 수도 있고, 폼을 다루는 호출자는 화면 전환 없이 다르게
  * 처리하는 쪽을 고를 수도 있다. "합성할지"는 이 파일이 정하지만 "던질지"는
  * 이 파일이 정하지 않는다.
  *
@@ -79,15 +79,15 @@ export interface RequestOptions {
  * 예외 메시지를 담지 않는다. groupErrors 가 `detail`을 그대로 사용자 배너에
  * 그리므로(errors.ts), 여기 원문이 들어가면 "fetch failed" 같은 영어 엔진
  * 메시지가 사용자에게 그대로 보인다(실측된 결함). 원문은 디버깅에
- * 필요하므로 완전히 버리지 않고 `meta.cause`에 남긴다 - `meta`는 스펙 9.2 가
- * 말하는 "사용자에게 보이는 문구" 자리가 아니다.
+ * 필요하므로 완전히 버리지 않고 `meta.cause`에 남긴다 - `meta`는
+ * "사용자에게 보이는 문구" 자리가 아니다.
  *
  * `meta.synthetic`도 같은 이유로 여기 둔다 - 이
  * 오류가 백엔드가 아니라 이 함수가 지어낸 것이라는 표시다. `cause`와 달리
  * 조건 없이 항상 붙인다 - NON_JSONAPI_RESPONSE 의 두 호출부는 `cause`를
  * 넘기지 않으므로 `cause` 유무로는 셋을 하나로 묶어 판정할 수 없다.
  * isSyntheticError(아래)가 이 표시로 판정하고, errors.ts 의 actionForErrors
- * 가 그 판정으로 `'transport'`를 고른다(스펙 9.2) - 화면은 code 문자열을
+ * 가 그 판정으로 `'transport'`를 고른다 - 화면은 code 문자열을
  * 몰라도 된다.
  */
 function synthesizeError(
@@ -128,7 +128,7 @@ export function isSyntheticError(error: ErrorObject): boolean {
 }
 
 /**
- * 브라우저가 보낸 `Accept-Language` 를 요청 옵션에 얹는다(스펙 9.2).
+ * 브라우저가 보낸 `Accept-Language` 를 요청 옵션에 얹는다.
  *
  * ## 왜 함수가 필요한가 - `exactOptionalPropertyTypes`
  *
@@ -146,12 +146,12 @@ export function isSyntheticError(error: ErrorObject): boolean {
  *
  * **값을 판단하지 않는다.** 없으면(`null`/`undefined`) 키를 빼고, 있으면
  * 무엇이든 그대로 넘긴다. 빈 문자열도 그대로 간다 - 브라우저가 보낸 헤더를
- * 프론트가 편집하지 않는 것이 스펙 9.2 의 정신이고(문구의 정본은 백엔드다),
+ * 프론트가 편집하지 않는다는 원칙이고(문구의 정본은 백엔드다),
  * 백엔드는 빈 값을 기본 언어로 처리한다(정본 `resolve_language` 확인).
  * 유효하지 않은 값이 헤더에 못 들어가는 경우는 `request()` 가 이미
  * `REQUEST_ASSEMBLY_FAILED` 로 다룬다.
  *
- * 이 계층에 두는 이유는 스펙 4장이 `lib/jsonapi/` 에 "HTTP 협상"을 맡기기
+ * 이 계층에 두는 이유는 이 디렉터리가 "HTTP 협상"을 맡고 있기
  * 때문이다.
  */
 export function withAcceptLanguage(
@@ -174,7 +174,7 @@ export async function request<T>(
   const url = `${getSettings().backendUrl}${path}${query === '' ? '' : `?${query}`}`
 
   // JSON.stringify(순환 참조)와 headers.set(개행 등 유효하지 않은 값)은
-  // 동기적으로 던진다. acceptLanguage 는 스펙 9.2 에 따라 미들웨어가 브라우저의
+  // 동기적으로 던진다. acceptLanguage 는 미들웨어가 브라우저의
   // Accept-Language 를 그대로 전달하는 값이라 공격자가 제어하는 입력이다 -
   // 여기서 던지면 이 모듈이 막으려던 흰 페이지가 그대로 재현된다. 그래서
   // 조립 전체를 감싼다.
