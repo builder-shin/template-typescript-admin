@@ -70,12 +70,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   GripVerticalIcon,
   Columns3Icon,
   ChevronDownIcon,
-  PlusIcon,
   ChevronsLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -323,77 +321,34 @@ function DataTableInner({ data, rowCount }: { data: RecentRow[]; rowCount: numbe
     }
   }
   return (
-    <Tabs defaultValue="outline" className="w-full flex-col justify-start gap-6">
-      <div className="flex items-center justify-between px-4 lg:px-6">
-        <Label htmlFor="view-selector" className="sr-only">
-          View
-        </Label>
-        <Select
-          defaultValue="outline"
-          items={[
-            { label: 'Outline', value: 'outline' },
-            { label: 'Past Performance', value: 'past-performance' },
-            { label: 'Key Personnel', value: 'key-personnel' },
-            { label: 'Focus Documents', value: 'focus-documents' },
-          ]}
-        >
-          <SelectTrigger className="flex w-fit @4xl/main:hidden" size="sm" id="view-selector">
-            <SelectValue placeholder="Select a view" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="outline">Outline</SelectItem>
-              <SelectItem value="past-performance">Past Performance</SelectItem>
-              <SelectItem value="key-personnel">Key Personnel</SelectItem>
-              <SelectItem value="focus-documents">Focus Documents</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <TabsList className="hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:bg-muted-foreground/30 **:data-[slot=badge]:px-1 @4xl/main:flex">
-          <TabsTrigger value="outline">Outline</TabsTrigger>
-          <TabsTrigger value="past-performance">
-            Past Performance <Badge variant="secondary">3</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="key-personnel">
-            Key Personnel <Badge variant="secondary">2</Badge>
-          </TabsTrigger>
-          <TabsTrigger value="focus-documents">Focus Documents</TabsTrigger>
-        </TabsList>
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-              <Columns3Icon data-icon="inline-start" />
-              Columns
-              <ChevronDownIcon data-icon="inline-end" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-32">
-              {table
-                .getAllColumns()
-                .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
-                .map((column) => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  )
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button variant="outline" size="sm">
-            <PlusIcon />
-            <span className="hidden lg:inline">Add Section</span>
-          </Button>
-        </div>
+    <div className="flex w-full flex-col justify-start gap-6">
+      <div className="flex items-center justify-end px-4 lg:px-6">
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+            <Columns3Icon data-icon="inline-start" />
+            열 표시
+            <ChevronDownIcon data-icon="inline-end" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-32">
+            {table
+              .getAllColumns()
+              .filter((column) => typeof column.accessorFn !== 'undefined' && column.getCanHide())
+              .map((column) => {
+                return (
+                  <DropdownMenuCheckboxItem
+                    key={column.id}
+                    className="capitalize"
+                    checked={column.getIsVisible()}
+                    onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                  >
+                    {column.id}
+                  </DropdownMenuCheckboxItem>
+                )
+              })}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
-      <TabsContent
-        value="outline"
-        className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
-      >
+      <div className="relative flex flex-1 flex-col gap-4 overflow-auto px-4 lg:px-6">
         <div className="overflow-hidden rounded-lg border">
           <DndContext
             collisionDetection={closestCenter}
@@ -521,16 +476,7 @@ function DataTableInner({ data, rowCount }: { data: RecentRow[]; rowCount: numbe
             </div>
           </div>
         </div>
-      </TabsContent>
-      <TabsContent value="past-performance" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-      <TabsContent value="key-personnel" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-      <TabsContent value="focus-documents" className="flex flex-col px-4 lg:px-6">
-        <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
-      </TabsContent>
-    </Tabs>
+      </div>
+    </div>
   )
 }

@@ -304,6 +304,35 @@ describe('rotateSession — 실제 fetch 호출', () => {
     })
   })
 
+  it('fetch 에 타임아웃 신호를 함께 보낸다(멈춘 fetch 가 영원히 대기하지 않도록)', async () => {
+    fetchMock.mockResolvedValue(
+      jsonApiResponse({
+        data: {
+          type: 'authTokens',
+          id: 'jti-3',
+          attributes: {
+            accessToken: 'a',
+            refreshToken: 'r',
+            tokenType: 'Bearer',
+            expiresIn: 900,
+            refreshExpiresIn: 2_592_000,
+          },
+        },
+      }),
+    )
+
+    await rotateSession('old-refresh-token', PROBE_ACCEPT_LANGUAGE, NOW)
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    // AbortSignal.timeout() 이 만든 신호인지만 확인한다 - 실제로 시간이 흘러
+    // 거절되는지(타임아웃이 실제로 발동하는지)는 real timer 없이는 결정론적으로
+    // 잴 수 없다(vitest 의 fake timer 는 AbortSignal.timeout 의 내부 구현까지
+    // 대체하지 않는다) - 여기서는 "신호가 붙어 있고 아직 거절되지 않았다"까지만
+    // 잰다.
+    expect(init.signal).toBeInstanceOf(AbortSignal)
+    expect(init.signal?.aborted).toBe(false)
+  })
+
   it('TOKEN_REVOKED 응답 → destroy, 재시도하지 않는다(정확히 1회)', async () => {
     fetchMock.mockResolvedValue(
       jsonApiResponse(

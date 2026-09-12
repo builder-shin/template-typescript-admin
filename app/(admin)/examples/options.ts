@@ -48,14 +48,24 @@ export function optionsFromDocument(document: CollectionDocument): OptionItem[] 
 }
 
 /**
- * `optionsRequest` 의 결과를 문서로 좁힌다 - 실패(!ok)·204(document: null)
- * 둘 다 이 화면이 스스로 고칠 수 없는 예외라 던진다(`examples/page.tsx` 와
- * 같은 선택). `[id]/page.tsx`·`new/page.tsx` 가 분류·라벨 각각에 이 함수를
- * 부른다 - 두 화면에 같은 세 줄짜리 unwrap 을 따로 베끼지 않기 위해서다.
+ * `optionsRequest` 의 결과를 문서로 좁힌다 - `[id]/page.tsx`·`new/page.tsx` 가
+ * 분류·라벨 각각에 이 함수를 부른다.
+ *
+ * **호출부가 `!result.ok` 를 먼저 걸렀다고 가정한다.** 예전에는 이 함수
+ * 자신이 `result.errors[0]?.detail` 을 메시지에 실어 던졌다 - 그러면
+ * `app/error.tsx` 가 그 detail(백엔드가 실제로 준 설명)을 버리고 고정 문구
+ * "백엔드에 연결할 수 없습니다"를 보여준다(검증 오류·500 같은, 백엔드가
+ * 실제로 응답한 경우에도 "연결할 수 없다"는 거짓 진단이 된다). 지금은
+ * 호출부가 `messageForReadFailure`(../read-result.ts)로 먼저 갈라 transport 만
+ * 던지고(그 경우에만 저 고정 문구가 참이다) 그 외는 배너로 그 자리에서
+ * 보여준다 - 이 함수에 `!result.ok` 인 값이 넘어오는 것은 그 자체로 호출부의
+ * 버그다.
  */
 export function unwrapOptionsResult(result: JsonApiResult<CollectionDocument>): CollectionDocument {
   if (!result.ok) {
-    throw new Error(result.errors[0]?.detail ?? '선택 목록을 불러오지 못했습니다.')
+    throw new Error(
+      '내부 오류: 실패한 결과가 unwrapOptionsResult 에 도달했습니다(호출부가 먼저 걸렀어야 한다).',
+    )
   }
   if (result.document === null) {
     throw new Error('선택 목록 응답에 본문이 없습니다.')

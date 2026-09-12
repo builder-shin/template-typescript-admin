@@ -50,6 +50,37 @@ export function isProtectedPath(pathname: string): boolean {
 export const LOGIN_REDIRECT_PARAM = 'next'
 
 /**
+ * 이번 요청의 `${pathname}${search}` 를 downstream 서버 컴포넌트에 넘기는 헤더 이름.
+ *
+ * **왜 필요한가.** Next.js 는 서버 컴포넌트(레이아웃 포함)가 현재 요청의
+ * pathname 을 읽는 공식적인 방법을 제공하지 않는다 - `usePathname()` 문서가
+ * 명시한다: "Reading the current URL from a Server Component is not
+ * supported. This design is intentional to support layout state being
+ * preserved across page navigations."(node_modules/next/dist/docs/01-app/
+ * 03-api-reference/04-functions/use-pathname.md). `app/(admin)/layout.tsx` 는
+ * 서버 컴포넌트라 `searchParams`/`params` 도 받지 않고, 그 계층에서 세션이
+ * 죽은 것을 감지해 `/login`으로 보낼 때 `LOGIN_REDIRECT_PARAM` 에 실을
+ * "지금 보던 경로"를 이 헤더 말고는 구할 방법이 없다.
+ *
+ * **메커니즘은 새로 만든 것이 아니다.** 이 파일이 회전된 access 쿠키를
+ * 같은 요청의 downstream 에 전달하는 데 이미 쓰는 바로 그 기법이다
+ * (`request.cookies.set` 뒤 `NextResponse.next({request:{headers}})`로
+ * 넘기기 - 파일 상단 "이 메커니즘이 실제로 되는가" 절, `request.cookies`
+ * 는 `request.headers` 의 `Cookie` 헤더를 감싼 것뿐이다). 같은 forwarding 을
+ * 쿠키가 아닌 일반 헤더에 적용한 것이 이 상수다 - 실측(pnpm dev + curl,
+ * 이 헤더를 상수 대신 하드코딩한 이전 버전으로): `/login?next=%2Ffoo%2Fbar`
+ * 에 curl 하면 로그인 페이지(서버 컴포넌트)의 `headers()` 가 이 헤더 값으로
+ * 정확히 `/login?next=%2Ffoo%2Fbar` 를 돌려주었다 - 별도 백엔드도 세션
+ * 쿠키도 필요 없었다(이 헤더는 프록시가 다는 것이지 백엔드가 다는 것이
+ * 아니라서).
+ *
+ * 값을 검사하지 않고 그대로 싣는다 - `LOGIN_REDIRECT_PARAM` 을 그대로
+ * bind 하는 login/page.tsx 의 관례(그 파일 주석: "검사는 decideAfterSignIn
+ * 한 곳에서만 한다")와 같은 이유다.
+ */
+export const REQUEST_PATH_HEADER = 'x-admin-request-path'
+
+/**
  * 토큰 회전의 유일한 지점이자 경로 가드.
  *
  * 파일명 이력: 원래 middleware.ts였다. Next.js 16이 "middleware" 파일 컨벤션을
@@ -231,6 +262,12 @@ export async function proxy(request: NextRequest) {
     return redirectResponse
   }
 
+  // REQUEST_PATH_HEADER 상수 선언부 참고 - 서버 컴포넌트가 pathname 을 읽을
+  // 공식적인 방법이 없어서 여기서 실어 보낸다. pendingWrites/clearCookies 를
+  // 건드리는 코드보다 먼저 두는 이유는 없다(순서 무관 - 이 둘은 서로 다른
+  // 헤더/속성을 건드린다) - 그냥 이 응답이 옮기는 것 중 "이번 요청 자체의
+  // 성질"인 것을 먼저 적었을 뿐이다.
+  request.headers.set(REQUEST_PATH_HEADER, `${pathname}${search}`)
   const response = NextResponse.next({ request: { headers: request.headers } })
   for (const write of pendingWrites) {
     response.cookies.set(write.name, write.value, write.attributes)

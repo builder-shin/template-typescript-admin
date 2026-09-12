@@ -195,6 +195,33 @@ export function interpretRotationOutcome(
 }
 
 /**
+ * 회전 fetch 의 타임아웃(ms).
+ *
+ * 이 값이 없으면 백엔드가 **거절이 아니라 그냥 멈출 때**(DB 락, 커넥션 풀
+ * 고갈 등) fetch 가 영원히 대기한다 - 그러면 이 matcher 에 걸리는 모든 요청
+ * (`/login` 포함, proxy.ts 파일 머리말 참고)이 그 fetch 하나를 기다리며 함께
+ * 멈춘다. `outcome.kind === 'unreachable'`(아래)이 막으려는 것이 정확히 이
+ * 사고("백엔드 장애 중 회전이 필요했던 모든 사용자가 로그아웃")인데, 그
+ * 갈래는 client.ts 의 catch(fetch) 가 **거절**을 잡아야만 도달한다 - 멈춘
+ * fetch 는 거절하지 않으므로 타임아웃 없이는 그 갈래에 닿지 못했다.
+ *
+ * `AbortSignal.timeout(ms)` 는 시간이 지나면 그 fetch 를 스스로 거절시킨다
+ * (`AbortError`) - 그러면 client.ts 의 기존 catch(fetch) 가 그 거절을 이미
+ * 다루는 `NETWORK_ERROR`/`status: 0` 경로로 잡고, interpretRotationOutcome
+ * 이 그것을 `unreachable` 로 수렴시킨다(둘 다 새로 만들 필요가 없다 - 멈춘
+ * fetch 를 "거절하는 fetch"로 바꾸는 것이 이 타임아웃의 전부다).
+ *
+ * 5 초를 고른 근거: 이 저장소의 로컬 컨테이너 헬스체크 타임아웃은 전부
+ * 2~3 초(docker-compose.e2e.yml) - 그보다 여유를 둬 정상 범위의 백엔드
+ * 지연(콜드 스타트, 순간 부하)을 오탐해 `unreachable` 로 잘못 넘기지
+ * 않으면서도, 진짜로 멈춘 요청은 무기한이 아니라 몇 초 안에 강제로
+ * 갈래를 타게 한다 - "로그인 화면까지 함께 멈춘다"보다 "몇 초 뒤 회전을
+ * 보류하고 기존 쿠키로 통과시킨다"가 훨씬 싸다(파일 상단 "왜 이대로
+ * 두는가" 절과 같은 저울질이다).
+ */
+const ROTATION_FETCH_TIMEOUT_MS = 5_000
+
+/**
  * 실제로 백엔드에 회전을 요청하는 유일한 자리 - proxy.ts 가 이 함수 하나만
  * 부른다.
  *
@@ -223,6 +250,10 @@ export function interpretRotationOutcome(
  * 나가는 모든 백엔드 호출은 그 요청의 Accept-Language 를 전달한다"는 규칙을
  * 호출부마다 예외 판단 없이 적용한다 - 규칙이 예외보다 단순하고, 어느 오류가
  * 화면에 보이는지는 나중에 바뀔 수 있다.
+ *
+ * `signal` 은 위 ROTATION_FETCH_TIMEOUT_MS 로 만든 `AbortSignal.timeout` 이다 -
+ * `RequestOptions.signal`(client.ts)과 그것을 `init.signal` 로 넘기는
+ * `request()`의 배선은 이미 있었다; 여기서는 그것을 쓰는 것뿐이다.
  */
 export async function rotateSession(
   refreshToken: string,
@@ -235,6 +266,7 @@ export async function rotateSession(
       {
         method: 'POST',
         body: { data: { type: 'refreshTokens', attributes: { refreshToken } } },
+        signal: AbortSignal.timeout(ROTATION_FETCH_TIMEOUT_MS),
       },
       acceptLanguage,
     ),

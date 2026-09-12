@@ -66,7 +66,18 @@ export type JsonApiResult<T> =
   | { ok: false; status: number; errors: ErrorObject[] }
 
 export interface RequestOptions {
-  method?: string
+  /**
+   * `string` 이 아니라 이 저장소가 실제로 쓰는 메서드의 리터럴 합집합이다 -
+   * 넓으면 `'PACTH'`(오타)도, `'PUT'` 도 그냥 컴파일된다. **`PUT` 을 뺀
+   * 이유**: 세 백엔드 전부 `PUT /examples/{id}` 를 `enable_upsert` 업서트로
+   * 등록해 두어 존재하지 않는 id 에도 201 로 새 자원을 만든다(실측,
+   * route_registrar.py) - 수정 폼이 절대 불러서는 안 되는 메서드라 합집합
+   * 자체에서 뺀다(actions.ts 의 같은 실측 참고). `GET` 은 어떤 호출부도
+   * 리터럴로 넘기지 않지만(기본값이라 생략한다, 아래 request() 의
+   * `options.method ?? 'GET'`) 그래도 이 템플릿이 실제로 쓰는 메서드라
+   * 합집합에 남긴다.
+   */
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
   query?: URLSearchParams
   accessToken?: string

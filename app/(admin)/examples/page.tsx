@@ -1,9 +1,11 @@
 import { headers } from 'next/headers'
+import { FormBanner } from '@/components/form/form-banner'
 import { ResourceGrid } from '@/components/grid/resource-grid'
 import { request } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
 import { LOGIN_REDIRECT_PARAM } from '@/proxy'
+import { messageForReadFailure } from '../read-result'
 import { bulkDeleteExampleAction } from './actions'
 import { listRequest, toSearchParams } from './list'
 
@@ -43,11 +45,18 @@ export default async function ExamplesPage({
     ...listRequest(resource, currentParams, (await headers()).get('accept-language')),
   )
 
-  // 읽기 경로는 던져서 error.tsx 를 띄우는 쪽을 고른다(lib/jsonapi/client.ts
-  // 의 request() 문서화된 선택지) - 목록 조회 실패에서 사용자가 이 화면
-  // 안에서 스스로 고칠 수 있는 것이 없다.
+  // transport(실제로 백엔드에 못 닿음)만 던져서 error.tsx 를 띄운다(그
+  // 파일의 "연결할 수 없다"는 고정 문구가 참이 되는 경우가 그것뿐이라서다) -
+  // 그 외 백엔드가 실제로 낸 오류(예: 잘못된 정렬 파라미터의 검증 오류)는
+  // 던지지 않고 배너로 그 자리에서 보여준다(messageForReadFailure, 폼이
+  // 이미 하는 것과 같은 선택).
   if (!result.ok) {
-    throw new Error(result.errors[0]?.detail ?? '목록을 불러오지 못했습니다.')
+    const message = messageForReadFailure(result.errors, '목록을 불러오지 못했습니다.')
+    return (
+      <div className="p-4 lg:p-6">
+        <FormBanner messages={[message]} />
+      </div>
+    )
   }
   // status(리터럴)가 아니라 document 자체로 좁힌다(client.ts 의 문서화된 규칙) -
   // 목록 GET 은 204 를 주지 않지만 타입은 그 분기를 여전히 포함한다.

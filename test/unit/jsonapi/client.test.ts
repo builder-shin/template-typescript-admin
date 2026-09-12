@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JSONAPI_MEDIA_TYPE, request, withAcceptLanguage } from '@/lib/jsonapi/client'
+import {
+  JSONAPI_MEDIA_TYPE,
+  request,
+  withAcceptLanguage,
+  type RequestOptions,
+} from '@/lib/jsonapi/client'
 import { COLLECTION_EMPTY, ERROR_NOT_FOUND, SINGLE_CREATED } from '../../fixtures/documents'
 
 // 실전 예시 값(`http://api:4000` · `http://localhost:4000`, .env.example)을
@@ -401,14 +406,21 @@ describe('withAcceptLanguage', () => {
    * 그 판단을 호출부마다 반복하지 않게 한 곳으로 모았고, 이 테스트가 그
    * 판단을 지킨다.
    *
-   * 값은 어느 브라우저도 어느 기본값도 만들 수 없는 것을 쓴다.
+   * accept-language 값은 어느 브라우저도 어느 기본값도 만들 수 없는 것을
+   * 쓴다. `PROBE_OPTIONS.method` 는 예전엔 같은 이유로 `'PROBE-METHOD'`(존재
+   * 하지 않는 메서드)를 썼지만, `RequestOptions.method` 가 이 저장소가 실제로
+   * 쓰는 메서드의 리터럴 합집합으로 좁혀지면서(client.ts) 더 이상 임의
+   * 문자열을 담을 수 없다 - `body`(`{ probe: 'probe-body' }`)만으로도 이
+   * 객체가 왕복 대상임을 알아보기에 충분해, 실제 리터럴(`'PATCH'`) 하나를
+   * 쓰는 것으로 대체했다 - 이 테스트들이 재는 것(withAcceptLanguage 가 다른
+   * 옵션을 안 건드린다)은 메서드 값이 진짜인지 가짜인지와 무관하다.
    */
   const PROBE_ACCEPT_LANGUAGE = 'xx-ZZ,qq;q=0.3'
-  const PROBE_OPTIONS = { method: 'PROBE-METHOD', body: { probe: 'probe-body' } }
+  const PROBE_OPTIONS = { method: 'PATCH', body: { probe: 'probe-body' } } as const
 
   it('값이 있으면 나머지 옵션을 건드리지 않고 얹는다', () => {
     expect(withAcceptLanguage(PROBE_OPTIONS, PROBE_ACCEPT_LANGUAGE)).toEqual({
-      method: 'PROBE-METHOD',
+      method: 'PATCH',
       body: { probe: 'probe-body' },
       acceptLanguage: PROBE_ACCEPT_LANGUAGE,
     })
@@ -435,8 +447,30 @@ describe('withAcceptLanguage', () => {
   it('원본 옵션 객체를 변경하지 않는다', () => {
     // 호출부가 만든 리터럴을 그 자리에서 오염시키면, 같은 객체를 재사용하는
     // 미래의 호출부에서 헤더가 유령처럼 따라붙는다.
-    const original = { method: 'PROBE-METHOD' }
+    const original = { method: 'PATCH' } as const
     withAcceptLanguage(original, PROBE_ACCEPT_LANGUAGE)
-    expect(original).toEqual({ method: 'PROBE-METHOD' })
+    expect(original).toEqual({ method: 'PATCH' })
+  })
+})
+
+describe('RequestOptions.method — 타입 좁힘', () => {
+  /**
+   * `method?: string` 이었을 때는 오타(`'PACTH'`)도, 편집 폼이 절대 불러서는
+   * 안 되는 `PUT`(세 백엔드 전부 업서트로 등록 - client.ts 의 RequestOptions
+   * 주석)도 그냥 컴파일됐다. 이 두 테스트는 실행이 아니라 typecheck 로
+   * 지켜진다 - **이 줄들이 통과하면(= 오류가 없으면) `@ts-expect-error` 자체가
+   * 컴파일 오류가 된다**(query.test.ts 의 SortTerm/isNull 테스트와 같은
+   * 관례). 런타임 단언은 두지 않는다 - 여기서 재는 것은 타입이다.
+   */
+  it('오타(PACTH)를 타입이 막는다', () => {
+    // @ts-expect-error method 는 정해진 리터럴 합집합이라 오타 문자열을 받지 않는다
+    const options: RequestOptions = { method: 'PACTH' }
+    void options
+  })
+
+  it('PUT 을 타입이 막는다 - 세 백엔드 전부 업서트라 편집 폼이 불러서는 안 된다', () => {
+    // @ts-expect-error method 리터럴 합집합에 PUT 이 없다(의도적으로 뺐다)
+    const options: RequestOptions = { method: 'PUT' }
+    void options
   })
 })

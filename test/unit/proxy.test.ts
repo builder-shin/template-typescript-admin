@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NextRequest, type NextResponse } from 'next/server'
-import { proxy, isProtectedPath, LOGIN_REDIRECT_PARAM, config } from '@/proxy'
+import { proxy, isProtectedPath, LOGIN_REDIRECT_PARAM, REQUEST_PATH_HEADER, config } from '@/proxy'
 import {
   SESSION_COOKIE_ACCESS,
   SESSION_COOKIE_REFRESH,
@@ -167,6 +167,26 @@ describe('proxy()', () => {
     expect(response.headers.get('location')).toBeNull()
     expect(fetchMock).not.toHaveBeenCalled()
     expect(response.cookies.getAll()).toEqual([])
+  })
+
+  it('통과하는 요청은 downstream(request.headers)에 REQUEST_PATH_HEADER 로 pathname+search 를 싣는다', async () => {
+    // app/(admin)/layout.tsx 가 세션 죽음을 감지해 /login?next=<현재 경로> 로
+    // 보낼 때 "현재 경로"를 구할 다른 방법이 없다(서버 컴포넌트는 pathname 을
+    // 읽는 공식 방법이 없다 - REQUEST_PATH_HEADER 선언부 주석). request.cookies.set
+    // 이 회전된 쿠키를 downstream 에 실어 보내는 것과 같은 자리(같은 request
+    // 객체를 그대로 뮤테이션)이므로 같은 방식(원래 request 를 다시 읽는다)으로 잰다.
+    const request = makeRequest('/examples/new?foo=bar', {
+      [SESSION_COOKIE_ACCESS]: encodeAccessCookieValue('a', Date.now() + 10 * 60_000),
+      [SESSION_COOKIE_REFRESH]: 'r',
+    })
+    await proxy(request)
+    expect(request.headers.get(REQUEST_PATH_HEADER)).toBe('/examples/new?foo=bar')
+  })
+
+  it('로그인으로 리다이렉트하는 요청은 REQUEST_PATH_HEADER 를 싣지 않는다(그 갈래는 그 줄에 도달하지 않고 일찍 반환한다)', async () => {
+    const request = makeRequest('/examples/new?foo=bar')
+    await proxy(request)
+    expect(request.headers.get(REQUEST_PATH_HEADER)).toBeNull()
   })
 
   it('access 만 있고 refresh 가 없는 반쪽 쿠키 + 보호된 경로 → fetch 없이 즉시 리다이렉트 + 쿠키 삭제', async () => {

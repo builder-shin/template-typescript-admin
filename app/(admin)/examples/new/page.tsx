@@ -1,10 +1,12 @@
 import { ArrowLeftIcon } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
+import { FormBanner } from '@/components/form/form-banner'
 import { Button } from '@/components/ui/button'
 import { request } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
+import { messageForReadFailure } from '../../read-result'
 import { createExampleAction } from '../actions'
 import { ExampleForm } from '../[id]/edit-form'
 import { optionsFromDocument, optionsRequest, unwrapOptionsResult } from '../options'
@@ -27,6 +29,19 @@ export default async function NewExamplePage() {
     request<CollectionDocument>(...optionsRequest(categoriesResource, lang)),
     request<CollectionDocument>(...optionsRequest(tagsResource, lang)),
   ])
+
+  // transport 만 던져 error.tsx 로 보낸다 - 그 외(백엔드가 실제로 낸 오류)는
+  // 배너로 그 자리에서 보여준다(`[id]/page.tsx` 와 같은 선택,
+  // ../../read-result.ts).
+  for (const result of [categoriesResult, tagsResult]) {
+    if (result.ok) continue
+    const message = messageForReadFailure(result.errors, '선택 목록을 불러오지 못했습니다.')
+    return (
+      <div className="p-4 lg:p-6">
+        <FormBanner messages={[message]} />
+      </div>
+    )
+  }
 
   const categories = unwrapOptionsResult(categoriesResult)
   const tags = unwrapOptionsResult(tagsResult)

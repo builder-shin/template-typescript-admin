@@ -62,20 +62,20 @@ describe('unwrapOptionsResult', () => {
     expect(unwrapOptionsResult({ ok: true, status: 200, document })).toBe(document)
   })
 
-  it('실패하면 첫 오류의 detail 로 던진다', () => {
+  // 호출부(`[id]/page.tsx`·`new/page.tsx`)가 `!result.ok` 를 messageForReadFailure
+  // (../read-result.ts)로 먼저 걸러야 한다 - 이 함수 자신은 detail 을 더 이상
+  // 메시지에 싣지 않는다(app/error.tsx 가 백엔드의 진짜 설명을 discard 하고
+  // "연결할 수 없다"는 거짓 문구를 보여주던 자리였다). 실패한 결과가 여기
+  // 도달하는 것 자체가 호출부의 버그이므로, detail 내용과 무관하게 항상 같은
+  // 내부 오류 문구로 던진다.
+  it('실패한 결과가 오면(호출부가 걸렀어야 함) 내부 오류로 던진다 - detail 을 담지 않는다', () => {
     expect(() =>
       unwrapOptionsResult({
         ok: false,
         status: 400,
         errors: [{ detail: '허용되지 않은 include 입니다' }],
       }),
-    ).toThrow('허용되지 않은 include 입니다')
-  })
-
-  it('실패했는데 detail 이 없으면 고정 문구로 던진다', () => {
-    expect(() => unwrapOptionsResult({ ok: false, status: 400, errors: [{}] })).toThrow(
-      '선택 목록을 불러오지 못했습니다.',
-    )
+    ).toThrow('내부 오류')
   })
 
   it('204(document: null)면 던진다 - 조용히 빈 목록으로 다루지 않는다', () => {

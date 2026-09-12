@@ -2,6 +2,7 @@ import { ArrowLeftIcon } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
+import { FormBanner } from '@/components/form/form-banner'
 import { ConfirmedDeleteForm } from '@/components/grid/bulk-confirm'
 import { formatDateTime, relationshipLabel } from '@/components/grid/format'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import type { Attributes, CollectionDocument, SingleDocument } from '@/lib/jsona
 import { actionForErrors } from '@/lib/jsonapi/errors'
 import { indexResources, resolveToMany, resolveToOne } from '@/lib/jsonapi/normalize'
 import { resourceByType } from '@/lib/resources'
+import { messageForReadFailure } from '../../read-result'
 import { deleteExampleAction, updateExampleAction } from '../actions'
 import { optionsFromDocument, optionsRequest, unwrapOptionsResult } from '../options'
 import { detailRequest } from './detail'
@@ -63,7 +65,16 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
 
   if (!detailResult.ok) {
     if (actionForErrors(detailResult.errors) === 'notFound') notFound()
-    throw new Error(detailResult.errors[0]?.detail ?? '상세를 불러오지 못했습니다.')
+    // transport 만 던진다(error.tsx 로 간다 - 그 파일의 고정 문구가 참인
+    // 유일한 경우). 그 외(검증 오류·500 등 백엔드가 실제로 응답한 경우)는
+    // 던지지 않고 배너로 그 자리에서 보여준다(messageForReadFailure, 폼이
+    // 이미 하는 것과 같은 선택).
+    const message = messageForReadFailure(detailResult.errors, '상세를 불러오지 못했습니다.')
+    return (
+      <div className="p-4 lg:p-6">
+        <FormBanner messages={[message]} />
+      </div>
+    )
   }
   // status(리터럴)가 아니라 document 자체로 좁힌다(client.ts 의 문서화된 규칙).
   if (detailResult.document === null) {
@@ -71,6 +82,20 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
   }
   if (detailResult.document.data === null) {
     notFound()
+  }
+
+  // 분류·라벨 선택 목록도 같은 기준으로 가른다 - 상세 자체는 받았는데 이
+  // 둘 중 하나가 실패하면 폼을 반쪽으로 그리는 대신 화면 전체를 배너로
+  // 바꾼다(부분 렌더가 아니라 "이 화면 전체가 지금 믿을 만하지 않다"는
+  // 신호를 준다).
+  for (const result of [categoriesResult, tagsResult]) {
+    if (result.ok) continue
+    const message = messageForReadFailure(result.errors, '선택 목록을 불러오지 못했습니다.')
+    return (
+      <div className="p-4 lg:p-6">
+        <FormBanner messages={[message]} />
+      </div>
+    )
   }
 
   const categories = unwrapOptionsResult(categoriesResult)
