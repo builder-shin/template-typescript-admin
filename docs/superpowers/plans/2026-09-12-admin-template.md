@@ -2668,45 +2668,54 @@ grep -n "m@example.com\|shadcn\|Acme Inc" components/app-sidebar.tsx
 find app -name 'page.tsx'                            # 실제 라우트 다섯
 ```
 
-| 조작된 것 | 실재하는 것 |
-| --- | --- |
-| `url: '#'` 20개 | 라우트는 `/` · `/examples` · `/examples/[id]` · `/examples/new` · `/login` 다섯뿐이고, 사이드바에 올릴 만한 것은 `/` 와 `/examples` 둘이다 |
-| `name: 'shadcn'` · `email: 'm@example.com'` | 로그인한 운영자. `/api/v1/users/me` 가 실재한다(실측: `users_controller.py` 가 `"/me"` 하나를 등록한다) |
-| `avatar: '/avatars/shadcn.jpg'` | **없다.** `public/` 디렉터리 자체가 이 저장소에 없고, 있더라도 Task 3 의 프록시 매처가 거기서 서빙되는 첫 파일을 `/login` 으로 보낸다 |
-| `Acme Inc.` | 이 템플릿은 남의 제품 이름을 모른다 |
+| 조작된 것 | 실재하는 것 | 지울지 대체할지 |
+| --- | --- | --- |
+| `url: '#'` 20개 | 라우트는 `/` · `/examples` · `/examples/[id]` · `/examples/new` · `/login` 다섯뿐이고, 사이드바에 올릴 만한 것은 `/` 와 `/examples` 둘이다 | 둘은 **대체**, 열여덟은 **지운다** |
+| `email: 'm@example.com'` | 로그인한 운영자의 이메일. `/api/v1/users/me` 가 실재한다 | **대체** |
+| `name: 'shadcn'` | **없다.** 실측: `user_serializer.py` 의 `attributes = ("email", "is_active", "created_at", "updated_at")` — **`name` 이 계약에 없다** | **지운다** |
+| `avatar: '/avatars/shadcn.jpg'` | **없다.** `public/` 디렉터리 자체가 이 저장소에 없고, 있더라도 Task 3 의 프록시 매처가 거기서 서빙되는 첫 파일을 `/login` 으로 보낸다 | **지운다** |
+| `Acme Inc.` | 이 템플릿은 남의 제품 이름을 모른다 | **지운다** |
 
-**조작을 지우는 것과 대체하는 것을 구별하라.** 운영자 이름·이메일은 **대체 가능하다**(백엔드가 준다). 아바타와 조직명은 **대체할 것이 없다** — 지운다. 20개의 죽은 링크는 둘이 실재하고 열여덟은 없다.
+**운영자는 이메일 주소 하나다.** 조작된 네 필드 중 대체할 것이 있는 것은 `email` 하나뿐이고 `name`·`avatar`·조직명은 셋 다 백엔드에 대응물이 없다. 그러니 `NavUser` 가 받는 모양도 그만큼 줄어든다 — 이름 자리를 이메일로 채워 "이름이 있는 척" 하지 말고, **이름 줄 자체를 없앤다.**
+
+`is_active`·`created_at`·`updated_at` 도 노출되지만 사이드바가 쓸 것이 아니다. 가져오지 마라.
 
 - [ ] **Step 2: 운영자 조회의 테스트를 쓴다**
 
-`/api/v1/users/me` 응답에서 표시 이름과 이메일을 뽑는 순수 함수를 만든다. 모양은 `app/(admin)/count.ts` 의 `readTotal` 과 `app/(admin)/options.ts` 의 `optionsFromDocument` 를 읽어서 맞춘다 — 요청 조립은 화면 옆, 순수 변환은 테스트 가능하게.
+`/api/v1/users/me` 응답에서 이메일을 뽑는 순수 함수를 만든다. 모양은 `app/(admin)/count.ts` 의 `readTotal` 과 `app/(admin)/examples/options.ts` 의 `optionsFromDocument` 를 읽어서 맞춘다 — 요청 조립은 화면 옆, 순수 변환은 테스트 가능하게.
 
 ```ts
 import { describe, expect, it } from 'vitest'
 import { operatorFromDocument } from '@/app/(admin)/operator'
 
 describe('operatorFromDocument', () => {
-  it('속성에서 이름과 이메일을 뽑는다', () => {
+  it('이메일을 뽑는다', () => {
     expect(
       operatorFromDocument({
-        data: { type: 'users', id: 'u1', attributes: { name: '신정우', email: 'ops@example.com' } },
+        data: {
+          type: 'users',
+          id: 'u1',
+          attributes: { email: 'ops@example.com', isActive: true },
+        },
       }),
-    ).toEqual({ name: '신정우', email: 'ops@example.com' })
+    ).toEqual({ email: 'ops@example.com' })
   })
 
-  it('이름이 없으면 이메일을 이름 자리에 쓴다 - 문구를 지어내지 않는다', () => {
-    expect(
-      operatorFromDocument({ data: { type: 'users', id: 'u1', attributes: { email: 'ops@example.com' } } }),
-    ).toEqual({ name: 'ops@example.com', email: 'ops@example.com' })
-  })
-
-  it('이메일조차 없으면 null 이다 - "알 수 없는 사용자" 같은 문구를 만들지 않는다', () => {
+  it('이메일이 없으면 null 이다 - 대체 문구를 만들지 않는다', () => {
+    // 계약 위반이지만 화면이 죽지는 않아야 한다. "알 수 없는 사용자" 같은
+    // 문구를 지어내는 대신 그 자리를 비운다(Step 4).
     expect(operatorFromDocument({ data: { type: 'users', id: 'u1' } })).toBeNull()
+  })
+
+  it('이메일이 문자열이 아니면 null 이다', () => {
+    expect(
+      operatorFromDocument({ data: { type: 'users', id: 'u1', attributes: { email: 42 } } }),
+    ).toBeNull()
   })
 })
 ```
 
-**`name` 이 백엔드 계약에 실제로 있는지 먼저 확인하라** — `user_serializer.py` 를 읽어 노출되는 속성 이름을 확인하고, 없으면 위 테스트를 실측에 맞게 고친 뒤 그렇게 했다고 보고하라. 이 계획이 추론으로 계약을 적어 여섯 번 틀렸다(원장의 F24-F55).
+**속성 이름의 표기를 확인하라.** 백엔드는 `is_active` 로 선언하지만 와이어에서 어떤 표기로 나가는지는 `app/jsonapi/naming.py` 가 정한다(실측: 이 저장소의 `lib/jsonapi` 는 camelCase 를 기대하고 기존 화면들이 `totalCount`·`createdAt` 을 쓴다). `email` 은 한 단어라 표기 문제가 없지만, 위 테스트의 `isActive` 는 **그 파일을 읽어 맞는 표기인지 확인하고**, 다르면 고친 뒤 그렇게 했다고 보고하라.
 
 - [ ] **Step 3: 테스트를 돌려 실패를 확인하고 구현한다**
 
@@ -2717,7 +2726,7 @@ Run: `pnpm vitest run test/unit/components/sidebar.test.ts` → FAIL → 구현 
 - `nav-main.tsx` 는 실재하는 두 곳만 받는다(`/` 와 `/examples`). 링크는 `next/link` 로, 현재 경로 강조는 `usePathname` 으로 — `components/grid/resource-grid.tsx` 가 이미 그것을 쓴다.
 - `nav-documents.tsx`·`nav-secondary.tsx` 에 올릴 실재하는 항목이 없으면 **그 컴포넌트 호출을 지운다.** 빈 섹션 제목만 남기지 마라 — 빈 섹션은 "곧 생긴다"고 약속하는 것이고 이 템플릿은 약속하지 않는다. 파일 자체는 블록의 일부로 남겨도 되지만, 남긴다면 `components/AGENTS.md` 에 "호출되지 않는다"고 적어라.
 - `Acme Inc.` 와 아바타를 지운다. 로고가 필요하면 **인라인 SVG** 로 그린다 — `public/` 에 파일을 두지 마라(Task 3 의 매처가 그것을 `/login` 으로 보낸다. 계획 Task 9 의 같은 경고 참고).
-- 운영자 이름·이메일은 서버에서 받아 prop 으로 내린다. 조회에 실패하면 **그 영역을 비워라** — 대체 문구를 만들지 마라.
+- 운영자 **이메일**은 서버에서 받아 prop 으로 내린다(이름은 계약에 없다 - Step 1). 조회에 실패하면 **그 영역을 비워라** — 대체 문구를 만들지 마라.
 
 - [ ] **Step 5: 로그아웃이 이미 배선돼 있는지 확인한다**
 
