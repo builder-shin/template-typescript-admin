@@ -11,6 +11,7 @@
     "lib/auth",
     "proxy.ts",
     "test/unit/auth",
+    "test/unit/auth/logout.test.ts",
     "test/unit/proxy.test.ts"
   ],
   "note": "복사본이다. 원본에서 계약 버그가 고쳐지면 이 커밋과 원본을 비교해 반영 여부를 판단한다. proxy.ts 의 PROTECTED_PATH_PATTERNS 는 어드민에서 의도적으로 원본과 갈라진다 - 원본은 목록·상세가 공개이고 /examples/new · /examples/[id]/edit 두 쓰기 경로만 보호하지만, 이 저장소는 공개 표면이 없어 /login 을 뺀 모든 경로를 보호한다. 원본과 비교할 때 이 차이를 드리프트로 오해하지 않는다.",

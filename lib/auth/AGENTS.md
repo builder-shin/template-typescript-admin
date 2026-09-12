@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-11 | Updated: 2026-09-11 -->
+<!-- Generated: 2026-09-11 | Updated: 2026-09-12 -->
 
 # lib/auth/ 작업 지침
 
@@ -15,6 +15,7 @@
 | `form-state.ts`  | 런타임 import 없는 폼 상수·상태·전송 실패 안내.                     |
 | `guard.ts`       | `LOGIN_PATH`와 쓰기 Action의 `requireSession()` 가드.               |
 | `logout.ts`      | 쿠키를 먼저 지우고 refresh 세션 폐기를 요청하는 `endSession()`.     |
+| `provision.ts`   | 첫 운영자를 만드는 `provisionOperator()` - 시드 스크립트 전용.      |
 | `rotation.ts`    | 회전 필요 여부와 응답의 순수 판정, refresh 요청.                    |
 | `session.ts`     | 두 쿠키의 직렬화·속성·읽기·쓰기·삭제.                               |
 | `tokens.ts`      | 세션·토큰 타입과 `expiresIn` 기반 절대 만료 시각, 60초 여유 판정.   |
@@ -33,6 +34,9 @@
   준 포인터와 문구로 배치하며 오류 코드별 필드·문구 카탈로그를 만들지 않는다.
 - 로그아웃은 쿠키 삭제가 백엔드 호출보다 먼저다. `flow.ts`는 이동 대상을 값으로
   반환하고 Action이 실행한다. `lib/`에서 라우팅 모듈 `proxy.ts`를 import하지 않는다.
+- `provision.ts`는 아무것도 import하지 않는다. 시드 스크립트(scripts/seed-operator.ts)가
+  Next 런타임 없이 `node`로 직접 실행되어 `@/` 경로 별칭이 해석되지 않기 때문이다.
+  `backendUrl`도 인자로 받고 `getSettings()`를 부르지 않는다.
 
 ## 검증과 의존성
 
@@ -41,6 +45,7 @@
 않는 저장소 규칙을 지킨다. 최종 검증은 `./scripts/check.sh`다.
 
 내부 의존성은 `lib/jsonapi/`와 `lib/config/settings.ts`, 외부 의존성은
-`next/headers`·`next/navigation`이다. 호출부는 `proxy.ts`와 `app/`에 있다.
+`next/headers`·`next/navigation`이다(`provision.ts`는 예외 - 위 규칙 참고).
+호출부는 `proxy.ts`와 `app/`에 있다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "secretlint": "secretlint --secretlintignore .gitignore \"**/*\"",
-    "check": "./scripts/check.sh"
+    "check": "./scripts/check.sh",
+    "seed:operator": "node --experimental-strip-types scripts/seed-operator.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",

@@ -85,12 +85,16 @@ export const LOGOUT_TYPE = 'refreshTokens'
  * 로그인 폼을 들이미는 것은 "왜 다시 들어오라는 거지"가 되고, 로그아웃은
  * 실패가 아니라 성공한 행동이라 오류 화면 계열의 목적지가 어울리지 않는다.
  *
- * **이 경로는 보호 경로가 아니어야 한다.** 보호 경로를 넣으면 proxy.ts 가
- * 곧바로 `/login?next=<여기>` 로 되돌려 보내, 로그아웃한 사용자가 로그인
- * 화면에 떨어지고 심지어 "로그아웃한 그 페이지로 돌아가라"는 next 까지
- * 달린다. 그 결합은 logout.test.ts 가 `isProtectedPath` 로 직접 확인한다 -
- * 이 파일에서 `@/proxy` 를 import 하면 lib/ 가 라우팅 계층을 거꾸로
- * 의존하게 된다(flow.ts 의 authLinkHref 주석과 같은 이유).
+ * **이 경로가 보호 경로여도 상관없다.** 이 저장소는 `/login` 하나만 빼고
+ * 전부 보호한다(proxy.ts) - 그래서 세션 쿠키가 지워진 채 이 경로를 다시
+ * 요청하면 proxy.ts 가 다시 `/login` 으로 돌려보낸다. 목록·상세가 공개인
+ * 저장소라면 이 되돌림이 결함이지만, 이 저장소는 애초에 `/login` 을 뺀
+ * 공개 표면이 없으므로 맞는 동작이다. **정작 지켜야 하는 것은 이 값이
+ * `LOGIN_PATH`·`/register` 같은 인증 화면 자체는 아니라는 것**이다 - 그래야
+ * 로그아웃이 로그인 폼을 곧장 들이미는 것과 구별된다. logout.test.ts 가
+ * `isProtectedPath`·`AUTH_SCREEN_PATHS` 로 이 둘을 직접 확인한다 - 이
+ * 파일에서 `@/proxy` 를 import 하면 lib/ 가 라우팅 계층을 거꾸로 의존하게
+ * 된다(flow.ts 의 authLinkHref 주석과 같은 이유).
  */
 export const POST_LOGOUT_PATH = '/'
 
