@@ -950,11 +950,13 @@ cp /tmp/ttn/test/unit/auth/logout.test.ts test/unit/auth/logout.test.ts
 git clone --depth 1 https://github.com/builder-shin/template-python-fastapi /tmp/api-fastapi
 docker compose -f /tmp/api-fastapi/docker-compose.yml up -d --build db redis migrate api
 
-curl -s -H 'accept: application/vnd.api+json' http://localhost:4000/health   # 뜰 때까지
+until curl -fsS -H 'accept: application/vnd.api+json' http://localhost:4000/health/ready; do sleep 2; done
 
 BACKEND_URL=http://localhost:4000 pnpm seed:operator ops@example.com 'pw-long-enough'
 BACKEND_URL=http://localhost:4000 pnpm dev
 ```
+
+건가 판정은 **`/health/ready`** 로 한다. `/health` 는 없어서(404) 어떤 상황에서도 뜨지 않고, `/health/live` 는 Postgres 가 아직 없어도 `ok` 을 되돌려서 기다리는 도구로는 쓸모가 없다. `ready` 는 `SELECT 1` 로 DB 를 확인하고 아직이면 **503** 을 돌려서, `--fail` 이 그것을 받아 `migrate` 가 끝나기까지 잠긴다.
 
 포트는 **4000** 이다. `E2E_API_PORT` 의 기본값 4100 은 Task 13 의 E2E 스택 전용이고, 컨테이너 안의 4000 과 호스트 공개 포트를 헷갈리지 않으려고 일부러 다르게 둔 값이다.
 
@@ -1642,7 +1644,13 @@ Run: `pnpm vitest run test/unit/resources/count.test.ts` → FAIL → 구현 →
 
 세 가지를 정해야 한다.
 
-**1. 카드는 넷인데 자원은 셋이다.** 네 번째는 **백엔드 상태**로 둔다 — `/health` 는 계약에 있는 표면이고(2.1), 운영자가 가장 먼저 묻는 것이다. 넷은 `examples` 총합 · 분류 총합 · 라벨 총합 · `/health` 가 된다. 참조 자원 카드에는 "읽기 전용"을 적는다.
+**1. 카드는 넷인데 자원은 셋이다.** 네 번째는 **백엔드 상태**로 둔다 — 운영자가 가장 먼저 묻는 것이다.
+
+**경로는 `/health/ready` 다.** 실측(2026-09-12): 백엔드가 등록하는 것은 `/health/live` 와 `/health/ready` 둘이고 **`/health` 는 없다**(404). `live` 는 무조건 `{ data: null, meta: { status: "ok" } }` 를 돌려주므로 **Postgres 가 죽어도 정상이라고 말한다**; `ready` 는 `SELECT 1` 을 실행하고 실패하면 **503**(`INTERNAL_SERVER_ERROR`)을 낸다. 카드가 정직해야 할 유일한 순간에 거짓말하지 않으려면 `ready` 여야 한다.
+
+`meta.status` 는 성공 시 백엔드가 항상 보내는 고정 리터럴이다 — 읽어도 되지만 상태 코드 이상의 정보를 담지 않으므로 독립된 근거처럼 제시하지 마라.
+
+**실패를 한 덩어리로 뭉개지 마라.** 이 카드는 다운을 보여 주려고 있으니 던지지 않는 것이 맞지만, 404 나 503 아닌 500 은 **장애가 아니라 설정 오류다.** 전부 "다운"으로 접으면 잘못된 경로를 물어본 것이 영원히 장애로 보인다 — 실제로 그렇게 한 번 났다. 넷은 `examples` 총합 · 분류 총합 · 라벨 총합 · `/health` 가 된다. 참조 자원 카드에는 "읽기 전용"을 적는다.
 
 **2. 추세 배지와 `CardFooter` 의 추세 문장은 지운다.** 우리 계약에 과거 데이터가 없고 지표 엔드포인트도 없어서 `+12.5%` 를 만들 방법이 **없다.** 숫자를 지어내는 대신 없애는 것이다 — 디자인을 단순화하는 게 아니라 **날조를 거부하는 것**이다. 카드 레이아웃과 타이포그래피(`text-2xl` · `tabular-nums` · `@[250px]/card:text-3xl` · `@container/card`)는 그대로 둔다.
 
@@ -1691,133 +1699,172 @@ labelling is the condition for keeping it. The recent-changes table has no
 
 **Files:**
 - Create: `app/(admin)/examples/[id]/page.tsx`, `app/(admin)/examples/[id]/loading.tsx`, `app/(admin)/examples/[id]/detail.ts`, `app/(admin)/examples/[id]/edit-form.tsx`
-- Create: `app/(admin)/examples/new/page.tsx`, `app/(admin)/examples/new/loading.tsx`, `app/(admin)/examples/actions.ts`
-- Create: `lib/resources/form.ts`
-- Test: `test/unit/resources/form.test.ts`
+- Create: `app/(admin)/examples/new/page.tsx`, `app/(admin)/examples/new/loading.tsx`
+- Create: `app/(admin)/examples/actions.ts`, `app/(admin)/examples/form-state.ts`
+- Modify: `test/unit/jsonapi/errors.test.ts` — 실측된 문서 pointer 셋을 고정한다
+- Test: `test/unit/examples/form-state.test.ts`
 
 **Interfaces:**
-- Consumes: Task 6 의 `ResourceDef`, Task 2 의 `lib/jsonapi` 오류 분류
-- Produces: `fieldErrors(document): Record<string, string>` — JSON:API `errors[].source.pointer` → 필드 이름
+- Consumes: Task 2 의 `groupErrors`·`actionForErrors`·`FieldErrors`(`lib/jsonapi/errors.ts`), Task 6 의 `ResourceDef`, Task 8 의 `listRequest`(`app/(admin)/examples/list.ts`)
+- Produces: `detailRequest(resource, id, acceptLanguage): [path: string, options: RequestOptions]` · `examplesFormState(errors, context): ExamplesFormState`
 
-- [ ] **Step 1: 필드 오류 매핑의 테스트를 쓴다**
+- [ ] **Step 1: 이미 있는 것을 읽는다 — 필드 오류 매핑을 새로 쓰지 마라**
 
-**백엔드가 실제로 내는 포인터 어휘는 실측돼 있다**(2026-09-12). 기억으로 가정하지 마라.
+**이 Task 의 첫 번째 일은 코드를 쓰는 것이 아니라 `lib/jsonapi/errors.ts` 와 `lib/auth/flow.ts` 를 읽는 것이다.** 이 계획의 이전 판은 `lib/resources/form.ts` 에 `fieldErrors(document): Record<string, string>` 를 새로 쓰라고 했다. 그 지시는 삭제됐다. 이유가 셋이다.
 
-| 출처 | 포인터 |
-| --- | --- |
-| Pydantic 검증 (`loc` 에서 `body` 를 뗀 것) | `/data/attributes/<필드>` |
-| `relationship_resolver` | `/data/relationships/<이름>` · `/data/relationships/<이름>/data/<n>/id` · `.../type` |
-| `document_parsing` · `crud_actions` | `/data` · `/data/id` · `/data/type` · `/data/relationships`(맨) |
+1. **이미 있다.** `lib/jsonapi/errors.ts` 의 `placeError` 가 pointer 를 정확히 같은 규칙으로 가른다 — `segments[1] !== 'data'` 면 문서 오류, `segments[2]` 가 통(`attributes`·`relationships`), `segments[3]` 이 필드, 없으면 문서 오류. **게다가 RFC 6901 이스케이프(`~1`→`/`, `~0`→`~`)를 풀어 주는데 이전 판의 명세에는 그 얘기가 아예 없었다.** `groupErrors` 가 그것을 `{ attributes, relationships, document }` 로 묶는다. `test/unit/jsonapi/errors.test.ts` 에 이미 30개가 붙어 있고 `a~1b`·`a~01`·`/data/attributes/`(뒤가 빈 것)까지 고정돼 있다.
+2. **자리가 틀렸다.** `lib/resources/AGENTS.md` 는 그 디렉터리가 **아무 내부 모듈도 import 하지 않는 순수 선언 계층**이라고 못 박는다. 오류 문서 파싱은 자원과 무관하므로 애초에 `lib/jsonapi/` 의 일이다. Task 9 에서 `lib/resources/count.ts` 가 정확히 이 규칙을 깨서 `app/(admin)/count.ts` 로 옮겼다 — 같은 실수를 다음 Task 에 또 심을 이유가 없다.
+3. **계약이 더 나빴다.** 이전 판의 `Record<string, string>` 은 필드당 문구 하나이고 **속성과 관계를 한 이름 공간에 납작하게 눌러** `category` 속성 오류와 `category` 관계 오류가 서로를 덮는다. `groupErrors` 는 셋을 분리하고 필드당 `string[]` 을 준다. 이전 판이 "전부 보여야 하는 자리가 생기면 그때 `string[]` 로 바꾼다"고 적어 둔 그 자리가 **바로 이 Task** 다.
 
-그래서 **"마지막 세그먼트가 필드"가 아니다.** 규칙은 하나다 — `/data/attributes/…` 또는 `/data/relationships/…` 의 **네 번째 세그먼트**가 필드이고, 그것이 없으면 필드 오류가 아니다.
+**읽어야 하는 정본은 `lib/auth/flow.ts` 의 `authFormStateFromErrors` 다.** 그것이 이 Task 가 필요한 모양을 이미 다 갖고 있다 — `actionForErrors(errors) === 'transport'` 먼저 걸러내고, `groupErrors` 로 묶고, 문구가 하나도 없으면(`isEmpty`) "쓸 수 없는 응답"으로 떨어뜨린다. 산문으로 옮겨 적지 않는 이유는 그 사본이 드리프트하기 때문이다.
+
+- [ ] **Step 2: 실측된 문서 pointer 셋을 기존 테스트에 고정한다**
+
+`placeError` 의 로직은 이미 이 셋을 옳게 다룬다. 그래도 고정하는 이유는 **이 셋이 백엔드가 실제로 내는 값**이라서다(실측 2026-09-12, `document_parsing`·`crud_actions`). 로직이 맞다는 것과 그 입력이 실물이라는 것은 다른 사실이고, 뒤에 오는 사람은 후자를 알 방법이 없다.
+
+`test/unit/jsonapi/errors.test.ts` 의 `describe('placeError')` 안에 덧붙인다.
+
+```ts
+  it.each(['/data/id', '/data/type', '/data/relationships'])(
+    '%s 는 문서 오류다 - 백엔드가 실제로 내는 pointer 다',
+    (pointer) => {
+      // 실측: document_parsing·crud_actions 가 이 셋을 낸다. 네 번째
+      // 세그먼트가 없으므로 붙일 필드가 없고, 배너로 가야 한다.
+      expect(placeError({ source: { pointer } })).toEqual({ kind: 'document' })
+    },
+  )
+```
+
+Run: `pnpm vitest run test/unit/jsonapi/errors.test.ts` → 33 passed (30 + 3). **구현을 고칠 일은 없다** — 이것은 회귀 고정이지 새 동작이 아니다. 만약 이 셋 중 하나라도 실패하면 그때는 `placeError` 가 틀린 것이니 멈추고 보고하라.
+
+- [ ] **Step 3: 폼 상태의 테스트를 쓴다 — auth 와 다른 점은 단 하나다**
+
+`examples` 폼은 auth 폼과 **관계 입력이 있다는 점에서만** 다르다. `flow.ts` 는 그 차이를 이미 이름 붙여 놨다: "인증 폼에는 관계 입력이 없다. 그런데 `groupErrors` 는 세 갈래를 다 돌려주므로 relationships 를 안 읽으면 그 문구가 **소리 없이 사라진다**. 그릴 자리가 없으면 배너가 옳다."
+
+**이 Task 에는 그릴 자리가 있다.** 그래서 `examplesFormState` 는 `grouped.relationships` 를 배너로 접지 않고 관계 입력에 붙인다. 그것이 auth 와의 유일한 실질 차이다.
 
 ```ts
 import { describe, expect, it } from 'vitest'
-import { fieldErrors } from '@/lib/resources/form'
+import { examplesFormState } from '@/app/(admin)/examples/form-state'
 
-const err = (pointer: string | undefined, detail: string) => ({
-  status: '422',
-  detail,
-  ...(pointer === undefined ? {} : { source: { pointer } }),
-})
-
-describe('fieldErrors', () => {
-  it('속성 pointer 가 가리키는 필드에 백엔드 문구를 그대로 붙인다', () => {
-    expect(
-      fieldErrors({
-        errors: [
-          err('/data/attributes/title', '제목은 200자를 넘을 수 없습니다'),
-          err('/data/attributes/status', '선언에 없는 상태 값입니다'),
-        ],
-      }),
-    ).toEqual({
-      title: '제목은 200자를 넘을 수 없습니다',
-      status: '선언에 없는 상태 값입니다',
-    })
+describe('examplesFormState', () => {
+  it('속성 오류는 속성 입력에, 관계 오류는 관계 입력에 붙인다', () => {
+    const state = examplesFormState([
+      { code: 'VALIDATION_ERROR', detail: '제목이 너무 깁니다', source: { pointer: '/data/attributes/title' } },
+      { code: 'VALIDATION_ERROR', detail: '없는 분류입니다', source: { pointer: '/data/relationships/category' } },
+    ])
+    expect(state.attributeErrors).toEqual({ title: ['제목이 너무 깁니다'] })
+    expect(state.relationshipErrors).toEqual({ category: ['없는 분류입니다'] })
+    expect(state.documentErrors).toEqual([])
   })
 
-  it('관계 pointer 를 읽는다', () => {
-    expect(fieldErrors({ errors: [err('/data/relationships/category', '없는 분류입니다')] })).toEqual(
-      { category: '없는 분류입니다' },
-    )
+  it('관계 배열의 항목별 실패는 그 관계 하나로 접힌다 - 둘 다 남긴다', () => {
+    // 실측: relationship_resolver 가 `/data/relationships/tags/data/<n>/id` 를 낸다.
+    // placeError 가 네 번째 세그먼트(tags)를 필드로 쓰므로 같은 키로 모인다.
+    const state = examplesFormState([
+      { code: 'VALIDATION_ERROR', detail: '첫 번째', source: { pointer: '/data/relationships/tags/data/0/id' } },
+      { code: 'VALIDATION_ERROR', detail: '두 번째', source: { pointer: '/data/relationships/tags/data/1/id' } },
+    ])
+    expect(state.relationshipErrors).toEqual({ tags: ['첫 번째', '두 번째'] })
   })
 
-  it('관계 항목까지 내려간 깊은 pointer 도 그 관계에 붙인다', () => {
-    expect(
-      fieldErrors({ errors: [err('/data/relationships/tags/data/0/id', '없는 라벨입니다')] }),
-    ).toEqual({ tags: '없는 라벨입니다' })
+  it('pointer 없는 VALIDATION_ERROR 는 배너로 간다 - 실측된 경로다', () => {
+    // 실측(exception_handlers.py): 본문이 깨진 JSON 이면 `json_invalid` 라
+    // _validation_source 가 아무 출처도 못 만들고, 백엔드는 pointer 없는
+    // VALIDATION_ERROR 를 낸다. actionForErrors 는 그래도 'fieldErrors' 를
+    // 돌려주므로, 붙일 필드가 없다는 사실을 화면이 스스로 알아야 한다.
+    const state = examplesFormState([{ code: 'VALIDATION_ERROR', detail: '본문을 해석할 수 없습니다' }])
+    expect(state.attributeErrors).toEqual({})
+    expect(state.relationshipErrors).toEqual({})
+    expect(state.documentErrors).toEqual(['본문을 해석할 수 없습니다'])
   })
 
-  it.each(['/data', '/data/id', '/data/type', '/data/relationships'])(
-    '%s 는 필드 오류가 아니다',
-    (pointer) => {
-      expect(fieldErrors({ errors: [err(pointer, '문서 오류')] })).toEqual({})
-    },
-  )
-
-  it('pointer 가 없는 오류는 필드에 붙이지 않는다', () => {
-    expect(fieldErrors({ errors: [err(undefined, '서버 오류')] })).toEqual({})
+  it('문구가 하나도 없으면 쓸 수 없는 응답이다 - 빈 빨간 상자를 그리지 않는다', () => {
+    expect(examplesFormState([{}]).unusable).toBe(true)
   })
 
-  it('같은 필드에 여럿이면 첫 것을 남긴다', () => {
-    expect(
-      fieldErrors({
-        errors: [
-          err('/data/relationships/tags/data/0/id', '첫 번째'),
-          err('/data/relationships/tags/data/1/id', '두 번째'),
-        ],
-      }),
-    ).toEqual({ tags: '첫 번째' })
+  it('transport 는 폼이 받지 않는다', () => {
+    // client.ts 가 합성한 오류는 app/error.tsx 의 일이다. flow.ts 와 같은 판정.
+    const state = examplesFormState([
+      { status: '0', code: 'NETWORK_ERROR', title: 'NETWORK_ERROR', meta: { synthetic: true } },
+    ])
+    expect(state.unusable).toBe(true)
   })
 })
 ```
 
-마지막 검사가 정하는 것: 관계 배열의 여러 항목이 각각 실패하면 같은 필드로 접힌다. **첫 것을 남긴다** — 순서는 백엔드가 정하고, 화면은 필드 하나에 메시지 하나를 붙인다. 전부 보여야 하는 자리가 생기면 그때 `string[]` 로 바꾼다.
+**`transport` 판정은 `code` 문자열로 하지 마라.** `isSyntheticError` 가 보는 표시가 무엇인지는 `lib/jsonapi/client.ts` 를 읽어 확인하고, 판정은 `actionForErrors` 에 맡긴다 — 위 테스트의 마지막 케이스가 그것을 고정한다. 합성 오류의 정확한 모양을 `client.ts` 에서 확인해 그 케이스를 맞춰 써라.
 
-`/data/relationships` 가 맨으로 오는 경우가 실제로 있다는 점에 주의한다 — 네 번째 세그먼트가 없으므로 필드 오류가 아니고, 배너로 간다.
+- [ ] **Step 4: 테스트를 돌려 실패를 확인하고 구현한다**
 
-**문구를 만들지 않는다** — 오류 문구의 정본은 백엔드이고 `Accept-Language` 로 협상된 것이다(스펙 6.3).
+Run: `pnpm vitest run test/unit/examples/form-state.test.ts` → FAIL → 구현 → PASS (5 tests)
 
-- [ ] **Step 2: 테스트를 돌려 실패를 확인하고 구현한다**
+**문구를 만들지 않는다** — 오류 문구의 정본은 백엔드이고 `Accept-Language` 로 협상된 것이다(스펙 6.3). `flow.ts` 가 401·409 를 두고 적어 둔 경고가 그대로 적용된다: 코드 문자열 → 필드 이름 카탈로그를 프론트에 두 벌째 만들지 마라.
 
-Run: `pnpm vitest run test/unit/resources/form.test.ts` → FAIL → 구현 → PASS (3 tests)
-
-- [ ] **Step 3: 상세 화면을 만든다**
+- [ ] **Step 5: 상세 화면을 만든다**
 
 `detail.ts` 에 `detailRequest(resource, id, acceptLanguage)` 를 두고 `page.tsx` 는 그것 하나에 넘긴다.
 
 **모양은 `app/(admin)/examples/list.ts` 를 읽어서 맞춘다** — Task 8 이 이미 만든 `listRequest` 가 정본이다. 산문으로 옮겨 적지 않는 이유는 그 사본이 드리프트하기 때문이다. 지금 그것은 `[path, options]` 튜플을 돌려주고 화면이 `request(...detailRequest(...))` 로 펼친다. `RequestOptions.query` 가 `URLSearchParams` 라는 점과 `withAcceptLanguage(options, lang)` 헬퍼가 있다는 점도 그 파일에서 확인된다.
 
-상세는 `include` 가 필요하다 — 관계 이름을 보여야 하므로 `include=category,tags` 를 실어야 하고, 빼먹으면 배지가 UUID 로 그려지거나 조용히 "분류 없음"이 된다. 목록의 `gridQuery` 는 그것을 이미 싣는다. 속성·관계·메타를 그린다. 관계 이름을 보이려면 `include=category,tags` 가 실려야 한다.
+**`include=category,tags` 를 반드시 싣는다.** 빼먹으면 배지가 UUID 로 그려지거나 조용히 "분류 없음"이 된다. 실측으로 두 사실이 확인됐다(2026-09-12):
 
-인라인 편집은 **저장이 취소와 다른 일을 하게** 만든다 — 저장은 `PATCH` 요청 하나를 보내고 제출 중에는 스피너만 남긴다.
+| 무엇 | 실측 |
+| --- | --- |
+| examples 의 `include` 허용 | `EXAMPLE_QUERY_POLICY.includes = frozenset({"category", "tags"})` |
+| 상세가 그것을 반영하나 | `crud_actions.show` 가 `parse_include_query` 로 읽어 문서에 넣는다 — 목록 전용이 아니다 |
+| categories·tags 의 `include` 허용 | **빈 집합이다**(`includes=frozenset()`) — 역참조가 순환을 만들어서 의도적으로 비웠다 |
 
-- [ ] **Step 4: 생성 화면과 Server Action 을 만든다**
+마지막 줄이 Step 6 에 걸린다: **생성 폼의 선택 목록을 받을 때 `include` 를 실으면 거절된다.** 분류·라벨 목록은 `include` 없이 받아라.
 
-`actions.ts` 에 생성·수정·삭제 Server Action 을 둔다. 실패하면 `fieldErrors` 로 필드에 붙이고 배너에 요약을 낸다. 성공하면 만들어진 자원의 상세로 이동한다.
+속성·관계·메타를 그린다. 인라인 편집은 **저장이 취소와 다른 일을 하게** 만든다 — 저장은 `PATCH` 요청 하나를 보내고 제출 중에는 스피너만 남긴다.
 
-- [ ] **Step 5: 스켈레톤 둘을 만든다**
+- [ ] **Step 6: 생성 화면과 Server Action 을 만든다**
+
+`actions.ts` 에 생성·수정·삭제 Server Action 을 둔다. 실패하면 `examplesFormState` 로 필드에 붙이고 배너에 요약을 낸다. 성공하면 만들어진 자원의 상세로 이동한다.
+
+**쓰기 계약은 실측돼 있다**(`route_registrar.py`, 2026-09-12). 기억으로 가정하지 마라.
+
+| 무엇 | 실측 | 화면이 해야 하는 것 |
+| --- | --- | --- |
+| 생성 | `POST /api/v1/examples` → **201** | 만들어진 자원의 상세로 보낸다 |
+| 수정 | `PATCH /api/v1/examples/{id}` → 200 | 상세를 갱신한다 |
+| 삭제 | `DELETE /api/v1/examples/{id}` → **204, 본문 없음** | 목록으로 보낸다 |
+| **쓰지 마라** | `PUT /api/v1/examples/{id}` | 업서트다(`enable_upsert = True`) — **201 로 자원을 새로 만들 수 있다.** 편집 폼이 부를 것이 아니다 |
+
+**204 를 `status` 로 좁히지 마라.** `lib/jsonapi/client.ts` 의 `JsonApiResult<T>` 는 204 갈래를 `status: 204` 리터럴로, 나머지를 `status: number` 로 선언한다 — 판별자가 섞여 있어서 TypeScript 는 `status` 비교로 멤버를 배제하지 않는다. 좁히려면 **`document` 자체로** 좁혀라(`if (result.document !== null)`). 그 파일이 이 함정을 주석으로 크게 적어 뒀으니 삭제 액션을 쓰기 전에 읽어라.
+
+- [ ] **Step 7: 스켈레톤 둘을 만든다**
 
 `[id]/loading.tsx` 와 `new/loading.tsx` — **텍스트 없이** 스켈레톤만.
 
-- [ ] **Step 6: 게이트를 돌리고 커밋**
+- [ ] **Step 8: 게이트를 돌리고 커밋**
 
 Run: `rm -rf .next && ./scripts/check.sh`
 
 ```bash
 git add -A
-git commit -m "feat: add the detail and create screens
+git commit -F - <<'MSG'
+feat: add the detail and create screens
 
-Field errors come from the backend's JSON:API errors: fieldErrors maps
-source.pointer onto attribute and relationship names and attaches the
-backend's own detail text. The frontend writes no failure wording, because
-the backend negotiates it from Accept-Language.
+Field errors come from the backend's JSON:API errors. This task adds no
+pointer parser: lib/jsonapi/errors.ts already maps source.pointer onto
+attribute and relationship names, unescapes RFC 6901 segments, and keeps
+every message per field. The screen's only job is placement, and the one
+way it differs from the auth form is that this form has relationship
+inputs, so relationship errors land on them instead of the banner.
+
+The frontend writes no failure wording, because the backend negotiates it
+from Accept-Language.
 
 Save is not wired to the same handler as Cancel — it sends one PATCH and
-shows a spinner while it does."
+shows a spinner while it does. PATCH, not PUT: PUT is an upsert here and
+can create a resource.
+MSG
 ```
 
 ---
+
 
 ### Task 11: `lib/bulk` — 순차 실행기
 
@@ -1826,7 +1873,7 @@ shows a spinner while it does."
 - Test: `test/unit/bulk/executor.test.ts`
 
 **Interfaces:**
-- Consumes: 없음 (순수 함수)
+- Consumes: `lib/jsonapi/document.ts` 의 `ErrorObject` **타입만**(`import type`) — 실행기는 여전히 순수 함수다
 - Produces:
 
 ```ts
@@ -1835,8 +1882,18 @@ export const MAX_BULK_ITEMS = 50
 export interface BulkOutcome {
   readonly id: string
   readonly ok: boolean
-  readonly status?: string
-  readonly detail?: string
+  /**
+   * 실패하면 백엔드가 낸 오류 배열을 **그대로** 들고 간다. `status`·`detail` 만
+   * 뽑아 복사하지 않는 이유는 `code` 가 버려지기 때문이다 — `code` 는
+   * `lib/jsonapi/errors.ts` 의 오류 라우팅 전습이 톤다는 유일한 필드이고,
+   * 그것을 버리면 Task 12 가 HTTP 상태 문자열로 정책을 다시 판단하게 되어
+   * 이밌 있는 결정을 둘로 나눴다(F44 와 같은 부리의 실수).
+   *
+   * `exactOptionalPropertyTypes: true` 이므로 끝내 복사하고 싶어지면
+   * `{ status: error.status }` 는 `string | undefined` 를 `status?: string` 에 넣으려 해
+   * **포함하지 못한다.** 오루 객처를 그대로 들고 가면 그 바위가 생기지 않는다.
+   */
+  readonly errors?: readonly ErrorObject[]
 }
 
 export interface BulkReport {
@@ -1858,9 +1915,14 @@ import { describe, expect, it, vi } from 'vitest'
 import { MAX_BULK_ITEMS, runBulk } from '@/lib/bulk/executor'
 
 const ok = (id: string) => ({ id, ok: true })
-// 실측된 실패 모양이다: 삭제는 성공하면 204, 그 행이 이미 없으면 404.
-// 백엔드는 삭제에 422 를 내지 않는다 - 참조 무결성 거절 경로가 없다.
-const gone = (id: string) => ({ id, ok: false, status: '404', detail: '그 자원을 찾을 수 없습니다' })
+// 실증된 실패 모양이다: 삭제는 성공하면 204, 그 행이 이밌 없으면 404.
+// 백엔드는 삭제에 422 를 내지 않는다 - 참조 무얼성 거절 경로가 없다.
+// code 를 같이 싣는다 - Task 12 가 이걸 보고 재시도 가능 여부를 가른다.
+const gone = (id: string) => ({
+  id,
+  ok: false,
+  errors: [{ status: '404', code: 'RESOURCE_NOT_FOUND', detail: '그 자원을 찾을 수 없습니다' }],
+})
 
 describe('runBulk', () => {
   it('선언된 순서대로 하나씩 보낸다', async () => {
@@ -1897,7 +1959,7 @@ describe('runBulk', () => {
       id === 'b' ? gone(id) : ok(id),
     )
     expect(report.outcomes.map((o) => o.ok)).toEqual([true, false, true])
-    expect(report.outcomes[1]!.status).toBe('404')
+    expect(report.outcomes[1]!.errors?.[0]?.code).toBe('RESOURCE_NOT_FOUND')
     expect(report.cancelled).toBe(false)
   })
 
@@ -1975,45 +2037,95 @@ UI."
 
 - [ ] **Step 1: 결과 표의 테스트를 쓴다**
 
+**재시도 가능 여부를 HTTP 상태 문자열로 판단하지 마라.** `BulkOutcome.errors` 가 백엔드 오류 객체를 그대로 들고 오므로, 그 판정은 `lib/jsonapi/errors.ts` 의 `actionForErrors` 가 이미 하고 있다. `summarize` 는 그 답을 읽어 쓰기만 한다 — 코드 문자열 목록을 여기 두 벌째 만들면 백엔드가 코드를 바꿀 때 조용히 썩는다(F44 와 같은 부리의 실수).
+
+**실측으로 확인된 것**(2026-09-12): 일괄 삭제가 만나는 실패는 셋이고 **그중 둘은 재시도하면 안 된다.**
+
+| 실패 | 코드 | 왜 |
+| --- | --- | --- |
+| 그 행이 이미 없다 | `404 RESOURCE_NOT_FOUND` | **운영자의 의도는 이미 달성됐다.** 다시 DELETE 를 보내도 영원히 같은 404 다. 스펙 6.3 이 꼽은 **최빈 실패**다(두 운영자가 한 그리드를 보고, 목록은 낡는다) |
+| 세션이 만료됐다 | `401` + `AUTHENTICATION_REQUIRED`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`TOKEN_REVOKED` | 실측: `ExamplesController.write_dependencies = (get_current_active_user,)` 라 **모든 DELETE 가 그 의존성을 지난다.** 세션이 죽었으면 남은 전건이 같은 401 이다 — 재시도 버튼은 무한 루프다. `actionForErrors` 가 이것을 `destroySession` 으로 부른다 |
+| 그 밖 | 5xx · 409 등, 그리고 `transport`(요청이 서버에 닿지조차 못했다) | **이것만 재시도할 값이 있다** |
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { summarize } from '@/components/grid/bulk-result'
 
+const failed = (id: string, status: string, code: string) => ({
+  id,
+  ok: false,
+  errors: [{ status, code, detail: 'x' }],
+})
+
 describe('summarize', () => {
   it('성공과 실패를 따로 센다', () => {
     const report = {
-      outcomes: [
-        { id: 'a', ok: true },
-        { id: 'b', ok: false, status: '404', detail: 'x' },
-        { id: 'c', ok: true },
-      ],
+      outcomes: [{ id: 'a', ok: true }, failed('b', '500', 'INTERNAL_SERVER_ERROR'), { id: 'c', ok: true }],
       cancelled: false,
     }
-    expect(summarize(report)).toEqual({ ok: 2, failed: 1, retryable: ['b'], cancelled: false })
+    expect(summarize(report)).toEqual({
+      ok: 2,
+      failed: 1,
+      alreadyGone: [],
+      retryable: ['b'],
+      sessionLost: false,
+      cancelled: false,
+    })
   })
 
-  it('재시도 대상은 실패한 것만이다', () => {
-    const report = {
-      outcomes: [
-        { id: 'a', ok: true },
-        { id: 'b', ok: false, status: '401', detail: 'y' },
-      ],
+  it('이미 없는 행은 재시도 대상이 아니다 - 의도가 이미 달성됐다', () => {
+    // 최빈 실패다. 재시도 버튼에 넣으면 운영자는 영원히 지워지지 않는
+    // 행을 계속 누르게 된다 - 실제로는 처음부터 지워져 있었다.
+    const s = summarize({ outcomes: [failed('b', '404', 'RESOURCE_NOT_FOUND')], cancelled: false })
+    expect(s.alreadyGone).toEqual(['b'])
+    expect(s.retryable).toEqual([])
+  })
+
+  it('세션이 죽으면 재시도가 아니라 재로그인이다', () => {
+    // 남은 전건이 같은 401 을 받는다. actionForErrors 가 destroySession 을 준다.
+    const s = summarize({ outcomes: [failed('b', '401', 'TOKEN_EXPIRED')], cancelled: false })
+    expect(s.sessionLost).toBe(true)
+    expect(s.retryable).toEqual([])
+  })
+
+  it('성공한 건은 다시 보내지 않는다', () => {
+    const s = summarize({
+      outcomes: [{ id: 'a', ok: true }, failed('b', '503', 'HTTP_ERROR')],
       cancelled: false,
-    }
-    expect(summarize(report).retryable).toEqual(['b'])
+    })
+    expect(s.retryable).toEqual(['b'])
   })
 
   it('전건 성공이면 재시도 대상이 없다', () => {
-    expect(summarize({ outcomes: [{ id: 'a', ok: true }], cancelled: false }).retryable).toEqual([])
+    const s = summarize({ outcomes: [{ id: 'a', ok: true }], cancelled: false })
+    expect(s).toEqual({
+      ok: 1,
+      failed: 0,
+      alreadyGone: [],
+      retryable: [],
+      sessionLost: false,
+      cancelled: false,
+    })
+  })
+
+  it('문구도 코드도 없는 실패는 재시도 대상이다 - 삼켜서 사라지게 하지 않는다', () => {
+    // `{ ok: false }` 에 errors 가 없을 수 있다(변환이 오류 문서를 못 얻은 경우).
+    // 분류할 근거가 없으면 alreadyGone·sessionLost 로 넘길 수 없으니 재시도로 둔다 -
+    // 어느 통에도 안 넣으면 그 행이 표에서 소리 없이 사라진다.
+    const s = summarize({ outcomes: [{ id: 'b', ok: false }], cancelled: false })
+    expect(s.failed).toBe(1)
+    expect(s.retryable).toEqual(['b'])
   })
 })
 ```
 
-둘째 검사가 "성공한 건은 다시 보내지 않는다"를 고정한다.
+`failed` 는 ok 가 아닌 전건의 수다 — `alreadyGone` 과 `retryable` 의 합이 아니다. 세션이 죽어 분류된 행도 실패로 센다. 표의 머리글이 "12건 중 3건 실패"를 정직하게 말해야 하기 때문이다.
 
 - [ ] **Step 2: 테스트를 돌려 실패를 확인하고 `summarize` 를 구현한다**
 
-Run: `pnpm vitest run test/unit/components/bulk-result.test.ts` → FAIL → 구현 → PASS (3 tests)
+Run: `pnpm vitest run test/unit/components/bulk-result.test.ts` → FAIL → 구현 → PASS (6 tests)
+
+`summarize` 는 건별로 `actionForErrors(outcome.errors ?? [])` 를 부르고 그 답으로 통을 고른다 — `notFound` → `alreadyGone`, `destroySession` → `sessionLost`, 나머지(`banner`·`fieldErrors`·`transport`) → `retryable`. 빈 배열에 `actionForErrors` 를 부르면 `'banner'` 가 나오므로 마지막 검사가 저절로 맞는다(그 함수가 "어떤 배열에도 정의된 답을 낸다"고 주석에 적어 둔 성질이다).
 
 - [ ] **Step 3: 선택 바를 만든다**
 
@@ -2025,7 +2137,17 @@ Run: `pnpm vitest run test/unit/components/bulk-result.test.ts` → FAIL → 구
 
 - [ ] **Step 5: 결과 표를 만든다**
 
-**토스트로 뭉개지 않는다.** 행별 성공·실패를 표로 내고, 실패 이유는 백엔드가 준 `status` 와 `detail` 을 그대로 쓴다. 실패한 행만 재시도하는 버튼을 둔다. 진행 중에는 **텍스트 없이** 스피너와 진행률만 둔다(진행 카운트 `7 / 12` 는 데이터이므로 허용).
+**토스트로 뭉개지 않는다.** 행별 성공·실패를 표로 내고, 실패 이유는 백엔드가 준 문구를 그대로 쓴다 — `outcome.errors` 에서 `detail ?? title ?? code` 를 읽는다(`lib/jsonapi/errors.ts` 의 `messageOf` 와 같은 순서다. 문구를 지어내지 마라). 진행 중에는 **텍스트 없이** 스피너와 진행률만 둔다(진행 카운트 `7 / 12` 는 데이터이므로 허용).
+
+**재시도 버튼은 `summarize().retryable` 만 받는다.** 세 통이 서로 다른 것을 뜻하므로 표도 셋을 구분해 보여야 한다.
+
+| 통 | 표가 말해야 하는 것 | 버튼 |
+| --- | --- | --- |
+| `retryable` | 다시 보내면 달라질 수 있다 | **재시도** |
+| `alreadyGone` | 그 행은 이미 없다 — 지우려던 목적은 달성됐다 | 없음. 목록 새로 고침을 권한다 |
+| `sessionLost` | 세션이 끊겨 남은 건이 처리되지 않았다 | **다시 로그인**(재시도가 아니다) |
+
+`sessionLost` 가 참이면 **재시도 버튼을 아예 그리지 마라.** 남은 전건이 같은 401 을 받으므로 그 버튼은 누를 때마다 같은 표를 다시 만든다.
 
 `sonner` 가 블록과 함께 들어왔지만 **부분 실패에는 쓰지 않는다.**
 
@@ -2033,22 +2155,45 @@ Run: `pnpm vitest run test/unit/components/bulk-result.test.ts` → FAIL → 구
 
 `actions.ts` 에 일괄 삭제 Action 을 더하고 `runBulk` 로 실행한다. 각 건은 `DELETE /api/v1/examples/{id}` 한 번이다.
 
+**`JsonApiResult` → `BulkOutcome` 변환은 이 Step 이 소유한다.** Task 11 의 실행기는 순수함수라 요청을 모르고, 화면은 `BulkOutcome` 만 본다 — 그 사이를 잇는 것이 여기다. 함정이 둘이고 둘 다 실측돼 있다.
+
+**1. 204 를 `status` 로 좁히지 마라.** 성공한 삭제는 **204, 본문 없음**이다(`route_registrar.py` 실측). 그런데 `lib/jsonapi/client.ts` 의 `JsonApiResult<T>` 는 204 갈래만 `status: 204` 리터럴이고 나머지는 `status: number` 라 판별자가 섞여 있다 — TypeScript 는 `result.status === 204` 로 멤버를 배제하지 않는다. 그 파일이 이 함정을 주석으로 크게 적어 뒀으니 읽고 시작해라. 좁히려면 `ok` 와 `document` 로 좁힌다.
+
+```ts
+// 성공: ok 가 참이면 끝이다. 204(document: null)도 200(document: T)도 같은 성공이다.
+// 삭제에서 문서를 읽을 일이 없으니 status 를 들여다볼 이유가 아예 없다.
+if (result.ok) return { id, ok: true }
+return { id, ok: false, errors: result.errors }
+```
+
+**2. `errors` 를 복사해 재조립하지 마라.** `BulkOutcome.errors` 가 `readonly ErrorObject[]` 인 이유가 이것이다 — `exactOptionalPropertyTypes: true` 아래에서 `{ status: e.status, detail: e.detail }` 는 `string | undefined` 를 `status?: string` 에 넣으려 해 **컴파일되지 않는다.** 오류 배열을 그대로 넘기면 그 벽이 생기지 않고, `code` 도 같이 살아서 Step 1 의 분류가 성립한다.
+
 - [ ] **Step 7: 게이트를 돌리고 커밋**
 
 Run: `rm -rf .next && ./scripts/check.sh`
 
 ```bash
 git add -A
-git commit -m "feat: make partial failure a first-class bulk result
+git commit -F - <<'MSG'
+feat: make partial failure a first-class bulk result
 
 The selection bar reads MAX_BULK_ITEMS rather than restating it and says how
 many requests a bulk action will send before it is pressed. Failures land in
-a per-row result table carrying the backend's own status and detail, with a
-retry that resends only the rows that failed.
+a per-row result table carrying the backend's own message.
+
+Retry is offered only for rows where retrying can change the answer. The two
+failures this actually hits are both excluded, and both were measured: a 404
+means the row was already gone, so the operator's intent is already satisfied
+and resending deletes nothing forever; a 401 means the session died, and since
+every DELETE goes through the same auth dependency, every remaining row would
+fail identically — a retry button there is a loop. summarize does not decide
+this from HTTP status strings; it reads actionForErrors, which already owns
+the routing, so there is no second catalogue of codes to rot.
 
 sonner arrived with the block but is deliberately not used here: a toast
 collapses twelve outcomes into one line, and three of twelve failing is the
-normal path."
+normal path.
+MSG
 ```
 
 ---

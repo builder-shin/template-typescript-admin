@@ -61,7 +61,7 @@ FastAPI · NestJS · Rails 세 백엔드 템플릿이 공유하는 JSON:API 1.1 
 | `/api/v1/examples`   | 자원 전체 — 아래 2.2                        |
 | `/api/v1/categories` | 읽기 전용 참조 자원                         |
 | `/api/v1/tags`       | 읽기 전용 참조 자원                         |
-| `/health`            | 헬스                                        |
+| `/health/live` · `/health/ready` | `live` 는 무조건 ok. `ready` 는 `SELECT 1` 로 Postgres 를 확인하고 실패 시 **503** |
 
 ### 2.2 자원별 라우트
 
