@@ -17,7 +17,7 @@
 - **로딩 상태에 텍스트를 쓰지 않는다.** 스켈레톤 또는 스피너(`Loader2`) 하나만 둔다. 열 수는 선언에서 가져오고 박지 않는다. (스펙 5.3)
 - **계층 위반의 정의** (스펙 4장): `lib/jsonapi/`·`lib/grid/`·`lib/bulk/` 에 이 저장소의 실제 자원 이름 문자열 리터럴이 **코드로** 나타나면 위반. `lib/resources/*.ts`·`lib/grid/*.ts`·`lib/bulk/*.ts` 에 JSX 가 있으면 위반. `app/` 에서 `fetch` 직접 호출은 위반. `components/grid/*` 에 자원 이름 분기는 위반.
 - **`lib/resources/index.ts` 의 `RESOURCES` 는 손으로 채운다.** 자동 탐색(glob · `import.meta.glob` · 동적 `import`)을 쓰면 계약이 사라진다. (스펙 4장)
-- **정렬·필터·페이지는 백엔드가 소유한다.** TanStack 은 `manualSorting`·`manualFiltering`·`manualPagination` 셋을 **함께** 켜고 돈다. (스펙 4.2)
+- **정렬·필터·페이지는 백엔드가 소유한다.** 설치된 `@tanstack/react-table@9.2.4` 에서 그 방법은 `manualPagination: true` + `rowCount` 를 주고, `sortedRowModel`·`filteredRowModel` 을 **등록하지 않는 것**이다. `manualSorting`·`manualFiltering` 은 v9 에 없다(실측 0건). (스펙 4.2)
 - **일괄 작업 상한은 50 건, 동시성 1(순차)이며 선언된 자리 하나에 있다.** 화면이 그 값을 읽어 누르기 전에 알린다. (스펙 6.2)
 - **오류 문구의 정본은 백엔드다.** 프론트엔드가 실패 이유 문장을 만들지 않는다. 요청 스코프의 모든 백엔드 호출이 그 요청의 `Accept-Language` 를 전달한다. (스펙 6.3)
 - **사라질 자리를 인용하지 않는다.** 계획 문서·세션 스크래치패드를 코드·문서 주석에서 인용하면 게이트 `[5/9]` 가 죽인다. 근거는 사실 문장으로 적는다.
@@ -998,9 +998,20 @@ only two of the three backends happened to accept."
 - Consumes: 없음 (순수 선언 계층)
 - Produces:
 
+**연산자 어휘는 백엔드가 정한다.** 실측(2026-09-12, FastAPI `app/schemas/example.py` 의 `FilterField` 정책): `exact` · `contains` · `in` · `gt` · `gte` · `lt` · `lte` · `isNull`. **`eq` 는 존재하지 않는다** — 이름을 지어내면 우리 테스트는 초록이고 실제 백엔드에서만 죽는다.
+
 ```ts
-export type FilterOperator = 'eq' | 'contains' | 'gte' | 'lte'
-export type ColumnKind = 'text' | 'badge' | 'badges' | 'datetime'
+export type FilterOperator =
+  | 'exact'
+  | 'contains'
+  | 'in'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'isNull'
+
+export type ColumnKind = 'text' | 'number' | 'badge' | 'badges' | 'datetime'
 
 export interface ColumnDef {
   readonly key: string
@@ -1010,9 +1021,13 @@ export interface ColumnDef {
 }
 
 export interface FilterDef {
+  /** 백엔드의 필터 키. 관계는 `category.id` 처럼 점을 포함한다. */
   readonly key: string
   readonly label: string
-  readonly operator: FilterOperator
+  /** 백엔드가 그 필드에 허용한 연산자 전부. 손으로 베낀 거울이다. */
+  readonly operators: readonly FilterOperator[]
+  /** 화면이 기본으로 쓰는 연산자. `operators` 안에 있어야 한다. */
+  readonly uiOperator: FilterOperator
   readonly options?: readonly string[]
 }
 
@@ -1057,6 +1072,26 @@ describe('RESOURCES', () => {
     }
   })
 
+  it('화면 기본 연산자는 백엔드가 허용한 것 안에 있어야 한다', () => {
+    for (const resource of RESOURCES) {
+      for (const filter of resource.filters) {
+        expect(filter.operators).toContain(filter.uiOperator)
+      }
+    }
+  })
+
+  it('examples 의 필터 키와 연산자가 백엔드 정책과 같다', () => {
+    const examples = resourceByType('examples')!
+    const policy = Object.fromEntries(examples.filters.map((f) => [f.key, [...f.operators].sort()]))
+    expect(policy).toEqual({
+      title: ['contains', 'exact'],
+      status: ['exact', 'in'],
+      score: ['exact', 'gt', 'gte', 'in', 'lt', 'lte'],
+      'category.id': ['exact', 'in', 'isNull'],
+      createdAt: ['exact', 'gt', 'gte', 'lt', 'lte'],
+    })
+  })
+
   it('선언이 동결돼 있다', () => {
     expect(Object.isFrozen(RESOURCES)).toBe(true)
     expect(() => {
@@ -1079,11 +1114,38 @@ Expected: FAIL — 모듈이 없다.
 
 - [ ] **Step 4: 세 자원을 선언한다**
 
-`example.ts` — `type: 'examples'`, `path: '/api/v1/examples'`, `writable: true`. 열은 `title`(text, sortable) · `category`(badge) · `tags`(badges) · `status`(badge, sortable) · `updatedAt`(datetime, sortable). 필터는 `title`(contains) · `status`(eq, options) · `category`(eq). `includes: ['category', 'tags']`.
+**아래는 백엔드 소스에서 실측한 계약이다**(2026-09-12, FastAPI `app/models/example.py` + `app/schemas/example.py`). 기억으로 고치지 마라.
 
-`category.ts` · `tag.ts` — `path: '/api/v1/categories'` · `/api/v1/tags'`, `writable: false`, 열은 `name` 하나.
+`example.ts` — `type: 'examples'`, `path: '/api/v1/examples'`, `writable: true`.
 
-**실제 속성 이름은 백엔드에서 확인하고 적는다** — 아래 Step 5 가 그것을 강제한다.
+| 열 | kind | sortable |
+| --- | --- | --- |
+| `title` | text | 예 |
+| `description` | text | 아니오 |
+| `status` | badge | 예 |
+| `score` | number | 예 |
+| `category` | badge | 아니오 |
+| `tags` | badges | 아니오 |
+| `createdAt` | datetime | 예 |
+| `updatedAt` | datetime | 예 |
+
+| 필터 키 | 허용 연산자 | 화면 기본 |
+| --- | --- | --- |
+| `title` | `exact` · `contains` | `contains` |
+| `status` | `exact` · `in` | `exact` |
+| `score` | `exact` · `gt` · `gte` · `lt` · `lte` · `in` | `gte` |
+| `category.id` | `exact` · `in` · `isNull` | `exact` |
+| `createdAt` | `exact` · `gt` · `gte` · `lt` · `lte` | `gte` |
+
+`sorts: ['title', 'status', 'score', 'createdAt', 'updatedAt']`, `includes: ['category', 'tags']`.
+
+**`status` 의 와이어 값은 `draft` · `active` · `archived` 다**(`ExampleStatus` StrEnum). 화면 라벨과 혼동하지 마라 — 필터에 실리는 것은 이 값이다.
+
+**관계 필터 키는 `category` 가 아니라 `category.id` 다.** 백엔드가 그렇게 선언했고, `category` 로 보내면 허용 목록에 없는 파라미터가 된다.
+
+백엔드의 기본 정렬은 `createdAt` 내림차순이고 `id` 타이브레이커가 붙는다. 화면이 정렬을 지정하지 않으면 그 순서가 온다.
+
+`category.ts` · `tag.ts` — `path: '/api/v1/categories'` · `'/api/v1/tags'`, `writable: false`, 열은 `name` 하나.
 
 - [ ] **Step 5: 선언을 실제 응답과 맞춘다**
 
@@ -1178,7 +1240,7 @@ describe('readGridState', () => {
   })
 
   it('왕복해도 같은 상태다', () => {
-    const params = new URLSearchParams('title=abc&status=public&sort=-updatedAt&hide=tags')
+    const params = new URLSearchParams('title=abc&status=active&sort=-updatedAt&hide=tags')
     const state = readGridState(params, EXAMPLES)
     expect(readGridState(writeGridState(state), EXAMPLES)).toEqual(state)
   })
@@ -1199,14 +1261,28 @@ const EXAMPLES = resourceByType('examples')!
 
 describe('gridQuery', () => {
   it('선언된 연산자로 필터를 조립하고 include 를 반드시 싣는다', () => {
-    const state = readGridState(new URLSearchParams('title=abc&status=public&sort=-updatedAt'), EXAMPLES)
+    const state = readGridState(
+      new URLSearchParams('title=abc&status=active&sort=-updatedAt'),
+      EXAMPLES,
+    )
     expect(gridQuery(EXAMPLES, state)).toEqual({
       'filter[title][contains]': 'abc',
-      'filter[status][eq]': 'public',
+      'filter[status][exact]': 'active',
       sort: '-updatedAt',
       'page[size]': '50',
+      'page[totals]': 'true',
       include: 'category,tags',
     })
+  })
+
+  it('총합을 항상 요청한다 - 표가 전체 쪽 수를 계산해야 한다', () => {
+    const state = readGridState(new URLSearchParams(), EXAMPLES)
+    expect(gridQuery(EXAMPLES, state)['page[totals]']).toBe('true')
+  })
+
+  it('관계 필터는 점을 포함한 키를 그대로 쓴다', () => {
+    const state = readGridState(new URLSearchParams('category.id=7c1f'), EXAMPLES)
+    expect(gridQuery(EXAMPLES, state)['filter[category.id][exact]']).toBe('7c1f')
   })
 
   it('커서 질의를 해석하지 않고 그대로 전달한다', () => {
@@ -1236,6 +1312,12 @@ Expected: FAIL — 모듈이 없다.
 `state.ts` 와 `query.ts` 를 쓴다. **`lib/grid/` 에 자원 이름 문자열 리터럴을 두지 않는다**(계층 위반) — 전부 `ResourceDef` 에서 읽는다. **JSX 도 `fetch` 도 두지 않는다.**
 
 커서 값은 백엔드가 발급한 불투명한 값으로 다룬다. 페이지 이동은 응답 링크의 query 를 읽어 `pageQuery` 에 담아 그대로 전달하고, 프런트엔드가 커서 내용을 해석하지 않는다.
+
+**총합은 opt-in 이라 명시적으로 요청해야 한다.** 실측(2026-09-12, `app/controllers/concerns/crud_actions.py:162,179-213`): `meta.totalCount` 와 null 이 아닌 `links.last` 는 **`page[totals]=true` 로만** 온다. 안 보내면 `meta` 에 `totalCount` 가 없고 `links.last` 는 null 이다(`next` 는 프로브 행 하나로 결정되므로 총합 없이도 앞뒤 이동은 된다).
+
+그래서 `gridQuery` 는 목록 질의에 **항상 `page[totals]=true` 를 싣는다.** 표가 전체 쪽 수를 계산해야 하고(Task 8 의 `rowCount`), 화면이 "전체 N건"을 그린다.
+
+**대가를 알고 받는다**: 매 쪽마다 백엔드가 `COUNT` 쿼리를 한 번 더 돈다. 백엔드가 이것을 opt-in 으로 둔 이유가 그 비용이다. 그 비용이 문제가 되는 배포는 이 플래그를 끄면 되고, 그때 잃는 것은 전체 쪽 수와 "전체 N건" 표시다 — 앞뒤 이동은 그대로 동작한다. 이 사실을 `lib/grid/AGENTS.md` 가 적는다.
 
 - [ ] **Step 5: 테스트를 돌려 통과를 확인한다**
 
@@ -1272,39 +1354,58 @@ UUID badges on one, a silent 'no category' on another."
 
 **Interfaces:**
 - Consumes: Task 7 의 `gridQuery`·`readGridState`, Task 6 의 `ResourceDef`, Task 2 의 `lib/jsonapi` 클라이언트
-- Produces: `manualModeOptions(): { manualSorting: true; manualFiltering: true; manualPagination: true }`, `listRequest(resource, params, acceptLanguage)` — 화면이 부르는 **조립 함수 하나**
+- Produces: `serverDrivenTableOptions(rowCount: number): { manualPagination: true; rowCount: number }`, `listRequest(resource, params, acceptLanguage)` — 화면이 부르는 **조립 함수 하나**
 
-- [ ] **Step 1: manual 모드의 테스트를 쓴다**
+**설치된 것은 `@tanstack/react-table@9.2.4` 다**(실측). v9 에서 서버 사이드를 켜는 방법은 v8 과 다르므로 아래를 그대로 따른다.
+
+| 무엇 | v9 에서의 방법 |
+| --- | --- |
+| 페이지 | `manualPagination: true` **와 `rowCount`**(서버 총합)를 함께 준다 |
+| 정렬 | `sortedRowModel` 을 **등록하지 않는다** |
+| 필터 | `filteredRowModel` 을 **등록하지 않는다** |
+
+**`manualSorting` · `manualFiltering` 은 v9 에 없다.** 패키지 전체를 검색해 0건이다 — 주면 인식되지 않고 조용히 무시된다. 그 이름을 쓰면 우리 테스트는 초록이고 표는 계속 불러온 쪽 안에서 정렬한다.
+
+`rowCount` 를 빼면 표가 전체 쪽 수를 계산할 수 없다. 값은 Task 9 가 실측한 메타 총합에서 온다.
+
+패키지가 `node_modules/@tanstack/react-table/skills/with-tanstack-query/SKILL.md` 에 1차 가이드를 담고 있다 — 서버 사이드 표의 정본이니 읽어라. 그 문서가 명시하는 함정 하나: **질의 결과를 별도 state 로 복사하지 마라.** 우리 구조에서는 RSC 가 받은 행을 그대로 `data` 로 넘긴다.
+
+- [ ] **Step 1: 서버 구동 옵션의 테스트를 쓴다**
 
 ```ts
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { manualModeOptions } from '@/lib/grid/table'
+import { serverDrivenTableOptions } from '@/lib/grid/table'
 
-describe('manualModeOptions', () => {
-  it('정렬·필터·페이지 셋을 함께 켠다', () => {
-    expect(manualModeOptions()).toEqual({
-      manualSorting: true,
-      manualFiltering: true,
-      manualPagination: true,
-    })
+const TABLE = 'app/(admin)/components/data-table.tsx'
+
+describe('serverDrivenTableOptions', () => {
+  it('페이지를 서버에 맡기고 총합을 함께 넘긴다', () => {
+    expect(serverDrivenTableOptions(1284)).toEqual({ manualPagination: true, rowCount: 1284 })
+  })
+
+  it('v9 에 없는 옵션 이름을 만들어 내지 않는다', () => {
+    const keys = Object.keys(serverDrivenTableOptions(0))
+    expect(keys).not.toContain('manualSorting')
+    expect(keys).not.toContain('manualFiltering')
   })
 })
 
 describe('DataTable 배선', () => {
-  it('표가 manualModeOptions 를 실제로 펼쳐 넣는다', () => {
-    const source = readFileSync('app/(admin)/components/data-table.tsx', 'utf8')
-    expect(source).toMatch(/\.\.\.manualModeOptions\(\)/)
+  it('표가 serverDrivenTableOptions 를 실제로 펼쳐 넣는다', () => {
+    expect(readFileSync(TABLE, 'utf8')).toMatch(/\.\.\.serverDrivenTableOptions\(/)
   })
 
-  it('클라이언트 행 모델을 등록하지 않는다', () => {
-    const source = readFileSync('app/(admin)/components/data-table.tsx', 'utf8')
-    expect(source).not.toMatch(/createSortedRowModel|createPaginatedRowModel|createFilteredRowModel/)
+  it('클라이언트 정렬·필터·페이지 행 모델을 등록하지 않는다', () => {
+    const source = readFileSync(TABLE, 'utf8')
+    expect(source).not.toMatch(/createSortedRowModel|createFilteredRowModel|createPaginatedRowModel/)
   })
 })
 ```
 
-둘째·셋째 검사가 **소스 텍스트를 읽는** 것은 의도다. 단위 테스트가 React 내부 옵션을 관측할 수 없고, 이 배선을 지우는 뮤턴트는 **화면상 아무 증상을 내지 않는다** — 값이 그려지므로 목록 전체가 정렬된 것처럼 읽힌다. 실제 동작은 Task 13 의 E2E 가 쪽을 넘으며 잡는다.
+마지막 둘이 **소스 텍스트를 읽는** 것은 의도다. 단위 테스트가 React 내부 옵션을 관측할 수 없고, **v9 에서는 행 모델을 등록하지 않는 것이 곧 서버 정렬이므로 그 부재가 계약이다.** 이 배선을 지우는 뮤턴트는 화면상 아무 증상을 내지 않는다 — 값이 그려지므로 목록 전체가 정렬된 것처럼 읽힌다. 실제 동작은 Task 13 의 E2E 가 쪽을 넘으며 잡는다.
+
+둘째 검사는 내가 처음 이 계획에 쓴 잘못(`manualSorting`·`manualFiltering` 을 켜라)이 되살아나는 것을 막는다.
 
 - [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
 
@@ -1313,11 +1414,11 @@ Expected: FAIL — `lib/grid/table.ts` 가 없고, 블록의 `data-table.tsx` �
 
 - [ ] **Step 3: `lib/grid/table.ts` 를 구현한다**
 
-`manualModeOptions()` 하나를 내보낸다. 설치된 `@tanstack/react-table` 의 버전에서 이 세 옵션 이름이 유효한지 확인한다 — TanStack 소스에서 `manualPagination: true` 는 `createPaginatedRowModel` 등록을 생략한 것과 **같은 분기**로 처리된다.
+`serverDrivenTableOptions(rowCount)` 하나를 내보낸다 — `{ manualPagination: true, rowCount }`. 다른 키를 더하지 마라. TanStack 소스에서 `manualPagination: true` 는 `createPaginatedRowModel` 등록을 생략한 것과 **같은 분기**로 처리되므로 페이지는 둘 중 어느 쪽으로도 끌 수 있지만, 정렬·필터는 **등록 생략만** 가능하다.
 
 - [ ] **Step 4: 블록의 `data-table.tsx` 를 서버 구동으로 고친다**
 
-`createFilteredRowModel()` · `createSortedRowModel()` · `createPaginatedRowModel()` 등록을 지우고 `...manualModeOptions()` 를 넣는다. 컴포넌트 안의 `pagination` `useState`(`pageSize: 10`)를 지우고 페이지·정렬·필터 상태를 **URL 에서 받는다**. 행 선택과 열 표시/숨김은 TanStack 에 남긴다.
+`createFilteredRowModel()` · `createSortedRowModel()` · `createPaginatedRowModel()` 등록을 지우고 `...serverDrivenTableOptions(rowCount)` 를 넣는다. `rowCount` 는 서버가 준 총합이다 — 없으면 표가 전체 쪽 수를 계산할 수 없다. 컴포넌트 안의 `pagination` `useState`(`pageSize: 10`)를 지우고 페이지·정렬·필터 상태를 **URL 에서 받는다**. 행 선택과 열 표시/숨김은 TanStack 에 남긴다.
 
 **dnd-kit 드래그 정렬은 손대지 않는다**(스펙 3.4.2). 서버에 순서가 없어 지속되지 않지만, 나중에 백엔드가 순서를 갖추면 배선만 하면 된다.
 
@@ -1390,8 +1491,9 @@ git commit -m "feat: drive the grid from the server instead of the loaded page
 The block ships client-side filtering, sorting and pagination over static
 JSON with pageSize in component state. Against a server-paginated list that
 sorts only the rows already loaded while looking entirely correct, so the
-three client row models are removed and manualSorting, manualFiltering and
-manualPagination are set together.
+the three client row models are removed and manualPagination is set with the
+server's rowCount. manualSorting and manualFiltering do not exist in the
+installed v9 — omitting the row models is what makes sorting server-side.
 
 Unit tests assert the wiring by reading the source: a mutant that drops it
 produces no visible symptom, so there is nothing else for a unit to observe.
@@ -1414,18 +1516,17 @@ in the family's repo."
 - Consumes: Task 6 의 `RESOURCES`, Task 2 의 `lib/jsonapi`
 - Produces: `countRequest(resource)` · `readTotal(document): number`
 
-- [ ] **Step 1: 총합 메타 키를 실제 응답에서 확인한다**
+- [ ] **Step 1: 총합의 계약을 확인한다 — 이미 실측돼 있다**
 
-```bash
-curl -s -H 'accept: application/vnd.api+json' \
-  'http://localhost:4100/api/v1/examples?page[size]=1' | python -m json.tool | head -30
-```
+백엔드 소스에서 읽은 계약이다(2026-09-12, `app/controllers/concerns/crud_actions.py:162,179-213`). **도커도 살아있는 백엔드도 필요 없다.**
 
-`meta` 아래 총합 키의 **실제 이름을 적어 둔다.** 기억으로 쓰지 마라 — 키가 틀리면 카드가 조용히 0 을 그린다. 세 백엔드에서 같은지도 확인한다(Task 13 의 매트릭스가 재확인한다).
+- 키는 **`meta.totalCount`** 다.
+- **`page[totals]=true` 를 보내야 온다.** 안 보내면 `meta` 에 없고 `links.last` 도 null 이다.
+- `next` 링크는 프로브 행 하나로 결정되므로 총합 없이도 앞뒤 이동은 된다.
+
+세 백엔드가 같은지는 Task 13 의 매트릭스가 재확인한다. 다르면 그때 계약 차이로 기록된다.
 
 - [ ] **Step 2: 카운트 함수의 테스트를 쓴다**
-
-Step 1 에서 확인한 키를 써서 쓴다. 아래 `<확인한키>` 를 그 이름으로 바꾼다.
 
 ```ts
 import { describe, expect, it } from 'vitest'
@@ -1435,25 +1536,28 @@ import { resourceByType } from '@/lib/resources'
 const EXAMPLES = resourceByType('examples')!
 
 describe('자원 카운트', () => {
-  it('한 건만 받아 총합을 읽는다', () => {
-    expect(countRequest(EXAMPLES).query['page[size]']).toBe('1')
+  it('한 건만 받고 총합을 켜서 받는다', () => {
+    const query = countRequest(EXAMPLES).query
+    expect(query['page[size]']).toBe('1')
+    expect(query['page[totals]']).toBe('true')
   })
 
   it('include 를 싣지 않는다', () => {
     expect(countRequest(EXAMPLES).query.include).toBeUndefined()
   })
 
-  it('메타의 총합을 읽는다', () => {
-    expect(readTotal({ data: [], meta: { '<확인한키>': 1284 } })).toBe(1284)
+  it('meta.totalCount 를 읽는다', () => {
+    expect(readTotal({ data: [], meta: { totalCount: 1284 } })).toBe(1284)
   })
 
-  it('총합이 없으면 던진다', () => {
+  it('총합이 없으면 던진다 - 조용히 0 을 그리지 않는다', () => {
     expect(() => readTotal({ data: [] })).toThrow()
+    expect(() => readTotal({ data: [], meta: {} })).toThrow()
   })
 })
 ```
 
-둘째 검사가 있어야 카운트가 관계까지 끌어오는 낭비를 막는다. 넷째 검사는 **조용히 0 을 그리지 않게** 한다.
+첫째 검사의 `page[totals]` 가 없으면 `readTotal` 이 항상 던진다 — 총합은 opt-in 이다. 둘째 검사는 카운트가 관계까지 끌어오는 낭비를 막는다. 넷째 검사는 **조용히 0 을 그리지 않게** 한다 — `meta` 가 아예 없는 경우와 `meta` 는 있는데 키가 없는 경우를 둘 다 본다.
 
 - [ ] **Step 3: 테스트를 돌려 실패를 확인하고 구현한다**
 
@@ -1508,36 +1612,80 @@ labelling is the condition for keeping it. The recent-changes table has no
 
 - [ ] **Step 1: 필드 오류 매핑의 테스트를 쓴다**
 
+**백엔드가 실제로 내는 포인터 어휘는 실측돼 있다**(2026-09-12). 기억으로 가정하지 마라.
+
+| 출처 | 포인터 |
+| --- | --- |
+| Pydantic 검증 (`loc` 에서 `body` 를 뗀 것) | `/data/attributes/<필드>` |
+| `relationship_resolver` | `/data/relationships/<이름>` · `/data/relationships/<이름>/data/<n>/id` · `.../type` |
+| `document_parsing` · `crud_actions` | `/data` · `/data/id` · `/data/type` · `/data/relationships`(맨) |
+
+그래서 **"마지막 세그먼트가 필드"가 아니다.** 규칙은 하나다 — `/data/attributes/…` 또는 `/data/relationships/…` 의 **네 번째 세그먼트**가 필드이고, 그것이 없으면 필드 오류가 아니다.
+
 ```ts
 import { describe, expect, it } from 'vitest'
 import { fieldErrors } from '@/lib/resources/form'
 
+const err = (pointer: string | undefined, detail: string) => ({
+  status: '422',
+  detail,
+  ...(pointer === undefined ? {} : { source: { pointer } }),
+})
+
 describe('fieldErrors', () => {
-  it('pointer 가 가리키는 속성에 백엔드 문구를 그대로 붙인다', () => {
-    const document = {
-      errors: [
-        { status: '422', detail: '제목은 200자를 넘을 수 없습니다', source: { pointer: '/data/attributes/title' } },
-        { status: '422', detail: '선언에 없는 상태 값입니다', source: { pointer: '/data/attributes/status' } },
-      ],
-    }
-    expect(fieldErrors(document)).toEqual({
+  it('속성 pointer 가 가리키는 필드에 백엔드 문구를 그대로 붙인다', () => {
+    expect(
+      fieldErrors({
+        errors: [
+          err('/data/attributes/title', '제목은 200자를 넘을 수 없습니다'),
+          err('/data/attributes/status', '선언에 없는 상태 값입니다'),
+        ],
+      }),
+    ).toEqual({
       title: '제목은 200자를 넘을 수 없습니다',
       status: '선언에 없는 상태 값입니다',
     })
   })
 
-  it('pointer 가 없는 오류는 필드에 붙이지 않는다', () => {
-    expect(fieldErrors({ errors: [{ status: '500', detail: '서버 오류' }] })).toEqual({})
+  it('관계 pointer 를 읽는다', () => {
+    expect(fieldErrors({ errors: [err('/data/relationships/category', '없는 분류입니다')] })).toEqual(
+      { category: '없는 분류입니다' },
+    )
   })
 
-  it('관계 pointer 도 읽는다', () => {
-    const document = {
-      errors: [{ status: '422', detail: '없는 분류입니다', source: { pointer: '/data/relationships/category' } }],
-    }
-    expect(fieldErrors(document)).toEqual({ category: '없는 분류입니다' })
+  it('관계 항목까지 내려간 깊은 pointer 도 그 관계에 붙인다', () => {
+    expect(
+      fieldErrors({ errors: [err('/data/relationships/tags/data/0/id', '없는 라벨입니다')] }),
+    ).toEqual({ tags: '없는 라벨입니다' })
+  })
+
+  it.each(['/data', '/data/id', '/data/type', '/data/relationships'])(
+    '%s 는 필드 오류가 아니다',
+    (pointer) => {
+      expect(fieldErrors({ errors: [err(pointer, '문서 오류')] })).toEqual({})
+    },
+  )
+
+  it('pointer 가 없는 오류는 필드에 붙이지 않는다', () => {
+    expect(fieldErrors({ errors: [err(undefined, '서버 오류')] })).toEqual({})
+  })
+
+  it('같은 필드에 여럿이면 첫 것을 남긴다', () => {
+    expect(
+      fieldErrors({
+        errors: [
+          err('/data/relationships/tags/data/0/id', '첫 번째'),
+          err('/data/relationships/tags/data/1/id', '두 번째'),
+        ],
+      }),
+    ).toEqual({ tags: '첫 번째' })
   })
 })
 ```
+
+마지막 검사가 정하는 것: 관계 배열의 여러 항목이 각각 실패하면 같은 필드로 접힌다. **첫 것을 남긴다** — 순서는 백엔드가 정하고, 화면은 필드 하나에 메시지 하나를 붙인다. 전부 보여야 하는 자리가 생기면 그때 `string[]` 로 바꾼다.
+
+`/data/relationships` 가 맨으로 오는 경우가 실제로 있다는 점에 주의한다 — 네 번째 세그먼트가 없으므로 필드 오류가 아니고, 배너로 간다.
 
 **문구를 만들지 않는다** — 오류 문구의 정본은 백엔드이고 `Accept-Language` 로 협상된 것이다(스펙 6.3).
 
@@ -1617,7 +1765,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { MAX_BULK_ITEMS, runBulk } from '@/lib/bulk/executor'
 
 const ok = (id: string) => ({ id, ok: true })
-const fail = (id: string) => ({ id, ok: false, status: '422', detail: '참조하는 라벨이 남아 있습니다' })
+// 실측된 실패 모양이다: 삭제는 성공하면 204, 그 행이 이미 없으면 404.
+// 백엔드는 삭제에 422 를 내지 않는다 - 참조 무결성 거절 경로가 없다.
+const gone = (id: string) => ({ id, ok: false, status: '404', detail: '그 자원을 찾을 수 없습니다' })
 
 describe('runBulk', () => {
   it('선언된 순서대로 하나씩 보낸다', async () => {
@@ -1651,10 +1801,10 @@ describe('runBulk', () => {
 
   it('일부가 실패해도 남은 것을 계속 보내고 행별로 모은다', async () => {
     const report = await runBulk(['a', 'b', 'c'], async (id) =>
-      id === 'b' ? fail(id) : ok(id),
+      id === 'b' ? gone(id) : ok(id),
     )
     expect(report.outcomes.map((o) => o.ok)).toEqual([true, false, true])
-    expect(report.outcomes[1]!.detail).toBe('참조하는 라벨이 남아 있습니다')
+    expect(report.outcomes[1]!.status).toBe('404')
     expect(report.cancelled).toBe(false)
   })
 
@@ -1679,6 +1829,8 @@ describe('runBulk', () => {
 ```
 
 셋째 검사가 스펙 6.2 의 상한을, 넷째가 6.3 의 "부분 실패는 1급 결과"를, 다섯째가 6.4 의 "남은 요청을 내지 않는다 · 되돌리지 않는다"를 고정한다. **보상 트랜잭션을 만들지 않는다** — 백엔드 계약이 없다.
+
+**픽스처의 상태 코드를 지어내지 마라.** 실측된 삭제 계약은 성공 204, 이미 없는 행 404 이고, **422 는 없다**(`example_tags` 가 `ondelete="CASCADE"` 라 참조 때문에 거절되는 경로가 아예 없다). 실행 중 세션이 만료되면 401 도 온다.
 
 - [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
 
@@ -1705,8 +1857,10 @@ git commit -m "feat: add the sequential bulk executor
 No bulk, batch or atomic:operations route exists in the backend contract, so
 deleting twelve rows is twelve DELETE requests. The executor sends them one
 at a time under a declared cap of 50, keeps going when one fails, and
-collects a per-row outcome: three of twelve failing with 422 is the normal
-path, not an exception.
+collects a per-row outcome: three of twelve failing is the normal path, not an
+exception. The failure that actually happens is 404 — the row was already gone,
+because two operators share one grid and lists go stale. The backend has no
+referential refusal on delete, so a 422 fixture would have been invented.
 
 Cancelling stops sending and does not undo what was already sent — there is
 no compensating route to call, and pretending otherwise would be a lie in the
@@ -1737,7 +1891,7 @@ describe('summarize', () => {
     const report = {
       outcomes: [
         { id: 'a', ok: true },
-        { id: 'b', ok: false, status: '422', detail: 'x' },
+        { id: 'b', ok: false, status: '404', detail: 'x' },
         { id: 'c', ok: true },
       ],
       cancelled: false,
@@ -1749,7 +1903,7 @@ describe('summarize', () => {
     const report = {
       outcomes: [
         { id: 'a', ok: true },
-        { id: 'b', ok: false, status: '409', detail: 'y' },
+        { id: 'b', ok: false, status: '401', detail: 'y' },
       ],
       cancelled: false,
     }
@@ -1943,7 +2097,9 @@ Task 8 이 소스 텍스트로만 지킨 것을 여기서 동작으로 잡는다
 
 - [ ] **Step 9: 일괄 작업 시나리오를 쓴다**
 
-행 여럿을 골라 삭제를 실행하고 **행별 결과 표**가 나오는지, 실패가 섞였을 때 **실패한 것만 재시도**되는지, 취소가 남은 요청을 막는지 본다. 실패를 만들려면 삭제가 422 로 거절되는 상태의 씨앗 행을 심는다.
+행 여럿을 골라 삭제를 실행하고 **행별 결과 표**가 나오는지, 실패가 섞였을 때 **실패한 것만 재시도**되는지, 취소가 남은 요청을 막는지 본다.
+
+**부분 실패를 만드는 방법은 404 다.** 삭제가 422 로 거절되는 상태는 이 백엔드에 존재하지 않는다(실측: `destroy` 는 성공 204, 없는 행 404 이고 `example_tags` 가 CASCADE 다). 대신 **목록을 그린 뒤 그 행 하나를 HTTP 로 직접 지우고** 화면에서 일괄 삭제를 실행한다 — 그러면 그 행만 404 로 죽는다. 이것이 운영에서 실제로 일어나는 모양이기도 하다: 운영자 둘이 같은 그리드를 보고, 목록이 낡는다.
 
 - [ ] **Step 10: 알려진 차이 보고를 만든다**
 
@@ -2017,6 +2173,14 @@ having run."
 **Interfaces:**
 - Consumes: 앞의 모든 과업
 - Produces: 스펙 8.4 의 성공 기준을 만족하는 저장소
+
+- [ ] **Step 0: 루트 `AGENTS.md` 에 이미 있는 블록을 지우지 마라**
+
+`next dev` 가 `AGENTS.md` 의 `<!-- BEGIN:nextjs-agent-rules -->` ~ `<!-- END:nextjs-agent-rules -->` 블록을 **스스로 쓰고 다시 붙인다**(실측: Task 5 의 연기 확인에서 `next dev` 를 돌리자 루트에 `AGENTS.md` 와 `@AGENTS.md` 한 줄만 담은 `CLAUDE.md` 가 생겼다). 생성 주체는 `node_modules/next/dist/server/lib/generate-agent-files.js` 다.
+
+**지우면 다음 `next dev` 가 다시 만들어 트리가 더러워진다** — 블록 자신이 그렇게 경고한다. 계층 계약은 그 블록 **위에** 쓰고, 블록은 파일 끝에 그대로 남긴다. 형제 저장소의 `AGENTS.md` 도 같은 모양이다.
+
+`CLAUDE.md` 는 그 한 줄(`@AGENTS.md`)만 유지한다 — 내용을 복제하지 마라.
 
 - [ ] **Step 1: 루트 `AGENTS.md` 를 쓴다 — 계층 계약의 정본**
 
