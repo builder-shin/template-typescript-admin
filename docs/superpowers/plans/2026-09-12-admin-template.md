@@ -941,13 +941,31 @@ cp /tmp/ttn/test/unit/auth/logout.test.ts test/unit/auth/logout.test.ts
 
 - [ ] **Step 8: 실제 백엔드로 손으로 확인한다**
 
+**미리 빌드된 백엔드 이미지는 없다**(실측: 세 저장소의 ghcr 패키지가 존재하지 않는다). 그리고 FastAPI 는 Postgres 를 요구하므로 `docker run` 하나로는 뜨지 않는다.
+
+**백엔드가 자기 스택을 소유한다** — 우리 저장소에 개발용 compose 파일을 만들지 마라. 형제 저장소도 그러지 않는다. 백엔드의 `docker-compose.yml` 을 그대로 쓴다(실측: `db`(postgres:18-alpine) · `redis` · `migrate`(alembic) · `api`(`4000:4000`) · `worker` 가 다 들어 있다).
+
 ```bash
-docker run --rm -d -p 4100:4000 --name api-probe <fastapi 이미지>   # Task 13 이 compose 로 대체한다
-BACKEND_URL=http://localhost:4100 pnpm seed:operator ops@example.com 'pw-long-enough'
-BACKEND_URL=http://localhost:4100 pnpm dev
+git clone --depth 1 https://github.com/builder-shin/template-python-fastapi /tmp/api-fastapi
+docker compose -f /tmp/api-fastapi/docker-compose.yml up -d --build db redis migrate api
+
+curl -s -H 'accept: application/vnd.api+json' http://localhost:4000/health   # 뜰 때까지
+
+BACKEND_URL=http://localhost:4000 pnpm seed:operator ops@example.com 'pw-long-enough'
+BACKEND_URL=http://localhost:4000 pnpm dev
 ```
 
-`/` 를 열면 `/login?next=%2F` 로 보내지고, 시드한 계정으로 들어가면 `/` 의 dashboard-01 셸이 보인다. 확인 후 `docker rm -f api-probe`.
+포트는 **4000** 이다. `E2E_API_PORT` 의 기본값 4100 은 Task 13 의 E2E 스택 전용이고, 컨테이너 안의 4000 과 호스트 공개 포트를 헷갈리지 않으려고 일부러 다르게 둔 값이다.
+
+`/` 를 열면 `/login?next=%2F` 로 보내지고, 시드한 계정으로 들어가면 `/` 의 dashboard-01 셸이 보인다.
+
+확인 후 내린다.
+
+```bash
+docker compose -f /tmp/api-fastapi/docker-compose.yml down -v
+```
+
+**도커가 없거나 빌드가 실패하면 BLOCKED 로 보고하지 말고 그 사실을 보고서에 적고 넘어가라** — 이 단계는 손으로 하는 연기(smoke) 확인이고, 실제 백엔드에 대한 자동 검증은 Task 13 이 소유한다. 이 과업의 게이트는 단위 테스트로 선다.
 
 - [ ] **Step 9: 게이트를 돌리고 커밋**
 
@@ -2010,7 +2028,16 @@ having run."
 2. **`(admin)` 안에서 `min-h-svh` 를 쓰지 마라** — 높이는 셸이 갖는다.
 3. **화면 껍데기를 `app/layout.tsx` 에 두지 마라** — 그 자리는 모든 그룹을 덮는다.
 4. **라우트 파일을 옮기거나 지운 뒤 게이트가 `TS2307` 로 죽으면 `rm -rf .next`** — `.next/dev` 만 지우면 안 되고, 빌드만 돌려서는 안 보이고 `[1/9]` 에서만 드러난다.
-5. **`shadcn add` 를 다시 돌리면 `table.tsx`·`label.tsx` 에 `'use client'` 가 되살아난다** — 되살아난 것을 보면 다시 뺀다. 판단 기준은 훅·이벤트 핸들러·브라우저 API 가 하나도 없으면 뺀다.
+5. **`shadcn add` 를 다시 돌리면 `table.tsx`·`label.tsx` 에 `'use client'` 가 되살아난다** — 되살아난 것을 보면 다시 뺀다.
+
+   **판별 기준은 "로컬 훅이 없다"가 아니라 "상호작용 프리미티브에 의존하지 않는다"다.** 실측(2026-09-12)으로 갈린다:
+
+   | 부품 | import | 지시어 |
+   | --- | --- | --- |
+   | `table` · `label` | `react`(타입) · `cn` 뿐 | **뺀다** |
+   | `avatar` · `separator` · `toggle` · `tooltip` | `@base-ui/react/*` 프리미티브 | **남긴다** |
+
+   넷도 파일 자체에는 훅·핸들러·브라우저 API 가 0건이라 "로컬 훅" 기준만 보면 뺄 대상처럼 보인다. 그런데 **프리미티브가 이미 클라이언트 컴포넌트라 import 경로로 경계가 생긴다** — 지시어를 떼도 번들 경계는 그대로이고 레지스트리와만 갈라진다. 이득 없이 드리프트만 늘린다.
 
 - [ ] **Step 2: dnd-kit 의 사실을 적는다**
 
@@ -2027,7 +2054,8 @@ having run."
 | `lib/grid/AGENTS.md` | URL ↔ 질의 경계, 커서를 해석하지 않는 이유 (Task 7 이 만들었다) |
 | `lib/bulk/AGENTS.md` | 벌크 엔드포인트가 없다는 사실이 정하는 것 셋 (Task 11 이 만들었다) |
 | `app/AGENTS.md` | "`fetch` 를 직접 하지 않는다" 규칙과 조립 함수를 다시 쪼개지 말라는 근거 |
-| `components/AGENTS.md` | 자원 이름으로 분기하지 않는다, 레지스트리 부품의 `'use client'` 정책 |
+| `components/AGENTS.md` | 자원 이름으로 분기하지 않는다, 레지스트리 부품의 `'use client'` 정책과 **그 판별 기준** |
+| `hooks/AGENTS.md` | `shadcn add` 가 넣은 훅의 자리 |
 | `test/AGENTS.md` | E2E 가 지키는 자리와 새 시나리오의 규칙 셋(실전 상수 금지 · 고유 이메일 · 자기 접두사로 좁히기) |
 | `scripts/AGENTS.md` | 단일 게이트 · 인용 검사 · 출처 검사 |
 | `docs/AGENTS.md` | 커밋되는 설계·계획·실측 기록 |
