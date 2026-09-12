@@ -67,6 +67,8 @@
 {
   "name": "template-typescript-admin",
   "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.11.0" },
   "packageManager": "pnpm@11.22.0",
   "scripts": {
     "dev": "next dev",
@@ -113,6 +115,8 @@
 ```
 
 `cn` 은 별칭이 아니라 **실제 npm 패키지**다(`import { cn } from 'cn'`). 빼면 복사해 온 부품과 `shadcn add` 가 쓴 부품이 함께 깨진다.
+
+`"type": "module"` 도 빼지 마라 — 없으면 vitest 가 매 실행 `configLoader` 경고를 낸다. 종료 코드는 0 이라 게이트는 초록인 채로 지나가고, `[6/9]` 의 출력만 더러워진다. 형제 저장소도 이 둘을 갖는다(실측 2026-09-12).
 
 - [ ] **Step 2: tsconfig 를 만든다**
 
@@ -369,6 +373,22 @@ cp /tmp/ttn/.env.example .env.example
 
 **테스트를 빼고 코드만 가져오지 마라.** 이 코어의 가치는 938개 단위 테스트가 지켜 온 데서 나온다. `test/unit/config/` 가 원본에 없으면 만들지 않는다.
 
+- [ ] **Step 2b: 복사본에서 남의 출처를 걷어낸다**
+
+복사해 온 주석은 **원본 저장소의 과업 이력**을 인용한다 — `D2 Task 4 재수정` · `D3 Task 1` · `브랜치 리뷰 Important-1` 같은 라벨과, 여기 존재하지 않는 파일·함수·테스트 건수. 이 저장소를 읽는 사람은 그중 무엇도 찾아갈 수 없다. Task 1 이 같은 이유로 설정 파일에서 이것을 걷어냈다.
+
+규칙은 하나다. **기술적 근거는 남기고 남의 출처는 지운다.**
+
+- 과업·리뷰 라벨(`D<숫자> Task`, `브랜치 리뷰 …`)을 지운다.
+- **이 저장소에 없는** 파일·함수·테스트 건수 인용을 지운다. 여기 실재하거나 뒤 과업이 만들 파일(`lib/jsonapi/client.ts` 등)을 가리키는 인용은 남긴다.
+- 라벨을 걷어낸 뒤 기술적 내용이 남지 않는 주석은 통째로 지운다. **근거를 새로 지어내지 마라.**
+
+```bash
+grep -rnE '\(D[0-9]+ Task|브랜치 리뷰' lib/ test/ || echo "남의 출처 0건"
+```
+
+Task 1 이 `scripts/check-citations.sh` 에 이 패턴을 넣었으므로 게이트 `[5/9]` 가 남은 것을 잡는다.
+
 - [ ] **Step 3: 출처를 기계가 읽을 수 있게 기록한다**
 
 `docs/provenance/copied-core.json`:
@@ -504,6 +524,12 @@ cp /tmp/ttn/proxy.ts proxy.ts
 mkdir -p test/unit/auth
 cp -r /tmp/ttn/test/unit/auth/. test/unit/auth/
 cp /tmp/ttn/test/unit/proxy.test.ts test/unit/proxy.test.ts
+```
+
+복사 직후 **Task 2 Step 2b 와 같은 정리를 한다** — 과업·리뷰 라벨과 이 저장소에 없는 파일·함수 인용을 걷어내고, 기술적 근거만 남긴다. `lib/auth/` 의 주석은 `app/(auth)/` 와 `app/(lab)/` 를 자주 가리키는데, **`(lab)` 은 이 저장소에 영영 생기지 않는다**(스펙 5.2). 게이트 `[5/9]` 가 남은 라벨을 잡는다.
+
+```bash
+grep -rnE '\(D[0-9]+ Task|브랜치 리뷰|\(lab\)' lib/ test/ proxy.ts || echo "남의 출처 0건"
 ```
 
 - [ ] **Step 2: 보호 경로 목록을 어드민의 것으로 바꾸는 테스트를 먼저 쓴다**
