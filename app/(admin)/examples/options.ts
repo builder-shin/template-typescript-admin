@@ -1,4 +1,4 @@
-import { withAcceptLanguage, type RequestOptions } from '@/lib/jsonapi/client'
+import { withAcceptLanguage, type JsonApiResult, type RequestOptions } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import type { ResourceDef } from '@/lib/resources'
 
@@ -45,4 +45,20 @@ export function optionsFromDocument(document: CollectionDocument): OptionItem[] 
     const name = object.attributes?.name
     return { id: object.id, name: typeof name === 'string' ? name : object.id }
   })
+}
+
+/**
+ * `optionsRequest` 의 결과를 문서로 좁힌다 - 실패(!ok)·204(document: null)
+ * 둘 다 이 화면이 스스로 고칠 수 없는 예외라 던진다(`examples/page.tsx` 와
+ * 같은 선택). `[id]/page.tsx`·`new/page.tsx` 가 분류·라벨 각각에 이 함수를
+ * 부른다 - 두 화면에 같은 세 줄짜리 unwrap 을 따로 베끼지 않기 위해서다.
+ */
+export function unwrapOptionsResult(result: JsonApiResult<CollectionDocument>): CollectionDocument {
+  if (!result.ok) {
+    throw new Error(result.errors[0]?.detail ?? '선택 목록을 불러오지 못했습니다.')
+  }
+  if (result.document === null) {
+    throw new Error('선택 목록 응답에 본문이 없습니다.')
+  }
+  return result.document
 }

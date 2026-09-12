@@ -26,8 +26,13 @@ import {
  */
 export const HEALTH_PATH = '/health/ready'
 
+/**
+ * `acceptLanguage` 는 필수 인자다(`countRequest`와 같은 이유, 그 파일 머리말
+ * 참고) - 선택 인자로 두면 잊고 안 넘긴 호출이 컴파일은 통과하고, 실패가
+ * 아니라 "백엔드가 엉뚱한 언어로 답한다"는 형태로만 조용히 드러난다.
+ */
 export function healthRequest(
-  acceptLanguage?: string | null,
+  acceptLanguage: string | null,
 ): [path: string, options: RequestOptions] {
   return [HEALTH_PATH, withAcceptLanguage({}, acceptLanguage)]
 }

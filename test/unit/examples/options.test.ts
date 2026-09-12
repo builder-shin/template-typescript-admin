@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { optionsFromDocument, optionsRequest } from '@/app/(admin)/examples/options'
+import {
+  optionsFromDocument,
+  optionsRequest,
+  unwrapOptionsResult,
+} from '@/app/(admin)/examples/options'
 import { resourceByType } from '@/lib/resources'
 
 const CATEGORIES = resourceByType('exampleCategories')!
@@ -49,5 +53,34 @@ describe('optionsFromDocument', () => {
   it('name 이 문자열이 아니면(누락 포함) id 로 대신한다', () => {
     const document = { data: [{ type: 'exampleCategories', id: 'c1' }] }
     expect(optionsFromDocument(document)).toEqual([{ id: 'c1', name: 'c1' }])
+  })
+})
+
+describe('unwrapOptionsResult', () => {
+  it('성공하면 문서를 그대로 돌려준다', () => {
+    const document = { data: [] }
+    expect(unwrapOptionsResult({ ok: true, status: 200, document })).toBe(document)
+  })
+
+  it('실패하면 첫 오류의 detail 로 던진다', () => {
+    expect(() =>
+      unwrapOptionsResult({
+        ok: false,
+        status: 400,
+        errors: [{ detail: '허용되지 않은 include 입니다' }],
+      }),
+    ).toThrow('허용되지 않은 include 입니다')
+  })
+
+  it('실패했는데 detail 이 없으면 고정 문구로 던진다', () => {
+    expect(() => unwrapOptionsResult({ ok: false, status: 400, errors: [{}] })).toThrow(
+      '선택 목록을 불러오지 못했습니다.',
+    )
+  })
+
+  it('204(document: null)면 던진다 - 조용히 빈 목록으로 다루지 않는다', () => {
+    expect(() => unwrapOptionsResult({ ok: true, status: 204, document: null })).toThrow(
+      '선택 목록 응답에 본문이 없습니다.',
+    )
   })
 })

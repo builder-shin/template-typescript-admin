@@ -93,8 +93,17 @@ const features = tableFeatures({
 
 const columnHelper = createColumnHelper<typeof features, GridRow>()
 
-/** 관계 대상의 표시 이름 - included 로 풀렸으면 이름, 식별자뿐이면 id. */
-function relationshipLabel(target: ResourceObject | ResourceIdentifier): string {
+/**
+ * 관계 대상의 표시 이름 - included 로 풀렸으면 이름, 식별자뿐이면 id.
+ *
+ * export 하는 이유는 이 컴포넌트 밖에도 소비자가 생겨서다 -
+ * `app/(admin)/examples/[id]/page.tsx` 가 상세 화면의 현재 분류·라벨을 같은
+ * 규칙으로 읽는다(그 화면도 `include=category,tags` 로 받은 관계를 배지가
+ * 아니라 텍스트로 그릴 뿐, "식별자뿐이면 id 로 대신한다"는 판단은 그리드와
+ * 똑같아야 한다). 이 파일 안에서 로컬로 다시 베끼면 그 판단이 두 벌로
+ * 갈린다.
+ */
+export function relationshipLabel(target: ResourceObject | ResourceIdentifier): string {
   if (isResourceObject(target) && typeof target.attributes?.name === 'string') {
     return target.attributes.name
   }
@@ -147,9 +156,15 @@ export function readRowCount(document: CollectionDocument): number {
   return total
 }
 
-/** ISO 문자열을 타임존 변환 없이 "YYYY-MM-DD HH:mm" 로 다듬는다 - 서버·클라이언트
- * 로케일이 다르면 Intl 포맷은 하이드레이션 불일치를 낼 수 있다. */
-function formatDateTime(value: string): string {
+/**
+ * ISO 문자열을 타임존 변환 없이 "YYYY-MM-DD HH:mm" 로 다듬는다 - 서버·클라이언트
+ * 로케일이 다르면 Intl 포맷은 하이드레이션 불일치를 낼 수 있다.
+ *
+ * `relationshipLabel` 과 같은 이유로 export 한다 -
+ * `app/(admin)/examples/[id]/page.tsx` 가 생성일·수정일을 같은 규칙으로
+ * 그린다.
+ */
+export function formatDateTime(value: string): string {
   const [date, time] = value.split('T')
   return date !== undefined && time !== undefined ? `${date} ${time.slice(0, 5)}` : value
 }

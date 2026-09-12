@@ -6,7 +6,7 @@ describe('healthRequest', () => {
   it('/health/ready 를 부른다 - /health 나 /health/live 가 아니다', () => {
     // /health 는 라우트가 아니다(404), /health/live 는 Postgres 를 보지 않아
     // DB 가 죽어도 ok 를 낸다 - 이 카드가 실제로 물어야 하는 것은 ready 쪽이다.
-    expect(healthRequest()[0]).toBe('/health/ready')
+    expect(healthRequest(null)[0]).toBe('/health/ready')
     expect(HEALTH_PATH).toBe('/health/ready')
   })
 
@@ -15,8 +15,8 @@ describe('healthRequest', () => {
     expect(options.acceptLanguage).toBe('ko')
   })
 
-  it('Accept-Language 를 넘기지 않으면 그 헤더 옵션 자체가 없다', () => {
-    const [, options] = healthRequest()
+  it('Accept-Language 로 null 을 넘기면 그 헤더 옵션 자체가 없다', () => {
+    const [, options] = healthRequest(null)
     expect(options).not.toHaveProperty('acceptLanguage')
   })
 })

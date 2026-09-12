@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   buildRows,
   extractCell,
+  formatDateTime,
   pageHref,
   readRowCount,
+  relationshipLabel,
   sortingStateFromToken,
   sortTokenFromState,
 } from '@/components/grid/resource-grid'
@@ -189,6 +191,44 @@ describe('extractCell', () => {
       relationships: { tags: { data: [] } },
     }
     expect(extractCell(TAGS, object, indexResources([]))).toEqual([])
+  })
+})
+
+describe('relationshipLabel', () => {
+  it('included 로 풀린 자원 객체는 attributes.name 을 낸다', () => {
+    expect(
+      relationshipLabel({ type: 'exampleCategories', id: '7', attributes: { name: '분류A' } }),
+    ).toBe('분류A')
+  })
+
+  it('식별자뿐이면(included 밖) id 로 대신한다 - 던지지 않는다', () => {
+    // {type, id} 뿐인 값은 isResourceObject 가 false 를 내는 자리다 -
+    // extractCell 의 "included 에 없는 관계는 식별자 id 를 낸다" 테스트와
+    // 같은 경계를 이 함수 자신에 대해서도 잰다.
+    expect(relationshipLabel({ type: 'exampleCategories', id: '7' })).toBe('7')
+  })
+
+  it('자원 객체이지만 attributes.name 이 문자열이 아니면(누락 포함) id 로 대신한다', () => {
+    // 위 테스트와 다른 경로다 - 여기서는 isResourceObject 가 true 다
+    // (attributes 멤버가 있다). 그런데도 name 이 문자열이 아니라서 여전히
+    // id 로 떨어져야 한다 - "자원 객체인가"와 "이름이 있는가"를 같은
+    // 조건으로 뭉뚱그리면(예: `isResourceObject(target)` 만으로 분기하면)
+    // 이 케이스에서 `target.attributes.name`(undefined)을 그대로 반환해
+    // 실패한다.
+    expect(relationshipLabel({ type: 'exampleCategories', id: '7', attributes: {} })).toBe('7')
+  })
+})
+
+describe('formatDateTime', () => {
+  it('ISO 문자열을 "YYYY-MM-DD HH:mm" 로 다듬는다', () => {
+    expect(formatDateTime('2026-09-05T20:10:39.659534+00:00')).toBe('2026-09-05 20:10')
+  })
+
+  it('"T" 가 없어 날짜·시간으로 쪼개지지 않으면 원본을 그대로 돌려준다 - 던지거나 조작하지 않는다', () => {
+    // date/time 분해가 실패하는 값(예: 이미 다듬어졌거나 애초에 ISO 가
+    // 아닌 문자열)에서 이 함수가 자르거나 이어붙이는 시도를 하면 안 된다 -
+    // split 결과의 둘째 원소가 undefined 인 이 분기가 그것을 잰다.
+    expect(formatDateTime('2026-09-05')).toBe('2026-09-05')
   })
 })
 

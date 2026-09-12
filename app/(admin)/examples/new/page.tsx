@@ -7,7 +7,7 @@ import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
 import { createExampleAction } from '../actions'
 import { ExampleForm } from '../[id]/edit-form'
-import { optionsFromDocument, optionsRequest } from '../options'
+import { optionsFromDocument, optionsRequest, unwrapOptionsResult } from '../options'
 
 /**
  * `examples` 생성 화면 - 폼 자체는 `[id]/edit-form.tsx` 의 `ExampleForm` 을
@@ -28,15 +28,8 @@ export default async function NewExamplePage() {
     request<CollectionDocument>(...optionsRequest(tagsResource, lang)),
   ])
 
-  if (!categoriesResult.ok) {
-    throw new Error(categoriesResult.errors[0]?.detail ?? '선택 목록을 불러오지 못했습니다.')
-  }
-  if (!tagsResult.ok) {
-    throw new Error(tagsResult.errors[0]?.detail ?? '선택 목록을 불러오지 못했습니다.')
-  }
-  if (categoriesResult.document === null || tagsResult.document === null) {
-    throw new Error('선택 목록 응답에 본문이 없습니다.')
-  }
+  const categories = unwrapOptionsResult(categoriesResult)
+  const tags = unwrapOptionsResult(tagsResult)
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
@@ -55,8 +48,8 @@ export default async function NewExamplePage() {
 
       <ExampleForm
         action={createExampleAction}
-        categories={optionsFromDocument(categoriesResult.document)}
-        tags={optionsFromDocument(tagsResult.document)}
+        categories={optionsFromDocument(categories)}
+        tags={optionsFromDocument(tags)}
       />
     </div>
   )

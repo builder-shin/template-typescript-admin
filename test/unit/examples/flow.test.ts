@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { examplesFormState } from '@/app/(admin)/examples/form-state'
+import { examplesFormState } from '@/app/(admin)/examples/flow'
 
 describe('examplesFormState', () => {
   it('속성 오류는 속성 입력에, 관계 오류는 관계 입력에 붙인다', () => {

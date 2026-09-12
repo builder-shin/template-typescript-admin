@@ -1,33 +1,26 @@
-import type { ErrorObject } from '@/lib/jsonapi/document'
-import { actionForErrors, groupErrors } from '@/lib/jsonapi/errors'
-
 /**
  * `examples` 생성·수정 폼의 화면 상태와 입력 이름.
  *
- * 모양과 판단은 `lib/auth/flow.ts` 의 `authFormStateFromErrors` 를 그대로
- * 옮긴 것이다 - `actionForErrors(errors) === 'transport'` 를 먼저 걸러내고,
- * `groupErrors` 로 묶고, 문구가 하나도 없으면 "쓸 수 없는 응답"으로
- * 떨어뜨린다. 산문으로 다시 적지 않는 이유는 그 사본이 드리프트하기
- * 때문이다(flow.ts 의 같은 주석 참고).
+ * ## 이 파일이 따로 있는 이유는 클라이언트 번들 경계다
  *
- * auth 와 다른 점은 딱 하나다 - **이 폼에는 관계 입력(분류·라벨)이 있다.**
- * 인증 폼은 관계 입력이 없어 관계 오류를 배너로 접었지만(flow.ts: "그릴
- * 자리가 없으면 배너가 옳다"), 이 폼은 그릴 자리가 있으므로
- * `relationshipErrors` 를 attributeErrors 와 분리해 관계 입력 아래 붙인다.
+ * 이 모듈은 **런타임 import 가 하나도 없다.** 아래 상수·타입·초기값은
+ * `[id]/edit-form.tsx`(`'use client'`, `new/page.tsx` 도 그것을 통해 같은
+ * 것을 쓴다)가 값으로 가져가야 하는데, 오류 판단(`examplesFormState`)을 이
+ * 파일에 두면 그 함수가 값으로 import 하는 `lib/jsonapi/errors` ->
+ * `lib/jsonapi/client` -> `lib/config/settings`(process.env 를 읽는 서버
+ * 전용 코드)까지 클라이언트 컴포넌트가 끌어들이는 자리가 된다 - 실제로
+ * 그렇게 되는지는 빌드마다 다시 재야 하는 사실이고, 아무 게이트도 그것을
+ * 검사하지 않는다. 판단을 `./flow.ts` 로 완전히 빼면 그 질문 자체가
+ * 사라진다 - 이 파일을 눈으로 읽는 것만으로 "런타임 import 가 없다"를 확인할
+ * 수 있다. `lib/auth/form-state.ts` 와 같은 경계, 같은 이유다.
  *
- * auth 와 달리 `context` 인자가 없다 - auth 는 실패한 응답에도 제출된
- * 이메일과 `accountCreated` 를 되돌려줘야 했지만, 이 폼의 입력은 전부
- * `defaultValue` 로 미리 채워져 있어(수정 폼은 기존 값, 생성 폼은 빈 값)
- * 실패해도 브라우저가 다시 그린 입력이 스스로 제출된 값을 쥔다 - 되돌려줄
- * 것이 없다.
+ * **이 파일에 import 를 추가하지 마라.** 추가하는 순간 위 경계가 무너지고,
+ * 그 사실은 빌드가 통과하기 때문에 조용히 일어난다(lib/auth/form-state.ts
+ * 의 같은 경고).
  *
- * `lib/auth/form-state.ts` 와 달리 이 파일 하나에 상태 모양과 그것을 만드는
- * 로직을 함께 둔다. auth 는 로그인·가입 두 화면이 `credentials-form.tsx`
- * 하나를 공유해야 해서 그 파일이 "런타임 import 가 없는 클라이언트 번들
- * 경계"를 맡고, 오류 판단(`authFormStateFromErrors`)은 별도로 `flow.ts` 에
- * 있다. 이 폼은 오류 판단의 소비자가 `actions.ts`(Server Action) 하나뿐이라
- * 가를 이유가 없다 - `edit-form.tsx` 는 아래 상수·타입·`IDLE_EXAMPLES_FORM_STATE`
- * 만 값으로 가져간다.
+ * `examplesFormState`(오류 배열을 아래 `ExamplesFormState` 로 바꾸는 판단)는
+ * `./flow.ts` 에 있다 - `actions.ts`(Server Action, 서버 전용) 하나만 그것을
+ * 부른다.
  */
 
 /**
@@ -80,38 +73,3 @@ export type ExamplesFormAction = (
 /** `unusable` 일 때 화면이 그릴 고정 문구 - 백엔드가 애초에 문구를 주지 못한 경우라 프론트가 직접 고른다. */
 export const UNUSABLE_EXAMPLES_MESSAGE =
   '지금은 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.'
-
-const UNUSABLE_EXAMPLES_FORM_STATE: ExamplesFormState = {
-  attributeErrors: {},
-  relationshipErrors: {},
-  documentErrors: [],
-  unusable: true,
-}
-
-function isEmpty(
-  attributes: Record<string, string[]>,
-  relationships: Record<string, string[]>,
-  document: string[],
-): boolean {
-  return (
-    document.length === 0 &&
-    Object.keys(attributes).length === 0 &&
-    Object.keys(relationships).length === 0
-  )
-}
-
-export function examplesFormState(errors: readonly ErrorObject[]): ExamplesFormState {
-  if (actionForErrors(errors) === 'transport') return UNUSABLE_EXAMPLES_FORM_STATE
-
-  const grouped = groupErrors(errors)
-  if (isEmpty(grouped.attributes, grouped.relationships, grouped.document)) {
-    return UNUSABLE_EXAMPLES_FORM_STATE
-  }
-
-  return {
-    attributeErrors: grouped.attributes,
-    relationshipErrors: grouped.relationships,
-    documentErrors: grouped.document,
-    unusable: false,
-  }
-}

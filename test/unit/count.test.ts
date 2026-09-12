@@ -6,18 +6,18 @@ const EXAMPLES = resourceByType('examples')!
 
 describe('자원 카운트', () => {
   it('한 건만 받고 총합을 켜서 받는다', () => {
-    const [, options] = countRequest(EXAMPLES)
+    const [, options] = countRequest(EXAMPLES, null)
     expect(options.query?.get('page[size]')).toBe('1')
     expect(options.query?.get('page[totals]')).toBe('true')
   })
 
   it('include 를 싣지 않는다', () => {
-    const [, options] = countRequest(EXAMPLES)
+    const [, options] = countRequest(EXAMPLES, null)
     expect(options.query?.get('include')).toBeNull()
   })
 
   it('경로는 그 자원의 것이다', () => {
-    expect(countRequest(EXAMPLES)[0]).toBe(EXAMPLES.path)
+    expect(countRequest(EXAMPLES, null)[0]).toBe(EXAMPLES.path)
   })
 
   it('meta.totalCount 를 읽는다', () => {
@@ -30,15 +30,15 @@ describe('자원 카운트', () => {
   })
 
   it('Accept-Language 를 넘기면 그 값이 옵션에 실린다', () => {
-    // 넘기지 않은 위 호출들과 대조되는 자리 - acceptLanguage 를 받아
+    // null 을 넘긴 위 호출들과 대조되는 자리 - acceptLanguage 를 받아
     // withAcceptLanguage 에 위임하는 조립 자체가 지워지는 뮤턴트를 여기서
-    // 잡는다(위 호출만으로는 acceptLanguage 인자가 아예 없어도 통과한다).
+    // 잡는다(위 호출만으로는 값이 항상 null 이어도 통과한다).
     const [, options] = countRequest(EXAMPLES, 'ko')
     expect(options.acceptLanguage).toBe('ko')
   })
 
-  it('Accept-Language 를 넘기지 않으면(undefined) 그 헤더 옵션 자체가 없다', () => {
-    const [, options] = countRequest(EXAMPLES)
+  it('Accept-Language 로 null 을 넘기면 그 헤더 옵션 자체가 없다', () => {
+    const [, options] = countRequest(EXAMPLES, null)
     expect(options).not.toHaveProperty('acceptLanguage')
   })
 })

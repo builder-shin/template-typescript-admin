@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { request, withAcceptLanguage } from '@/lib/jsonapi/client'
 import type { SingleDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
+import { examplesFormState } from './flow'
 import {
   CATEGORY_FIELD,
   DESCRIPTION_FIELD,
@@ -12,7 +13,6 @@ import {
   STATUS_FIELD,
   TAGS_FIELD,
   TITLE_FIELD,
-  examplesFormState,
   type ExamplesFormState,
 } from './form-state'
 
@@ -20,7 +20,7 @@ import {
  * `examples` 의 생성·수정·삭제 Server Action.
  *
  * 판단은 두 파일에 이미 있다 - 필드 배치는 `lib/jsonapi/errors.ts`(Task 2),
- * 실패/성공 분류는 `examplesFormState`(./form-state.ts). 이 파일은 그 둘을
+ * 실패/성공 분류는 `examplesFormState`(./flow.ts). 이 파일은 그 둘을
  * 기계적으로 잇기만 한다 - `app/(auth)/actions.ts` 가 `lib/auth/flow.ts` 를
  * 잇기만 하는 것과 같은 이유다(이 파일도 headers()·redirect() 가 요청
  * 스코프를 요구해 단위 테스트 계층에서 부를 수 없다 - 그 저장소의 관례를

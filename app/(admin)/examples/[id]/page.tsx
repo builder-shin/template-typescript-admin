@@ -3,26 +3,16 @@ import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { SubmitButton } from '@/components/form/submit-button'
+import { formatDateTime, relationshipLabel } from '@/components/grid/resource-grid'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { request } from '@/lib/jsonapi/client'
-import type {
-  Attributes,
-  CollectionDocument,
-  ResourceIdentifier,
-  ResourceObject,
-  SingleDocument,
-} from '@/lib/jsonapi/document'
+import type { Attributes, CollectionDocument, SingleDocument } from '@/lib/jsonapi/document'
 import { actionForErrors } from '@/lib/jsonapi/errors'
-import {
-  indexResources,
-  isResourceObject,
-  resolveToMany,
-  resolveToOne,
-} from '@/lib/jsonapi/normalize'
+import { indexResources, resolveToMany, resolveToOne } from '@/lib/jsonapi/normalize'
 import { resourceByType } from '@/lib/resources'
 import { deleteExampleAction, updateExampleAction } from '../actions'
-import { optionsFromDocument, optionsRequest } from '../options'
+import { optionsFromDocument, optionsRequest, unwrapOptionsResult } from '../options'
 import { detailRequest } from './detail'
 import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
 
@@ -32,10 +22,10 @@ import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
  * 세 요청(상세 하나 + 선택 목록 둘)을 병행한다 - 서로 의존하지 않는다
  * (app/(admin)/page.tsx 가 다섯 요청을 Promise.all 로 묶는 것과 같은 이유).
  * `detailRequest` 는 `include=category,tags` 를 반드시 싣는다(그 파일
- * 머리말) - 아래 `relationshipLabel` 이 그 `included` 를 실제로 읽어
- * 현재 분류·라벨을 이름으로 보여준다. 이것을 빼면 실측된 결함(배지가
- * UUID 로 그려지거나 조용히 "분류 없음"이 됨)이 바로 이 자리에서
- * 재현된다.
+ * 머리말) - `components/grid/resource-grid.tsx` 의 `relationshipLabel` 을
+ * 그대로 가져와 그 `included` 를 실제로 읽어 현재 분류·라벨을 이름으로
+ * 보여준다. 이것을 빼면 실측된 결함(배지가 UUID 로 그려지거나 조용히
+ * "분류 없음"이 됨)이 바로 이 자리에서 재현된다.
  *
  * 읽기 실패는 던진다(`error.tsx`/`notFound()` 가 받는다) - 이 화면 안에서
  * 사용자가 스스로 고칠 수 있는 것이 없다(examples/page.tsx 와 같은 선택).
@@ -68,15 +58,8 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  if (!categoriesResult.ok) {
-    throw new Error(categoriesResult.errors[0]?.detail ?? '선택 목록을 불러오지 못했습니다.')
-  }
-  if (!tagsResult.ok) {
-    throw new Error(tagsResult.errors[0]?.detail ?? '선택 목록을 불러오지 못했습니다.')
-  }
-  if (categoriesResult.document === null || tagsResult.document === null) {
-    throw new Error('선택 목록 응답에 본문이 없습니다.')
-  }
+  const categories = unwrapOptionsResult(categoriesResult)
+  const tags = unwrapOptionsResult(tagsResult)
 
   const object = detailResult.document.data
   const index = indexResources(detailResult.document.included)
@@ -123,8 +106,8 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
 
       <ExampleForm
         action={updateExampleAction.bind(null, id)}
-        categories={optionsFromDocument(categoriesResult.document)}
-        tags={optionsFromDocument(tagsResult.document)}
+        categories={optionsFromDocument(categories)}
+        tags={optionsFromDocument(tags)}
         initialValues={initialValues}
       />
 
@@ -133,20 +116,6 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
       </form>
     </div>
   )
-}
-
-/** 관계 대상의 표시 이름 - included 로 풀렸으면 이름, 식별자뿐이면 id(components/grid/resource-grid.tsx 의 relationshipLabel 과 같은 판단). */
-function relationshipLabel(target: ResourceObject | ResourceIdentifier): string {
-  if (isResourceObject(target) && typeof target.attributes?.name === 'string') {
-    return target.attributes.name
-  }
-  return target.id
-}
-
-/** ISO 문자열을 타임존 변환 없이 "YYYY-MM-DD HH:mm" 로 다듬는다(resource-grid.tsx 의 formatDateTime 과 같다). */
-function formatDateTime(value: string): string {
-  const [date, time] = value.split('T')
-  return date !== undefined && time !== undefined ? `${date} ${time.slice(0, 5)}` : value
 }
 
 function stringAttr(attributes: Attributes | undefined, key: string): string {
