@@ -956,7 +956,7 @@ BACKEND_URL=http://localhost:4000 pnpm seed:operator ops@example.com 'pw-long-en
 BACKEND_URL=http://localhost:4000 pnpm dev
 ```
 
-건가 판정은 **`/health/ready`** 로 한다. `/health` 는 없어서(404) 어떤 상황에서도 뜨지 않고, `/health/live` 는 Postgres 가 아직 없어도 `ok` 을 되돌려서 기다리는 도구로는 쓸모가 없다. `ready` 는 `SELECT 1` 로 DB 를 확인하고 아직이면 **503** 을 돌려서, `--fail` 이 그것을 받아 `migrate` 가 끝나기까지 잠긴다.
+건강 판정은 **`/health/ready`** 로 한다. `/health` 는 없어서(404) 어떤 상황에서도 뜨지 않고, `/health/live` 는 Postgres 가 아직 없어도 `ok` 를 되돌려서 기다리는 도구로는 쓸모가 없다. `ready` 는 `SELECT 1` 로 DB 를 확인하고 아직이면 **503** 을 돌려서, `--fail` 이 그것을 실패로 받아 `migrate` 가 끝날 때까지 루프가 계속 돈다.
 
 포트는 **4000** 이다. `E2E_API_PORT` 의 기본값 4100 은 Task 13 의 E2E 스택 전용이고, 컨테이너 안의 4000 과 호스트 공개 포트를 헷갈리지 않으려고 일부러 다르게 둔 값이다.
 
@@ -1885,13 +1885,13 @@ export interface BulkOutcome {
   /**
    * 실패하면 백엔드가 낸 오류 배열을 **그대로** 들고 간다. `status`·`detail` 만
    * 뽑아 복사하지 않는 이유는 `code` 가 버려지기 때문이다 — `code` 는
-   * `lib/jsonapi/errors.ts` 의 오류 라우팅 전습이 톤다는 유일한 필드이고,
+   * `lib/jsonapi/errors.ts` 의 오류 라우팅 전부가 키로 쓰는 유일한 필드이고,
    * 그것을 버리면 Task 12 가 HTTP 상태 문자열로 정책을 다시 판단하게 되어
-   * 이밌 있는 결정을 둘로 나눴다(F44 와 같은 부리의 실수).
+   * 이미 있는 결정을 둘로 나눈다(F44 와 같은 부류의 실수).
    *
-   * `exactOptionalPropertyTypes: true` 이므로 끝내 복사하고 싶어지면
+   * `exactOptionalPropertyTypes: true` 이므로, 굳이 뽑아 복사하려 들면
    * `{ status: error.status }` 는 `string | undefined` 를 `status?: string` 에 넣으려 해
-   * **포함하지 못한다.** 오루 객처를 그대로 들고 가면 그 바위가 생기지 않는다.
+   * **컴파일되지 않는다.** 오류 객체를 그대로 들고 가면 그 벽이 생기지 않는다.
    */
   readonly errors?: readonly ErrorObject[]
 }
