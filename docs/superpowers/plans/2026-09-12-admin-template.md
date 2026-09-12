@@ -2218,7 +2218,7 @@ MSG
 
 **Files:**
 - Create: `docker-compose.e2e.yml`, `Dockerfile`, `.dockerignore`, `playwright.config.ts`
-- Create: `test/e2e/{stack.ts,matrix.ts,fixtures.ts,probe-email.ts}`, `test/e2e/seed/examples.sql`
+- Create: `test/e2e/{stack.ts,matrix.ts,fixtures.ts,probe-email.ts}`, `test/e2e/seed/{examples.sql,examples.rails.sql,README.md}`
 - Create: `test/e2e/{auth.spec.ts,examples.spec.ts,bulk.spec.ts}`
 - Modify: `scripts/check.sh`, `package.json`
 - Test: `test/unit/e2e/matrix.test.ts`, `test/unit/e2e/probe-email.test.ts`
@@ -2345,6 +2345,19 @@ x-rails-build: &rails-build
 4. 각 백엔드의 환경 변수·의존 관계·헬스체크는 **정본 파일에서 그대로 옮긴다.** 기억으로 쓰면 갈래마다 다르게 깨진다.
 
 마이그레이션 뒤 `test/e2e/seed/examples.sql` 을 넣는 `seed-*` 서비스도 profile 마다 하나씩 둔다.
+
+**씨앗 파일은 둘이다.** `examples.sql` 은 fastapi·nestjs 가 공유하고(두 백엔드의 테이블 이름이 같다), **Rails 는 `examples.rails.sql` 을 따로 쓴다** — 분류·라벨·조인 테이블 이름이 다르다(정본 434-435행). 왜 다른지와 무엇이 다른지는 `test/e2e/seed/README.md` 에 적는다. 하나로 때우면 rails 프로파일이 씨앗 단계에서 `relation does not exist` 로 죽는데, **그때는 이미 git URL 에서 Rails 이미지를 다 빌드한 뒤다.**
+
+**정본에서 반드시 찾아 확인할 것 다섯.** 아래는 답이 아니라 질문이다 — 답은 전부 정본의 주석에 있고, 그 주석은 대조군 실측으로 쓰여 있다. 값을 여기 옮겨 적지 않는 이유는 그 사본이 드리프트하기 때문이다. 다섯 개를 각각 찾아서 **어디서 찾았는지 보고에 적어라.** 하나라도 못 찾았으면 못 찾았다고 적어라 — 추측해 메우지 마라.
+
+| 무엇 | 왜 놓치기 쉬운가 |
+| --- | --- |
+| Rails 가 왜 **별도 데이터베이스 이름**을 받나, 그리고 `seed-rails` 의 `PGDATABASE` 가 무엇이어야 하나 | `bin/rails db:prepare` 는 DB 를 **새로 만든 경우에만** `db:seed` 를 돈다. 공유 DB 를 주면 시드를 조용히 건너뛰고, 엉뚱한 DB 에 씨앗을 넣으면 E2E 단정이 전부 빈 데이터에서 실패한다 |
+| Rails 의 **Host 차단**을 푸는 환경변수, 그리고 **두 번째 값이 왜 필요한가** | 없으면 `GET /health/ready` 가 403 `Blocked hosts` 를 낸다. 두 번째 값을 빼면 브라우저를 거치지 않고 호스트 공개 포트로 직접 닿는 시나리오만 전멸한다 — Host 헤더가 컨테이너 이름이 아니기 때문이다. **FastAPI·NestJS 에는 이 검사가 없어서 두 갈래에서는 드러나지 않는다** |
+| `development` 스테이지에 **HEALTHCHECK 가 없어서** compose 가 무엇을 대신 주나, 그리고 왜 `localhost` 가 아니라 서비스 이름으로 찌르나 | production 스테이지의 HEALTHCHECK 를 글자 그대로 베끼면 죽는다(정본이 실측으로 적어 뒀다) |
+| `--wait` 가 성립하려면 `web` 의 `depends_on` 이 무엇까지 가리켜야 하나 | 정상 종료(exit 0)하는 일회성 서비스를 참조에서 빼면 compose 가 그것을 "예기치 않게 멈췄다"로 읽고 실패한다 |
+| 포트를 **한 곳에서만** 정하는 규칙이 어느 파일에 있나 | `ALLOWED_HOSTS` 의 두 번째 값과 `ports.published` 가 같은 변수를 참조해야 한다 — 한쪽만 고치면 조용히 어긋난다 |
+
 
 - [ ] **Step 5: E2E 픽스처의 가드를 만든다**
 
