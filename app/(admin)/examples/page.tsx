@@ -74,6 +74,7 @@ export default async function ExamplesPage({
       document={result.document}
       bulkDeleteAction={bulkDeleteExampleAction}
       reauthHref={reauthHref}
+      rowHrefBase="/examples"
     />
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   columnFilteringFeature,
@@ -60,6 +61,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { ROW_CLICK_IGNORED_SELECTOR, shouldNavigateFromRowClick } from './row-click'
 import { BulkConfirmPanel } from './bulk-confirm'
 import { BulkProgress, BulkResultTable, mergeRetryReport } from './bulk-result'
 import { formatDateTime, relationshipLabel } from './format'
@@ -305,6 +307,22 @@ export function ResourceGrid(props: {
    * 그 경로 조립을 안전하게 할 수 있으므로 완성된 문자열만 받는다.
    */
   reauthHref: string
+  /**
+   * 있으면 행을 눌러 `<이 값>/<자원 id>` 상세로 간다. 없으면 행은 지금처럼
+   * 눌리지 않는다 - **이 파일이 자원 이름으로 분기해서 "examples 면 상세가
+   * 있다"를 판단하지 않는다.** 상세 라우트가 있는지는 화면이 아는 사실이고
+   * (`app/(admin)/examples/page.tsx` 가 넘긴다), 참조용 자원처럼 상세 화면이
+   * 없는 것은 그냥 넘기지 않는다.
+   *
+   * **함수가 아니라 문자열인 이유(실측으로 겪었다).** 처음에는
+   * `(id) => string` 으로 뒀는데, 이 컴포넌트를 그리는 것은 서버 컴포넌트이고
+   * **함수는 RSC 경계를 건널 수 없다** - 서버 렌더가 그 자리에서 던져
+   * `app/error.tsx` 가 그려지고 표가 아예 없었다(React #441).
+   * `bulkDeleteAction` 이 함수인데도 건너는 것은 그것이 Server Action
+   * (`actions.ts` 의 `'use server'`)이라 참조로 직렬화되기 때문이고,
+   * `reauthHref` 는 애초에 문자열이다. 평범한 클로저는 둘 중 어느 쪽도 아니다.
+   */
+  rowHrefBase?: string
 }) {
   return (
     <React.Suspense fallback={null}>
@@ -318,11 +336,13 @@ function ResourceGridInner({
   document,
   bulkDeleteAction,
   reauthHref,
+  rowHrefBase,
 }: {
   resource: ResourceDef
   document: CollectionDocument
   bulkDeleteAction?: (id: string) => Promise<BulkOutcome>
   reauthHref: string
+  rowHrefBase?: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -503,15 +523,72 @@ function ResourceGridInner({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      <FlexRender cell={cell} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
+              table.getRowModel().rows.map((row) => {
+                // 자원 id 는 `row.id` 다 - `getRowId: (row) => row.id`(위 useTable
+                // 옵션)가 GridRow.id 를 그대로 테이블 행 id 로 쓰기 때문이다.
+                // `row.original` 은 v9 의 Row 에 없다(실측: 그걸 읽으면 표가
+                // 렌더 자체를 못 하고 React #441 로 죽는다) - 선택 행을 읽는
+                // 위 `selectedIds` 도 같은 이유로 `row.id` 를 쓴다.
+                const href = rowHrefBase === undefined ? undefined : `${rowHrefBase}/${row.id}`
+                const cells = row.getVisibleCells()
+                // 링크를 감을 셀을 **인덱스가 아니라 정체로** 고른다 - 컬럼
+                // 표시를 끄면 인덱스가 밀리고, `select`(체크박스) 열은 링크가
+                // 될 수 없다. 첫 데이터 셀 하나만 링크다: 행 전체를 <a> 로
+                // 감으면 그 안의 체크박스가 링크 자손이 되어 키보드 탐색이
+                // 깨진다.
+                const linkCellId = cells.find((cell) => cell.column.id !== 'select')?.id
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && 'selected'}
+                    className={href === undefined ? undefined : 'cursor-pointer'}
+                  >
+                    {cells.map((cell) => (
+                      <TableCell
+                        key={cell.id}
+                        // 핸들러가 **행이 아니라 셀**에 붙는다 - `select`(체크박스)
+                        // 셀에는 아예 붙지 않으므로 체크박스를 눌러 상세로
+                        // 튕겨 나가는 일이 **구성상** 불가능하다. 무시 목록을
+                        // 늘려 막는 쪽을 택하지 않은 이유: 그 목록은 행에 컨트롤이
+                        // 늘 때마다 조용히 낡는다(실측으로 겪었다 - Base UI
+                        // 체크박스는 `role="checkbox"` 를 보장하지 않고
+                        // `<span data-slot="checkbox">` 로 렌더된다). 선택자는
+                        // 데이터 셀 **안에** 생길 컨트롤만 막는 2차 방어로 남는다.
+                        onClick={
+                          href === undefined || cell.column.id === 'select'
+                            ? undefined
+                            : (event) => {
+                                const target = event.target
+                                const insideIgnored =
+                                  target instanceof Element &&
+                                  target.closest(ROW_CLICK_IGNORED_SELECTOR) !== null
+                                if (
+                                  shouldNavigateFromRowClick({
+                                    insideIgnored,
+                                    selectedText: window.getSelection()?.toString() ?? '',
+                                  })
+                                ) {
+                                  router.push(href)
+                                }
+                              }
+                        }
+                      >
+                        {href !== undefined && cell.id === linkCellId ? (
+                          // 진짜 <Link> 를 하나 둔다 - 행 클릭은 마우스만의
+                          // 편의이고, 키보드·스크린리더는 이 링크로 상세에
+                          // 도달한다. 둘 중 하나만 두면 한쪽 사용자가 상세를
+                          // 열 수 없다.
+                          <Link href={href} className="hover:underline">
+                            <FlexRender cell={cell} />
+                          </Link>
+                        ) : (
+                          <FlexRender cell={cell} />
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                )
+              })
             ) : (
               <TableRow>
                 <TableCell
