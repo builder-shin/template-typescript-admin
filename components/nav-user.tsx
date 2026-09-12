@@ -18,13 +18,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import {
-  EllipsisVerticalIcon,
-  CircleUserRoundIcon,
-  CreditCardIcon,
-  BellIcon,
-  LogOutIcon,
-} from 'lucide-react'
+import { EllipsisVerticalIcon, CircleUserRoundIcon, LogOutIcon } from 'lucide-react'
 
 /**
  * `operator`가 `null`인 두 경우 - 서버 조회 자체가 실패했거나(`layout.tsx`가
@@ -77,27 +71,11 @@ export function NavUser({ operator }: { operator: Operator | null }) {
               </DropdownMenuLabel>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem>
-                <CircleUserRoundIcon />
-                Account
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <CreditCardIcon />
-                Billing
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <BellIcon />
-                Notifications
-              </DropdownMenuItem>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
             {/*
-              나머지 항목(Account·Billing·Notifications)은 shadcn 대시보드
-              블록이 남긴 장식이고 실제 기능이 없다 - 이 항목만 실제로
-              존재하는 기능(로그아웃)에 대응한다. 나머지를 실재하게 만들거나
-              지우는 것은 Task 15(사이드바 정리)의 Step 1 표에도 없던 별개
-              항목이라 그대로 남긴다 - 지우는 판단은 이 저장소의 남은 과제다.
+              Account·Billing·Notifications 항목(과 로그아웃을 그로부터
+              가르던 구분선)을 지웠다 - 셋 다 클릭해도 아무 일도 일어나지
+              않는, 이 과업이 이미 지운 url: '#' 내비게이션 스무 개와 같은
+              부류의 장식이었다.
 
               `logoutAction`(app/(auth)/actions.ts)을 직접 호출한다 -
               `<form action>` 이 아니라 이 파일의 다른 예(resource-grid.tsx 의
