@@ -416,22 +416,65 @@ grep -hoE '^export (async )?(function|const|type|interface|class) [A-Za-z_][A-Za
 
 - [ ] **Step 5: 출처 검사의 테스트를 쓴다**
 
+**검사가 실제로 실패할 수 있다는 것을 증명하는 테스트를 쓴다.** 지금 트리에서 0 으로 끝나는 것만 재면, 스크립트가 항상 0 으로 끝나도록 망가져도 초록이다 — 그때 게이트는 제공하지 않는 보증을 보고한다. Task 1 의 인용 테스트가 세운 기준이 이것이다.
+
 ```ts
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import record from '../../../docs/provenance/copied-core.json'
 
+const SCRIPT = join(process.cwd(), 'scripts/check-provenance.sh')
+
+/** 깨진 기록을 담은 임시 트리에서 검사를 돌리고 종료 코드를 돌려준다. */
+function runAgainst(body: string | null): number {
+  const dir = mkdtempSync(join(tmpdir(), 'prov-'))
+  if (body !== null) {
+    mkdirSync(join(dir, 'docs', 'provenance'), { recursive: true })
+    writeFileSync(join(dir, 'docs/provenance/copied-core.json'), body, 'utf8')
+  }
+  try {
+    execFileSync('bash', [SCRIPT], { cwd: dir })
+    return 0
+  } catch (error) {
+    return (error as { status: number }).status
+  }
+}
+
+const VALID = {
+  source: 'https://github.com/builder-shin/template-typescript-nextjs',
+  commit: 'a'.repeat(40),
+  paths: ['docs'],
+}
+
 describe('copied-core provenance', () => {
-  it('40자 커밋 SHA 를 갖는다', () => {
+  it('지금 기록은 유효하다', () => {
     expect(record.commit).toMatch(/^[0-9a-f]{40}$/)
+    expect(record.paths.length).toBeGreaterThan(0)
+    expect(() => execFileSync('bash', [SCRIPT])).not.toThrow()
   })
 
-  it('기록된 경로가 전부 실재한다', () => {
-    expect(record.paths.length).toBeGreaterThan(0)
-    expect(() => execFileSync('bash', ['scripts/check-provenance.sh'])).not.toThrow()
+  it('기록 파일이 없으면 죽는다', () => {
+    expect(runAgainst(null)).not.toBe(0)
+  })
+
+  it('커밋 SHA 가 40자 16진수가 아니면 죽는다', () => {
+    expect(runAgainst(JSON.stringify({ ...VALID, commit: 'nope' }))).not.toBe(0)
+  })
+
+  it('paths 가 비어 있으면 죽는다', () => {
+    expect(runAgainst(JSON.stringify({ ...VALID, paths: [] }))).not.toBe(0)
+  })
+
+  it('기록된 경로가 사라졌으면 죽는다', () => {
+    expect(runAgainst(JSON.stringify({ ...VALID, paths: ['없는-경로'] }))).not.toBe(0)
   })
 })
 ```
+
+임시 디렉터리에서 돌리려면 스크립트가 **현재 작업 디렉터리 기준**으로 기록을 찾아야 한다. 기본 동작은 그대로 두어 `scripts/check.sh` 를 고칠 필요가 없게 한다.
 
 - [ ] **Step 6: 테스트를 돌려 실패를 확인한다**
 
@@ -524,43 +567,62 @@ cp /tmp/ttn/proxy.ts proxy.ts
 mkdir -p test/unit/auth
 cp -r /tmp/ttn/test/unit/auth/. test/unit/auth/
 cp /tmp/ttn/test/unit/proxy.test.ts test/unit/proxy.test.ts
+
+# logout 테스트는 아직 없는 코드를 가져온다 - 아래를 읽어라.
+rm test/unit/auth/logout.test.ts
 ```
 
-복사 직후 **Task 2 Step 2b 와 같은 정리를 한다** — 과업·리뷰 라벨과 이 저장소에 없는 파일·함수 인용을 걷어내고, 기술적 근거만 남긴다. `lib/auth/` 의 주석은 `app/(auth)/` 와 `app/(lab)/` 를 자주 가리키는데, **`(lab)` 은 이 저장소에 영영 생기지 않는다**(스펙 5.2). 게이트 `[5/9]` 가 남은 라벨을 잡는다.
+**`test/unit/auth/logout.test.ts` 는 여기서 복사하지 않는다.** 그 파일은 `@/app/(auth)/actions` 의 `logoutAction` 을 import 하는데, 그 Server Action 은 **Task 5** 가 만든다(실측 2026-09-12: 복사 대상 아홉 중 이 파일 하나만 `app/` 에 닿는다). 가져오면 `[1/9] typecheck` 가 없는 모듈로 죽는다.
+
+**스텁을 만들어 넘기지 마라.** 스텁은 가짜를 상대로 통과하는 테스트를 만들고, 그때 초록은 아무것도 보증하지 않는다. 테스트는 자기가 검증하는 코드와 함께 와야 하므로 **Task 5 가 `actions.ts` 를 만들 때 이 테스트를 가져온다.**
+
+그동안 `lib/auth/logout.ts` 자체는 복사되지만 단위 테스트가 없는 상태로 남는다 — Task 5 가 닫는다.
+
+복사 직후 **Task 2 Step 2b 와 같은 정리를 한다** — 과업·리뷰 라벨과 이 저장소에 없는 파일·함수 인용을 걷어내고, 기술적 근거만 남긴다. `lib/auth/` 의 주석은 `app/(auth)/` 와 `app/(lab)/` 를 자주 가리키는데, **`(lab)` 은 이 저장소에 영영 생기지 않는다**(계약 실험실은 형제 저장소가 소유한다). 게이트 `[5/9]` 가 남은 라벨을 잡는다.
+
+**`스펙 N.N` 포인터도 함께 걷어낸다.** 복사본의 절 번호는 **형제 저장소 스펙의 것**이라 이 저장소에서는 대부분 다른 절로 떨어진다 — Task 2 에서 실측한 결과 `9.2` 는 여기 아예 없고, `7.2` 는 첫 운영자 문제이며, `3장`·`8.1` 은 코어 조달과 단일 게이트였다. **죽은 인용보다 나쁘다**: 죽은 인용은 아무 데도 안 닿는 것을 독자가 알지만, 이것은 그럴듯하고 틀린 곳에 닿는다.
+
+포인터는 거의 항상 이미 뜻을 담은 문장 뒤의 괄호다 — 괄호만 지우면 손실이 없다. 괄호가 내용을 품고 있으면 그 내용을 문장으로 살리고 번호만 뺀다. **우리 절 번호로 다시 매핑하지 마라** — 손으로 매핑하면 고치는 것보다 틀리는 것이 많다.
+
+**맨 `Task N` 도 잡아야 한다.** `proxy.ts` 에 `"Task 5 와의 새 계약이다"` 라는 주석이 있는데(실측), 그건 **형제의 Task 5** 다. 그런데 **우리 Task 5 도 하필 로그인 과업**이라 우리 계획을 가리키는 것처럼 읽힌다 — 우연이 인용을 더 위험하게 만든 자리다.
+
+이 경우 내용 자체는 우리에게도 참이다(로그인 Server Action 이 `LOGIN_REDIRECT_PARAM` 을 읽어야 복귀가 완성된다). 그러니 **번호만 빼고 무엇과의 계약인지로 다시 쓴다** — 예: "로그인 Server Action 과의 계약이다".
 
 ```bash
-grep -rnE '\(D[0-9]+ Task|브랜치 리뷰|\(lab\)' lib/ test/ proxy.ts || echo "남의 출처 0건"
+grep -rnE 'D[0-9]+ Task|Task [0-9]|브랜치 리뷰|\(lab\)|스펙 [0-9]' lib/ test/ proxy.ts || echo "남의 출처 0건"
 ```
+
+`test/unit/scripts/check-citations.test.ts` 의 `스펙 4.2` 는 **우리 것**이고, 게이트가 우리 스펙 인용을 막지 않는다는 것을 증명하는 픽스처다 — 건드리지 마라.
 
 - [ ] **Step 2: 보호 경로 목록을 어드민의 것으로 바꾸는 테스트를 먼저 쓴다**
 
 nextjs 는 목록·상세가 공개이고 쓰기만 보호된다. **어드민은 읽기조차 운영자만 본다.** 복사해 온 `test/unit/proxy.test.ts` 에 더한다.
 
+복사본은 이미 `isProtectedPath(pathname)` 를 export 한다(`PROTECTED_PATH_PATTERNS.some(...)` 를 감싼 것). **그 판정을 테스트에서 다시 구현하지 마라** — 로직을 베껴 두면 둘이 갈라질 수 있고, 갈라지면 테스트가 제품이 아니라 자기 사본을 검증한다.
+
 ```ts
 import { describe, expect, it } from 'vitest'
-import { PROTECTED_PATH_PATTERNS } from '@/proxy'
-
-function isProtected(path: string): boolean {
-  return PROTECTED_PATH_PATTERNS.some((pattern) => pattern.test(path))
-}
+import { isProtectedPath } from '@/proxy'
 
 describe('어드민의 보호 경로', () => {
   it('공개는 /login 하나다', () => {
-    expect(isProtected('/login')).toBe(false)
+    expect(isProtectedPath('/login')).toBe(false)
   })
 
   it.each(['/', '/examples', '/examples/abc', '/examples/new', '/examples/abc/edit'])(
     '%s 는 보호된다',
     (path) => {
-      expect(isProtected(path)).toBe(true)
+      expect(isProtectedPath(path)).toBe(true)
     },
   )
 
   it('가입 경로는 존재하지 않는다', () => {
-    expect(isProtected('/register')).toBe(true)
+    expect(isProtectedPath('/register')).toBe(true)
   })
 })
 ```
+
+복사본의 기본값은 `/examples/new` 와 `/examples/[id]/edit` 둘만 보호한다(실측) — 나머지를 공개로 두는 고객용 앱의 목록이다. 위 테스트는 그 목록으로는 전부 실패한다. 그게 Step 4 가 할 일이다.
 
 마지막 검사가 중요하다 — `/register` 화면을 만들지 않기로 했으므로(스펙 7.1) 그 경로가 **열려 있으면 안 된다.** 없는 화면이 공개로 남으면 나중에 누가 만들 때 보호를 잊는다.
 
@@ -703,6 +765,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
 **`(admin)` 안에서 `min-h-svh` 를 쓰지 마라.** 높이는 셸이 갖는다 — 화면이 다시 잡으면 헤더 높이만큼 넘친다.
 
+- [ ] **Step 8b: 그룹 밖 껍데기 셋을 만든다**
+
+`app/` 루트에 `error.tsx` · `not-found.tsx` · `loading.tsx` 를 만든다. 형제 저장소의 같은 파일을 가져와 이 저장소에 맞게 다듬는다(인용 정리는 Task 2·3 과 같은 규칙).
+
+**이건 취향이 아니라 기능 구멍을 메우는 일이다.** 복사해 온 코어의 오류 설계가 이 파일의 존재에 걸려 있다(실측 2026-09-12):
+
+- `lib/jsonapi/errors.ts:49` — 백엔드가 응답조차 주지 못한 `transport` 갈래는 **`app/error.tsx` 가 받는다**. 나머지 넷과 달리 화면이 직접 그리지 않는다.
+- `lib/jsonapi/client.ts:18-25` — 읽기 경로에서 던질지 `ok:false` 로 돌려줄지의 판단이 **"`error.tsx` 가 있으니 던져도 흰 페이지가 아니다"** 를 전제로 쓰여 있다.
+
+**즉 이 파일이 없는 동안 그 전제가 거짓이다.** 던지는 읽기 경로는 Next 기본 오류 화면으로 떨어지고, `transport` 갈래는 받을 곳이 없다. Task 2 의 주석 다섯 자리가 이 파일을 가리키는 이유가 그것이고, 이 단계가 생기면 그 인용들은 **앞을 가리키는 올바른 인용**이 된다.
+
+형제의 `app/error.tsx` 는 `@/components/ui/button` 을 쓴다 — 이 과업이 `shadcn add` 로 이미 들여온 뒤라 그대로 온다. `min-h-svh` 도 쓰는데, **이 셋은 그룹 밖이라 셸이 없으므로 여기서는 옳다**(금지되는 것은 `(admin)` 안이다).
+
+가져온 뒤 `스펙 9.2` 같은 형제 스펙 포인터를 Task 2·3 과 같은 규칙으로 걷어낸다.
+
+`app/` 루트의 셋은 **라우트 그룹 밖이라 셸을 두르지 않는다.** 즉 `(admin)` 안의 화면이 `notFound()` 를 불러도 사이드바는 사라진다. 그게 의도다.
+
+`loading.tsx` 는 **텍스트를 하나도 쓰지 않는다** — 스켈레톤 또는 스피너만(스펙 5.3).
+
 - [ ] **Step 9: 게이트를 돌린다**
 
 Run: `rm -rf .next && ./scripts/check.sh`
@@ -819,6 +900,20 @@ export function SubmitButton({ label }: { label: string }) {
 ```
 
 **제출 중에 "로그인 중..." 같은 문구를 쓰지 않는다.** pending 동안 버튼 안에는 스피너 하나만 남는다(전역 규칙, 스펙 5.3).
+
+- [ ] **Step 6b: Task 3 이 미뤄 둔 로그아웃 테스트를 가져온다**
+
+`app/(auth)/actions.ts` 를 만든 뒤, Task 3 이 복사하지 않고 남겨 둔 테스트를 가져온다.
+
+```bash
+cp /tmp/ttn/test/unit/auth/logout.test.ts test/unit/auth/logout.test.ts
+```
+
+그 파일은 `@/app/(auth)/actions` 의 `logoutAction` 을 import 한다 — Task 3 시점에는 그 모듈이 없어서 `[1/9]` 가 죽었다. 이제 존재하므로 함께 온다. **복사 직후 Task 3 과 같은 인용 정리를 한다**(과업·리뷰 라벨, 이 저장소에 없는 파일 인용, `스펙 N.N` 포인터).
+
+`logoutAction` 의 시그니처가 복사본이 기대하는 것과 다르면 **테스트를 고치지 말고** 이 과업의 `actions.ts` 를 원본에 맞춘다 — 그 테스트가 계약의 정본이다.
+
+`docs/provenance/copied-core.json` 의 `paths` 에 이 파일을 더한다.
 
 - [ ] **Step 7: `(auth)` 그룹과 로그인 화면을 만든다**
 
