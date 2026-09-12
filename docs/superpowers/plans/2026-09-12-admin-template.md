@@ -1715,46 +1715,49 @@ Run: `pnpm vitest run test/unit/e2e` → FAIL → 구현 → PASS (5 tests)
 
 - [ ] **Step 4: compose 스택을 만든다**
 
-Postgres · Redis · 마이그레이션 · 씨앗 데이터 · 백엔드 하나 · 이 앱의 **프로덕션 빌드**를 띄운다. 이 파일의 **핵심 계약은 네트워크 별칭**이다.
+Postgres · Redis · 마이그레이션 · 씨앗 데이터 · 백엔드 하나 · 이 앱의 **프로덕션 빌드**를 띄운다.
+
+**정본은 `template-typescript-nextjs@34d0b10` 의 `docker-compose.e2e.yml` 이다**(502행, 근거가 주석에 있다). 그 파일을 읽고 구조를 그대로 미러링한다 — 아래는 반드시 지켜야 하는 계약만 적은 것이다.
+
+**미리 빌드된 이미지는 없다**(실측 2026-09-12: 세 백엔드의 ghcr 패키지가 존재하지 않는다). Docker 가 **git URL 을 build context 로** 받아 백엔드를 직접 빌드한다.
 
 ```yaml
-services:
+# 백엔드마다 migrate-* · api-* · seed-* 세 서비스를 두고 profiles 로 가른다.
+# db(postgres:18-alpine) 와 redis(redis:8-alpine) 는 셋이 공유한다.
+
+  api-rails:
+    profiles: [rails]
+    build:
+      context: https://github.com/builder-shin/template-ruby-rails.git#main
+      # target 을 지정하지 않으면 Dockerfile 의 마지막 스테이지가 잡힌다.
+      target: development
+    networks:
+      default:
+        aliases: [api] # ← 세 api-* 가 모두 이 별칭을 갖는다
+    ports:
+      - target: 4000
+        published: ${E2E_API_PORT:-4100}
+
   web:
-    build: { context: ., dockerfile: Dockerfile }
+    build:
+      context: .
+      target: runtime
     environment:
       # 세 갈래에서 이 값이 똑같다 - 갈아끼우면서 고치는 값이 하나도 없다.
       BACKEND_URL: http://api:4000
-      SESSION_COOKIE_SECURE: 'false'
-    ports: ['${E2E_WEB_PORT:-3000}:3000']
-
-  api-fastapi:
-    profiles: ['fastapi']
-    image: ghcr.io/builder-shin/template-python-fastapi:main
-    networks:
-      default:
-        aliases: ['api'] # ← 세 api-* 가 모두 이 별칭을 갖는다
-    ports: ['${E2E_API_PORT:-4100}:4000']
-
-  api-nestjs:
-    profiles: ['nestjs']
-    image: ghcr.io/builder-shin/template-typescript-nestjs:main
-    networks:
-      default:
-        aliases: ['api']
-    ports: ['${E2E_API_PORT:-4100}:4000']
-
-  api-rails:
-    profiles: ['rails']
-    image: ghcr.io/builder-shin/template-ruby-rails:main
-    networks:
-      default:
-        aliases: ['api']
-    ports: ['${E2E_API_PORT:-4100}:4000']
+    ports:
+      - target: 3000
+        published: ${E2E_WEB_PORT:-3000}
 ```
 
-`migrate-fastapi` · `migrate-nestjs` · `migrate-rails` 를 각 profile 에 하나씩 두고, 마이그레이션 뒤 `test/e2e/seed/examples.sql` 을 넣는다. 이미지 태그·포트·의존 관계의 정확한 값은 각 백엔드 저장소의 compose 파일에서 확인해 맞춘다.
+지켜야 할 것 넷:
 
-**별칭이 셋 다 `api` 인 것이 이 설계의 전부다** — `web` 의 `BACKEND_URL` 이 갈래와 무관하게 같아지고, 그래서 "전환은 `BACKEND_URL` 하나"라는 계약이 E2E 에서도 참이 된다.
+1. **별칭이 셋 다 `api` 인 것이 이 설계의 전부다** — `web` 의 `BACKEND_URL` 이 갈래와 무관하게 같아지고, 그래서 "전환은 `BACKEND_URL` 하나"라는 계약이 E2E 에서도 참이 된다.
+2. **`E2E_API_PORT` 기본값은 4000 이 아니라 4100 이다** — 컨테이너 안의 포트 4000(`BACKEND_URL` 이 가리키는 그 포트)과 호스트 공개 포트를 헷갈리지 않게 일부러 다르게 뒀다.
+3. **Rails 는 `target: development` 가 필수다.** 정본 파일의 주석이 그 이유를 갖는다.
+4. 각 백엔드의 환경 변수·의존 관계·헬스체크는 **정본 파일에서 그대로 옮긴다.** 기억으로 쓰면 갈래마다 다르게 깨진다.
+
+마이그레이션 뒤 `test/e2e/seed/examples.sql` 을 넣는 `seed-*` 서비스도 profile 마다 하나씩 둔다.
 
 - [ ] **Step 5: E2E 픽스처의 가드를 만든다**
 
