@@ -2358,6 +2358,33 @@ x-rails-build: &rails-build
 | `--wait` 가 성립하려면 `web` 의 `depends_on` 이 무엇까지 가리켜야 하나 | 정상 종료(exit 0)하는 일회성 서비스를 참조에서 빼면 compose 가 그것을 "예기치 않게 멈췄다"로 읽고 실패한다 |
 | 포트를 **한 곳에서만** 정하는 규칙이 어느 파일에 있나 | `ALLOWED_HOSTS` 의 두 번째 값과 `ports.published` 가 같은 변수를 참조해야 한다 — 한쪽만 고치면 조용히 어긋난다 |
 
+**Postgres 에 볼륨을 붙이지 마라 — 없는 것이 계약이다.** 정본 실측(2026-09-12): 최상위 `volumes:` 키가 **없고**, `db` 서비스는 `image`·`environment`·`healthcheck` 세 개뿐이며 `/var/lib/postgresql` 마운트도 `tmpfs` 도 없다. 즉 데이터가 컨테이너의 쓰기 계층에만 있어서 `down` 한 번에 사라지고, 매 `up` 이 **빈 데이터베이스에서 시작한다.**
+
+개발용 스택을 짜는 본능대로 `db` 에 named volume 을 붙이면 두 가지가 조용히 망가진다.
+
+| 갈래 | 두 번째 실행부터 |
+| --- | --- |
+| rails | **씨앗이 건너뛰어진다.** `bin/rails db:prepare` 는 데이터베이스를 **새로 만든 경우에만** `db:seed` 를 돈다. 볼륨이 남으면 `rails_e2e_template` 이 이미 존재하므로 생성도 시드도 없다 — E2E 단정이 전부 빈 데이터에서 실패한다 |
+| fastapi · nestjs | `examples.sql` 이 이미 있는 행 위에 다시 돌아, 고정 id 면 중복 키로 죽고 아니면 행이 배로 쌓여 페이지·총합 단정이 어긋난다 |
+
+정본이 다른 모든 결정에 주석을 달아 놓고 이 부재에는 달지 않았다 — 그래서 여기 적는다. **볼륨이 필요해 보이면 그것은 스택을 재사용하려는 신호이고, 이 스택은 재사용하지 않는 것이 설계다.**
+
+**`.dockerignore` 는 정본의 것을 그대로 쓴다.** 짧고 드리프트하지 않으므로 여기 옮겨 적는다(실측: 정본 저장소의 `.dockerignore` 전문):
+
+```
+node_modules
+.next
+.git
+.superpowers
+docs
+coverage
+*.tsbuildinfo
+.env
+.env.local
+```
+
+`web` 의 build context 가 `.` 이므로 이 목록이 없으면 `node_modules/` 전체가 데몬으로 올라가 빌드가 느려지고, **`.superpowers/`**(원장·브리핑·리뷰 패키지 — 지금 수 MB 다)까지 컨텍스트에 실린다. `.env` 두 줄은 실수로 이미지에 자격증명이 들어가는 것을 막는다.
+
 
 - [ ] **Step 5: E2E 픽스처의 가드를 만든다**
 
