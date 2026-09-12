@@ -1915,8 +1915,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { MAX_BULK_ITEMS, runBulk } from '@/lib/bulk/executor'
 
 const ok = (id: string) => ({ id, ok: true })
-// 실증된 실패 모양이다: 삭제는 성공하면 204, 그 행이 이밌 없으면 404.
-// 백엔드는 삭제에 422 를 내지 않는다 - 참조 무얼성 거절 경로가 없다.
+// 실증된 실패 모양이다: 삭제는 성공하면 204, 그 행이 이미 없으면 404.
+// 백엔드는 삭제에 422 를 내지 않는다 - 참조 무결성 거절 경로가 없다.
 // code 를 같이 싣는다 - Task 12 가 이걸 보고 재시도 가능 여부를 가른다.
 const gone = (id: string) => ({
   id,
