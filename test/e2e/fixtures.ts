@@ -44,18 +44,6 @@ export interface ConsoleGuard {
 /** 크롬이 네트워크 응답을 중계하는 줄. 앱이 말한 것이 아니다 - 위 주석 참고. */
 const BROWSER_NETWORK_NARRATION = /^Failed to load resource:/
 
-/**
- * 로그인한 모든 화면에서 항상 404 로 죽는 자리 하나 - `components/app-sidebar.tsx`
- * 의 하드코딩된 데모 데이터(`avatar: '/avatars/shadcn.jpg'`)를 `nav-user.tsx`
- * 가 그대로 그린다. `public/` 디렉터리 자체가 이 저장소에 없어(Dockerfile 의
- * 같은 이름 절) 이 요청은 항상, 예외 없이 404 다 - 개별 테스트가
- * `expectHttpFailure()` 로 매번 선언하게 하는 대신 여기서 한 번 걸러 낸다.
- * 사이드바 블록 자체(가짜 사용자·`url: '#'` 내비게이션)를 실재하는 것으로
- * 바꾸는 일은 이 태스크의 범위 밖이다 - 그 파일을 고치는 태스크가 이 줄도
- * 함께 지운다.
- */
-const KNOWN_DECORATIVE_404 = /\/avatars\/shadcn\.jpg$/
-
 export const test = base.extend<{ consoleGuard: ConsoleGuard }>({
   consoleGuard: [
     async ({ page }, use) => {
@@ -77,7 +65,6 @@ export const test = base.extend<{ consoleGuard: ConsoleGuard }>({
         target.on('response', (response) => {
           if (response.status() < 400) return
           const url = response.url()
-          if (KNOWN_DECORATIVE_404.test(url)) return
           if (expectedFailures.some((pattern) => pattern.test(url))) return
           problems.push(`[http ${response.status()}] ${url}`)
         })

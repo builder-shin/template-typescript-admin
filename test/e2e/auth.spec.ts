@@ -171,10 +171,10 @@ test.describe('가입(프로비저닝) · 로그인 · 로그아웃', () => {
     expectSessionCookieAttributes(established, '로그인 직후')
 
     // 로그아웃 - 사이드바 사용자 메뉴를 열고 "로그아웃"을 누른다. 트리거는
-    // 셸이 만든 고정 데모 사용자("shadcn")를 보여줄 뿐이다(app-sidebar.tsx) -
-    // 부분 일치로 잡아 정확한 접근성 이름 조합(아바타 alt·이메일 공백 등)에
-    // 기대지 않는다.
-    await page.getByRole('button', { name: 'shadcn' }).click()
+    // 이제 서버가 `/api/v1/users/me`로 조회한 실제 운영자의 이메일을
+    // 보여준다(Task 15, app/(admin)/operator.ts) - 위에서 가입에 쓴 것과
+    // 같은 `email` 이라 그 값으로 정확히 잡을 수 있다.
+    await page.getByRole('button', { name: email }).click()
     await page.getByRole('menuitem', { name: '로그아웃' }).click()
 
     // POST_LOGOUT_PATH(logout.ts)는 '/' 이지만 그 경로도 보호 대상이라
