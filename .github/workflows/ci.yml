@@ -1,0 +1,118 @@
+name: CI
+
+# 정본 게이트(FastAPI)를 한 번, 세 백엔드 매트릭스(스펙 8.3 - CI 전용)를 한 번
+# 돈다. 로컬 게이트(`./scripts/check.sh`)는 늘 FastAPI 하나로만 돈다 - 매번
+# 세 스택을 띄우면 개발 흐름이 막히기 때문이다. 그 3-백엔드 비교를 여기서만
+# 한다.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+# 툴체인 버전은 여기 두지 않는다 - 정본은 package.json 이다
+# (`engines.node` = ">=24.11.0", `packageManager` = "pnpm@11.22.0"). 각 잡의
+# "툴체인 설치" 스텝이 그 필드를 읽는다 - 근거는 .github/AGENTS.md.
+
+jobs:
+  gate:
+    name: 게이트 (FastAPI, ./scripts/check.sh)
+    runs-on: ubuntu-latest
+    # 백엔드를 git 컨텍스트에서 빌드하고 스택이 뜨기를 기다리는 구조라, 준비
+    # 대기가 걸리면 기본 한도(6시간)까지 러너를 붙잡는다 - 넉넉하되 유한하게
+    # 잡는다.
+    timeout-minutes: 20
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v7
+
+      - name: Node 설치 (package.json 의 engines.node)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+
+      - name: pnpm 설치 (package.json 의 packageManager)
+        uses: pnpm/action-setup@v6
+
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+
+      - name: Playwright Chromium 설치
+        # 의존성 설치에 딸려 오지 않는다 - 브라우저 바이너리는 별도 스텝이
+        # 필요하다. `--with-deps` 는 Playwright 공식 CI 가이드가 권하는
+        # 대로 헤드리스 실행에 필요한 OS 패키지까지 함께 받는다.
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: 게이트 실행 (아홉 단계 전부, 정본 FastAPI)
+        run: ./scripts/check.sh
+
+      - name: 실패한 Playwright 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-gate
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  e2e-matrix:
+    name: E2E (${{ matrix.backend }})
+    needs: gate
+    runs-on: ubuntu-latest
+    # 게이트와 같은 이유(백엔드 git 컨텍스트 빌드 + 스택 기동 대기).
+    timeout-minutes: 20
+    strategy:
+      # 한 백엔드가 실패해도 나머지 둘의 결과를 본다 - 세 백엔드 각각의
+      # 결과가 전부 필요하다(스펙 8.4의 성공 기준 2).
+      fail-fast: false
+      matrix:
+        backend: [fastapi, nestjs, rails]
+    env:
+      BACKEND_KIND: ${{ matrix.backend }}
+    steps:
+      - name: 저장소 체크아웃
+        uses: actions/checkout@v7
+
+      - name: Node 설치 (package.json 의 engines.node)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: package.json
+
+      - name: pnpm 설치 (package.json 의 packageManager)
+        uses: pnpm/action-setup@v6
+
+      - name: 의존성 설치
+        run: pnpm install --frozen-lockfile
+
+      - name: Playwright Chromium 설치
+        run: pnpm exec playwright install --with-deps chromium
+
+      # 아래 한 스텝이 세 갈래 전부를 돈다 - docker compose 로 이 백엔드
+      # 스택을 빌드·기동하고(test/e2e/stack.ts), 브라우저로 세 스펙 파일을
+      # 실행한 뒤 스택을 내린다. "알려진 계약 드리프트" 는 스택 기동 직후
+      # test/e2e/global-setup.ts 가 reportKnownDivergences() 를 불러 이
+      # 로그에 자동으로 남긴다 - 0건이어도 "0건"이 찍힌다(matrix.ts). 이
+      # 잡의 각 실행이 스펙 8.4 "매 실행 출력" 을 만드는 단위다.
+      - name: E2E 실행 - ${{ matrix.backend }}
+        run: pnpm test:e2e
+
+      - name: 실패한 Playwright 리포트 업로드
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          # 매트릭스이므로 갈래 이름을 넣는다 - 넣지 않으면 세 실행이 같은
+          # 이름으로 업로드해 서로 덮어쓴다.
+          name: playwright-report-${{ matrix.backend }}
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

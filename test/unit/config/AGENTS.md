@@ -1,5 +1,5 @@
-<!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-11 | Updated: 2026-09-11 -->
+<!-- Parent: ../../AGENTS.md -->
+<!-- Generated: 2026-09-11 | Updated: 2026-09-12 -->
 
 # config
 
