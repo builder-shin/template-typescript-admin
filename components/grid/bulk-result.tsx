@@ -12,20 +12,27 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import type { BulkOutcome, BulkReport } from '@/lib/bulk/executor'
+import type { BulkOutcome, BulkOutcomeBucket, BulkReport } from '@/lib/bulk/executor'
 import type { ErrorObject } from '@/lib/jsonapi/document'
-import { actionForErrors } from '@/lib/jsonapi/errors'
 
 /**
- * 일괄 실행 결과의 판정과 표시.
+ * 일괄 실행 결과의 표시 - 판정은 하지 않는다.
  *
  * `runBulk`(lib/bulk/executor.ts)은 순수 실행기라 재시도 가능 여부를 모른다 -
- * `run` 콜백이 돌려준 `BulkOutcome` 을 모을 뿐이다. 재시도 가능 여부는 이미
- * `lib/jsonapi/errors.ts` 의 `actionForErrors` 가 정해 두었다 - 그 답을 다시
- * HTTP 상태 문자열로 판단하면(예: `status === '404'` 를 여기서 또 비교하면)
- * 판정이 두 벌로 갈리고, 백엔드가 오류 코드를 바꾸는 날 한쪽만 조용히 썩는다.
- * 그래서 `summarize`·`classify` 는 건마다 `actionForErrors` 의 답을 읽어 통만
- * 고른다.
+ * `run` 콜백(`app/(admin)/examples/actions.ts` 의 `bulkDeleteExampleAction`)이
+ * 돌려준 `BulkOutcome` 을 모을 뿐이다. **재시도 가능 여부(`bucket`)도 이제
+ * 그 Server Action 이 이미 정해서 결과에 실어 보낸다** - `lib/jsonapi/errors.ts`
+ * 의 `actionForErrors` 를 다시 부르지 않는다.
+ *
+ * 예전에는 이 파일이 직접 `actionForErrors` 를 값으로 import 해서 판정했다 -
+ * 이 파일은 `'use client'` 이므로, 그 값 import 는 `lib/jsonapi/errors` →
+ * `client.ts` → `lib/config/settings.ts`(서버 전용, `process.env` 를 읽는다)
+ * 까지 이어지는 사슬을 클라이언트 번들의 값-import 그래프에 끌어들였다
+ * (트리 셰이킹이 실제로 안 쓰는 코드를 쳐내 우연히 새지 않았을 뿐, 강제하는
+ * 규칙이 없었다). 판정을 Server Action 쪽으로 옮기고 이 파일은 이미 판정된
+ * `bucket` 을 세고 그리기만 하면서, 이 파일의 `lib/` 값 import 는 이제 0개다
+ * (`test/unit/components/boundary-policy.test.ts` 의 역방향 단정이 이것을
+ * 기계적으로 지킨다).
  */
 
 export interface BulkSummary {
@@ -37,27 +44,11 @@ export interface BulkSummary {
   readonly cancelled: boolean
 }
 
-type Bucket = 'ok' | 'alreadyGone' | 'sessionLost' | 'retryable'
-
 /**
- * 건 하나를 통 하나로 나눈다. `actionForErrors` 의 다섯 답 중 `notFound` 는
- * `alreadyGone` 으로, `destroySession` 은 `sessionLost` 로 가고, 나머지
- * (`banner`·`fieldErrors`·`transport`)는 전부 `retryable` 로 모인다 - 셋 다
- * "다시 보내면 지금과 다른 결과가 나올 수 있다"는 성질을 공유해서다.
- *
- * `errors` 가 아예 없으면(변환이 오류 문서를 못 얻은 경우) `actionForErrors([])`
- * 가 `'banner'` 를 낸다 - 어떤 배열에도 정의된 답을 낸다는 그 함수의 성질
- * 그대로다. 분류할 근거가 없다고 어느 통에도 넣지 않으면 그 행이 표에서
- * 소리 없이 사라진다.
+ * 이미 분류된 `outcome.bucket` 을 센다 - `classify` 는 더 이상 없다(판정
+ * 자체가 `bucketForFailure`, `app/(admin)/examples/bulk-outcome.ts` 로
+ * 옮겨져 Server Action 이 이미 끝내 둔다).
  */
-function classify(outcome: BulkOutcome): Bucket {
-  if (outcome.ok) return 'ok'
-  const action = actionForErrors(outcome.errors ?? [])
-  if (action === 'notFound') return 'alreadyGone'
-  if (action === 'destroySession') return 'sessionLost'
-  return 'retryable'
-}
-
 export function summarize(report: BulkReport): BulkSummary {
   let ok = 0
   let failed = 0
@@ -66,14 +57,13 @@ export function summarize(report: BulkReport): BulkSummary {
   let sessionLost = false
 
   for (const outcome of report.outcomes) {
-    const bucket = classify(outcome)
-    if (bucket === 'ok') {
+    if (outcome.bucket === 'ok') {
       ok += 1
       continue
     }
     failed += 1
-    if (bucket === 'alreadyGone') alreadyGone.push(outcome.id)
-    else if (bucket === 'sessionLost') sessionLost = true
+    if (outcome.bucket === 'alreadyGone') alreadyGone.push(outcome.id)
+    else if (outcome.bucket === 'sessionLost') sessionLost = true
     else retryable.push(outcome.id)
   }
 
@@ -109,9 +99,15 @@ function messageOf(error: ErrorObject): string | undefined {
   return error.detail ?? error.title ?? error.code
 }
 
-/** outcome 하나의 실패 사유. 오류가 여럿이면 문구를 가진 첫 오류를 쓴다. */
+/**
+ * outcome 하나의 실패 사유. 오류가 여럿이면 문구를 가진 첫 오류를 쓴다.
+ * 성공(`ok: true`)에는 사유가 없다 - 호출부가 이미 `outcome.ok` 로 걸러
+ * 부르지만(렌더 쪽), 이 함수 자신도 판별 합집합으로 좁혀야
+ * `outcome.errors` 에 닿는다(그 필드는 `ok: false` 쪽에만 있다).
+ */
 function reasonOf(outcome: BulkOutcome): string | undefined {
-  for (const error of outcome.errors ?? []) {
+  if (outcome.ok) return undefined
+  for (const error of outcome.errors) {
     const message = messageOf(error)
     if (message !== undefined) return message
   }
@@ -145,7 +141,7 @@ export function BulkProgress({
   )
 }
 
-function bucketBadge(bucket: Bucket) {
+function bucketBadge(bucket: BulkOutcomeBucket) {
   if (bucket === 'ok') return <Badge variant="outline">성공</Badge>
   if (bucket === 'alreadyGone') return <Badge variant="secondary">이미 없음</Badge>
   if (bucket === 'sessionLost') return <Badge variant="destructive">세션 끊김</Badge>
@@ -218,7 +214,7 @@ export function BulkResultTable({
             {report.outcomes.map((outcome) => (
               <TableRow key={outcome.id}>
                 <TableCell className="font-mono text-xs">{outcome.id}</TableCell>
-                <TableCell>{bucketBadge(classify(outcome))}</TableCell>
+                <TableCell>{bucketBadge(outcome.bucket)}</TableCell>
                 <TableCell className="text-muted-foreground">
                   {outcome.ok ? null : (reasonOf(outcome) ?? '—')}
                 </TableCell>

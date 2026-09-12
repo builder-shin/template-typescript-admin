@@ -41,8 +41,8 @@ import {
   paginationFromParams,
   sortingFromParams,
   sortingToToken,
-  type RecentRow,
 } from '@/components/data-table-query'
+import type { RecentRow } from '@/app/(admin)/recent'
 import { serverDrivenTableOptions } from '@/lib/grid/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'

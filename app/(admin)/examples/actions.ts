@@ -8,6 +8,7 @@ import { clearSession } from '@/lib/auth/session'
 import { request } from '@/lib/jsonapi/client'
 import type { ErrorObject, SingleDocument } from '@/lib/jsonapi/document'
 import { actionForErrors } from '@/lib/jsonapi/errors'
+import { bucketForFailure } from './bulk-outcome'
 import { examplesFormState } from './flow'
 import type { ExamplesFormState } from './form-state'
 import { createExampleRequest, deleteExampleRequest, updateExampleRequest } from './write'
@@ -115,6 +116,34 @@ async function redirectToLoginOnSessionDeath(errors: readonly ErrorObject[]): Pr
   redirect(LOGIN_PATH)
 }
 
+/**
+ * 삭제 요청(단건·일괄 공통)의 타임아웃(ms).
+ *
+ * **여기서 만든 신호는 브라우저의 취소 버튼이 아니다 - 만들 수가 없다.**
+ * `resource-grid.tsx` 의 일괄 삭제 취소 버튼은 `AbortController` 를 쥐고
+ * `runBulk`(lib/bulk/executor.ts)에 그 `signal` 을 넘기지만, `runBulk` 는 그
+ * 신호를 **다음 요청을 내기 전에만** 확인한다(그 파일 주석) - 이미 나가
+ * 있는 `bulkDeleteExampleAction` 호출 하나는 끝까지 기다린다(의도적: 이미
+ * 보낸 요청은 되돌리지 않는다). 그 신호를 이 Server Action 안까지 실어
+ * "지금 나가 있는 이 요청도 당장 끊어라"로 쓰고 싶어질 수 있는데, 불가능
+ * 하다 - React 의 Server Function 인자 직렬화(react-server-dom 의
+ * `processReply`, 실측: 컴파일된 번들에 `FormData`·`Map`·`Set`·`Blob`·`Date`
+ * 만 특수 처리되고 그 밖의 클래스 인스턴스는 "Only plain objects, and a few
+ * built-ins, can be passed to Server Functions"로 **그 자리에서 던진다**)는
+ * `AbortSignal` 을 인자로 받지 않는다 - `bulkDeleteExampleAction(id,
+ * controller.signal)` 처럼 불러 보면 호출 시점에 즉시 예외가 난다.
+ *
+ * 그래서 이 타임아웃은 이 함수 **안에서** 매 호출마다 새로 만든다(rotation.ts
+ * 의 `ROTATION_FETCH_TIMEOUT_MS` 와 같은 기법) - 백엔드가 응답을 거절하는
+ * 게 아니라 그냥 멈추면(잠금 대기 등) `await run(id)`(executor.ts)가 영원히
+ * 끝나지 않아, `runBulk` 의 "다음 요청 전에만 확인한다"는 신호 확인이 결코
+ * 오지 않고 취소 버튼이 아무 일도 하지 않는 것처럼 보인다 - 이 타임아웃은
+ * 그 한도를 유한하게 만든다. 취소 버튼은 여전히 "이번 건이 끝나는 즉시
+ * 다음 건은 내지 않는다"만 보장한다 - "이번 건을 지금 당장 끊는다"는 위
+ * 이유로 이 저장소가 가진 도구로는 만들 수 없다.
+ */
+const DELETE_FETCH_TIMEOUT_MS = 10_000
+
 /** 성공하면 만들어진 자원의 상세로 보낸다(스펙 표) - 실측: `POST /api/v1/examples` -> 201. */
 export async function createExampleAction(
   _previous: ExamplesFormState,
@@ -171,7 +200,12 @@ export async function deleteExampleAction(id: string): Promise<void> {
   const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<never>(
-    ...deleteExampleRequest(id, session.accessToken, acceptLanguage),
+    ...deleteExampleRequest(
+      id,
+      session.accessToken,
+      acceptLanguage,
+      AbortSignal.timeout(DELETE_FETCH_TIMEOUT_MS),
+    ),
   )
 
   if (!result.ok) {
@@ -192,8 +226,19 @@ export async function deleteExampleAction(id: string): Promise<void> {
  *
  * `deleteExampleAction` 과 달리 실패해도 던지지 않는다 - 부분 실패가 이
  * 실행의 정상 경로라(lib/bulk/AGENTS.md), 한 건의 실패로 나머지 실행을
- * 막으면 안 된다. 성공·실패 모두 `BulkOutcome` 하나로 돌려주고, 판단(재시도
- * 가능 여부)은 화면(`components/grid/bulk-result.tsx`)이 한다.
+ * 막으면 안 된다. 성공·실패 모두 `BulkOutcome` 하나로 돌려주고, 화면
+ * (`components/grid/bulk-result.tsx`)은 그것을 그리기만 한다 - 판단(재시도
+ * 가능 여부, 어느 통인가) 자체는 이 함수가 `bucketForFailure`(./bulk-outcome.ts)
+ * 로 여기서 이미 끝내 둔다.
+ *
+ * **`bucket` 을 여기서 채우는 이유.** `actionForErrors` 는
+ * `lib/jsonapi/errors` → `client.ts` → `lib/config/settings.ts` 로 이어지는
+ * 값 import 다 - 이 판정이 예전처럼 결과 화면(`'use client'`)에 있으면 그
+ * 값 import 사슬이 클라이언트 번들의 그래프에 들어온다. Server Action 은
+ * 절대 클라이언트에 번들되지 않으므로, 이 함수(이미 `redirectToLoginOnSessionDeath`
+ * 로 `actionForErrors` 를 부르고 있다)가 판정까지 마쳐 결과에 실어 보내면
+ * 화면은 그 값을 읽기만 하면 된다 - `lib/bulk/executor.ts` 의 `BulkOutcomeBucket`
+ * 주석과 `test/unit/components/boundary-policy.test.ts` 의 역방향 단정 참고.
  *
  * 두 함정을 여기서 피한다(둘 다 실측됨) -
  * 1. 성공한 삭제는 204·본문 없음이다. `result.status === 204` 로는
@@ -208,9 +253,14 @@ export async function bulkDeleteExampleAction(id: string): Promise<BulkOutcome> 
   const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<never>(
-    ...deleteExampleRequest(id, session.accessToken, acceptLanguage),
+    ...deleteExampleRequest(
+      id,
+      session.accessToken,
+      acceptLanguage,
+      AbortSignal.timeout(DELETE_FETCH_TIMEOUT_MS),
+    ),
   )
 
-  if (result.ok) return { id, ok: true }
-  return { id, ok: false, errors: result.errors }
+  if (result.ok) return { id, ok: true, bucket: 'ok' }
+  return { id, ok: false, errors: result.errors, bucket: bucketForFailure(result.errors) }
 }

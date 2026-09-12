@@ -46,6 +46,28 @@ import { describe, expect, it } from 'vitest'
  * `이름(` 정규식이다 - 프로토타입 체인 접근(`obj.Name(`)처럼 완전히 다른
  * 호출을 오탐할 수 있지만, 오늘 이 저장소에는 그런 자리가 없다(실측, 아래
  * 두 번째 테스트가 그 실측을 계속 지킨다).
+ *
+ * ## 두 번째 방향 - `'use client'` 파일이 `lib/config/settings` 로 값-import 를 닿게 하지 않는다
+ *
+ * 위는 "비-클라이언트가 클라이언트 값을 호출하는가"(한 방향)만 본다 - 반대
+ * 방향("클라이언트 파일 자신이 값으로 무엇을 끌어오는가")은 별개의 위험을
+ * 지킨다. `lib/config/settings.ts` 는 `process.env` 를 읽는 서버 전용
+ * 코드다 - `'use client'` 파일의 값-import **전이적 폐쇄**(직접이든, 몇
+ * 단계를 거치든)에 그 파일이 들어오면, 그 코드가 클라이언트 번들의
+ * 의존 그래프에 들어온다는 뜻이다. `server-only` 패키지 같은 강제 장치가
+ * 이 저장소에 없어(그 자리가 있었다면 `next build` 가 잡았을 것이다),
+ * 오늘 새지 않는 것은 순전히 트리 셰이킹이 실제로 안 쓰이는 코드를 쳐내
+ * 주는 우연이다 - 이 테스트가 그 우연을 규칙으로 바꾼다.
+ *
+ * 실제로 걸렸던 자리 둘(`components/grid/bulk-result.tsx` 가
+ * `lib/jsonapi/errors` 의 `actionForErrors` 를 값으로 불러 `client.ts` →
+ * `settings.ts` 까지 이어졌던 것, `components/data-table-query.ts` 가
+ * `recentExamplesRequest` 를 통해 같은 사슬에 닿았던 것)를 고치며 이
+ * 테스트를 추가했다 - 예외 목록은 없다. 둘 다 값 import 를 아예 없애는
+ * 쪽으로 고쳤지, 이 테스트에 예외를 등록하는 쪽으로 고치지 않았다 -
+ * 예외 목록이 있으면 "닿지 않는다"가 아니라 "닿아도 되는 곳을 빼고는
+ * 닿지 않는다"가 되어, 새 예외가 조용히 늘어나는 것을 이 테스트가 막지
+ * 못한다.
  */
 
 const SCAN_DIRS = ['app', 'components', 'lib']
@@ -70,11 +92,12 @@ function listSourceFiles(dir: string): string[] {
 
 /**
  * 파일 맨 앞의 공백과 두 종류의 주석(줄 주석 `//`, 블록 주석)을 건너뛴 뒤 첫
- * 문장이 `'use client'`(또는 `"use client"`)인지 본다 - ECMAScript 의 directive prologue 규칙과
- * 같다. 주석 안에서 그 문구를 설명만 하는 파일(위 머리말 참고)을 클라이언트
- * 모듈로 오판하지 않기 위해 이 정도 파싱이 필요했다.
+ * 문장이 정확히 그 지시어(`'use client'` 또는 `'use server'`, 따옴표 종류
+ * 무관)인지 본다 - ECMAScript 의 directive prologue 규칙과 같다. 주석 안에서
+ * 그 문구를 설명만 하는 파일(위 머리말 참고)을 오판하지 않기 위해 이 정도
+ * 파싱이 필요했다.
  */
-function isUseClientFile(source: string): boolean {
+function hasDirective(source: string, directive: string): boolean {
   let rest = source
   for (;;) {
     const trimmed = rest.replace(/^\s+/, '')
@@ -91,13 +114,33 @@ function isUseClientFile(source: string): boolean {
     rest = trimmed
     break
   }
-  return /^(['"])use client\1/.test(rest)
+  const escaped = directive.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^(['"])${escaped}\\1`).test(rest)
 }
 
 const allFiles = SCAN_DIRS.flatMap((dir) => listSourceFiles(dir))
 const allFilesSet = new Set(allFiles)
 const fileContents = new Map(allFiles.map((file) => [file, readFileSync(file, 'utf8')]))
-const clientFiles = new Set(allFiles.filter((file) => isUseClientFile(fileContents.get(file)!)))
+const clientFiles = new Set(
+  allFiles.filter((file) => hasDirective(fileContents.get(file)!, 'use client')),
+)
+/**
+ * `'use server'` 파일들 - 역방향 폐쇄(`valueImportClosure`)가 이 파일들의
+ * 경계에서 멈춘다. 공식 문서(node_modules/next/dist/docs/01-app/02-guides/
+ * server-actions.md:78,84): "the 'use server' directive tells the compiler
+ * to swap the function's implementation in client bundles for a reference
+ * ... unused Server Functions are stripped from client bundles" - 즉 클라이언트
+ * 파일이 `'use server'` 파일에서 값을 import 해도, 그 구현과 그 구현이
+ * 끌어오는 것들은 클라이언트 번들에 실리지 않는다(오직 액션 참조 하나만
+ * 실린다). 이 경계를 반영하지 않으면 이 스캔이 거짓 양성을 낸다 - 실측:
+ * `components/nav-user.tsx` 가 `app/(auth)/actions.ts`(`'use server'`)의
+ * `logoutAction` 을 값으로 import 하고, 그 파일은 `lib/auth/*` 를 거쳐
+ * `lib/config/settings.ts` 에 닿는다 - 이 경계 처리 없이 실행하면 이
+ * 저장소에 실제로는 없는 위반을 보고한다.
+ */
+const serverFiles = new Set(
+  allFiles.filter((file) => hasDirective(fileContents.get(file)!, 'use server')),
+)
 
 /** `@/` 별칭과 상대 경로(`./`·`../`)만 저장소 안으로 푼다 - 그 밖(패키지 이름)은 대상이 아니다. */
 function resolveImportPath(specifier: string, fromFile: string): string | undefined {
@@ -183,6 +226,79 @@ describe('지시어 경계 - 비-클라이언트 모듈이 use client 모듈의 
     const violations = crossBoundaryImports
       .filter(({ name, file }) => isCalled(name, fileContents.get(file)!))
       .map(({ file, name, resolved }) => `${file}: '${name}' (from ${resolved})`)
+
+    expect(violations).toEqual([])
+  })
+})
+
+/**
+ * 이 import 문(`IMPORT_RE` 의 한 매치)이 **값**을 끌어오는지 - `namedImports`
+ * 와 달리 대상 파일이 클라이언트인지는 보지 않는다(역방향 탐색은 대상이
+ * 무엇이든 값 import 인 간선을 전부 따라가야 한다). `import type {...}`
+ * 전체, 그리고 `{ type X, ... }` 처럼 중괄호 안 지정자가 전부 `type` 접두를
+ * 가진 경우만 값 import 가 아니다 - 기본 import·네임스페이스 import·중괄호
+ * 안에 지정자 하나라도 `type` 이 아닌 것이 섞이면 값 import 다.
+ */
+function isValueImport(groups: Record<string, string | undefined>): boolean {
+  if (groups.wholeType !== undefined) return false
+  if (groups.defaultName !== undefined) return true
+  if (groups.soloDefault !== undefined) return true
+  if (groups.nsName !== undefined) return true
+  if (groups.braceBody !== undefined) {
+    const specifiers = groups.braceBody
+      .split(',')
+      .map((specifier) => specifier.trim())
+      .filter((specifier) => specifier !== '')
+    return specifiers.some((specifier) => !/^type\s+/.test(specifier))
+  }
+  return false
+}
+
+/**
+ * `start` 에서 값 import 로 닿을 수 있는 모든 파일의 전이적 폐쇄(자기 자신
+ * 포함) - 클라이언트 여부와 무관하게 저장소 내부 파일 전부를 따라간다.
+ * 순환 import 가 있어도 `visited` 로 막혀 무한 루프에 빠지지 않는다.
+ */
+function valueImportClosure(start: string): Set<string> {
+  const visited = new Set<string>([start])
+  const queue = [start]
+  while (queue.length > 0) {
+    const current = queue.pop()!
+    // `'use server'` 파일 자체는 도달한 것으로 기록하지만, 그 너머로는
+    // 가지 않는다 - 공식 문서가 확인하는 그대로, 클라이언트 번들에는 이
+    // 파일의 구현도 그 구현이 끌어오는 것도 실리지 않고 액션 참조 하나만
+    // 실린다(serverFiles 선언부 주석).
+    if (serverFiles.has(current)) continue
+    const source = fileContents.get(current)
+    if (source === undefined) continue
+    for (const match of source.matchAll(IMPORT_RE)) {
+      const groups = match.groups!
+      if (!isValueImport(groups) || groups.specifier === undefined) continue
+      const target = resolveImportPath(groups.specifier, current)
+      if (target === undefined || visited.has(target)) continue
+      visited.add(target)
+      queue.push(target)
+    }
+  }
+  return visited
+}
+
+describe("지시어 경계 - 'use client' 파일은 lib/config/settings 에 값으로 닿지 않는다", () => {
+  const SETTINGS_FILE = 'lib/config/settings.ts'
+
+  it('SETTINGS_FILE 이 실제로 스캔 대상이다 - 스캔 자체가 무력화되지 않았다', () => {
+    // 위 "경계를 넘는 값 import 가 존재한다" 테스트가 clientFiles 가 비어
+    // 있지 않음을 이미 보장한다 - 여기서는 이 테스트가 겨냥하는 특정 파일
+    // (SETTINGS_FILE)이 스캔된 파일 목록에 실제로 있는지만 따로 확인한다.
+    // 경로 오타로 이 파일을 놓치면 아래 "닿지 않는다" 단정이 공허하게
+    // 초록이 된다.
+    expect(allFilesSet.has(SETTINGS_FILE)).toBe(true)
+  })
+
+  it('어떤 use client 파일의 값-import 전이적 폐쇄에도 SETTINGS_FILE 이 없다 - 예외 없음', () => {
+    const violations = [...clientFiles]
+      .filter((file) => valueImportClosure(file).has(SETTINGS_FILE))
+      .sort()
 
     expect(violations).toEqual([])
   })

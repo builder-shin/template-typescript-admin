@@ -1,4 +1,5 @@
 import type { ResourceDef } from '@/lib/resources'
+import { MAX_PAGE_SIZE } from './query'
 
 /**
  * URL 검색 파라미터와 그리드 표시 상태 사이의 변환.
@@ -28,12 +29,6 @@ export interface GridState {
 /** 화면이 URL 에 쪽당 건수를 명시하지 않았을 때 쓰는 기본값. */
 export const DEFAULT_PAGE_SIZE = 50
 
-/**
- * 세 백엔드 모두 `page[size]` 를 이 값에서 자른다(실측) - 클라이언트가 먼저
- * 지켜 두면 화면이 받는 값과 백엔드가 실제로 적용하는 값이 갈리지 않는다.
- */
-const MAX_PAGE_SIZE = 100
-
 const SORT_KEY = 'sort'
 const PAGE_SIZE_KEY = 'pageSize'
 const HIDE_KEY = 'hide'
@@ -45,6 +40,14 @@ const HIDE_KEY = 'hide'
  */
 const PAGE_POSITION_PATTERN = /^page\[(number|after|before)\]$/
 
+/**
+ * 상한(`MAX_PAGE_SIZE`)은 `query.ts` 가 정의한다 - 그 파일 머리말이 이유를
+ * 적고 있다: 값을 실제로 와이어에 싣는 `gridQuery` 도 같은 상수로 다시
+ * 자르므로 이 클램프가 없어도 와이어는 안전하지만, `resource-grid.tsx` 는
+ * `gridQuery` 를 거치지 않고 `GridState.pageSize` 를 자기 표의
+ * `pagination.pageSize`(쪽 수 계산)에 그대로 쓴다 - 그 자리를 지키는 것은
+ * 이 함수뿐이다.
+ */
 function clampPageSize(raw: string | null): number {
   if (raw === null) return DEFAULT_PAGE_SIZE
   const parsed = Number(raw)

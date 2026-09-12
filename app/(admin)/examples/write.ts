@@ -122,14 +122,26 @@ export function updateExampleRequest(
  * `DELETE /api/v1/examples/{id}` 하나뿐이고 갈리는 것은 **결과를 다루는
  * 방식**(단건은 던지고 리다이렉트, 일괄은 `BulkOutcome` 으로 접는다)이지
  * 요청 모양이 아니다.
+ *
+ * `signal` 은 선택이고, 있으면 그대로 `RequestOptions.signal` 에 실어
+ * `request()` 에 넘긴다(`exactOptionalPropertyTypes` 때문에 없으면 키
+ * 자체를 뺀다 - `withAcceptLanguage` 와 같은 관례). 호출부(`actions.ts`)가
+ * 이 신호를 무엇으로 채우는지는 이 함수가 모른다 - 그 판단과 근거는
+ * `actions.ts` 에 있다(요약: 브라우저의 취소 버튼이 쥔 `AbortController`
+ * 는 Server Action 인자로 건널 수 없어, 서버 쪽에서 새로 만든 타임아웃을
+ * 쓴다).
  */
 export function deleteExampleRequest(
   id: string,
   accessToken: string,
   acceptLanguage: string | null,
+  signal?: AbortSignal,
 ): [path: string, options: RequestOptions] {
   return [
     `${EXAMPLES.path}/${id}`,
-    withAcceptLanguage({ method: 'DELETE', accessToken }, acceptLanguage),
+    withAcceptLanguage(
+      { method: 'DELETE', accessToken, ...(signal !== undefined ? { signal } : {}) },
+      acceptLanguage,
+    ),
   ]
 }

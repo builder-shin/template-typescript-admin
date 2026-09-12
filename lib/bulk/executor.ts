@@ -31,23 +31,72 @@ import type { ErrorObject } from '@/lib/jsonapi/document'
 /** 한 번의 실행에 담을 수 있는 최대 건수. 화면은 실행 전에 이 값을 읽어 미리 알린다. */
 export const MAX_BULK_ITEMS = 50
 
-export interface BulkOutcome {
-  readonly id: string
-  readonly ok: boolean
-  /**
-   * 실패하면 백엔드가 낸 오류 배열을 **그대로** 들고 간다. `status`·`detail` 만
-   * 뽑아 복사하지 않는 이유는 `code` 가 버려지기 때문이다 - `code` 는
-   * `lib/jsonapi/errors.ts` 의 오류 라우팅 전체가 기대는 유일한 필드이고,
-   * 그것을 버리면 다음 태스크가 HTTP 상태 문자열로 정책을 다시 판단하게 되어
-   * 이미 있는 결정을 둘로 나눈다.
-   *
-   * `exactOptionalPropertyTypes: true` 이므로 그래도 복사해서 담고 싶어지면
-   * `{ status: error.status }` 는 `string | undefined` 를 `status?: string` 에
-   * 넣으려 해 컴파일이 안 된다. 오류 객체를 그대로 들고 가면 그 자리가 생기지
-   * 않는다.
-   */
-  readonly errors?: readonly ErrorObject[]
-}
+/**
+ * 결과 표(`components/grid/bulk-result.tsx`)가 건 하나를 그릴 통 넷.
+ *
+ * **이 파일은 이 값의 뜻을 모른다 - 그저 실어 나른다.** 어떤 실패가
+ * `alreadyGone` 인지 `sessionLost` 인지 `retryable` 인지 판정하는 것은
+ * `actionForErrors`(lib/jsonapi/errors.ts)의 일이고, 그 함수를 부르는
+ * 것은 `app/(admin)/examples/bulk-outcome.ts`(Server Action 이 쓴다)다 -
+ * 이 파일은 그 판정을 값 import 없이 타입으로만 표현한다.
+ */
+export type BulkOutcomeBucket = 'ok' | 'alreadyGone' | 'sessionLost' | 'retryable'
+
+/**
+ * 판별 합집합이다 - `ok: false` 인데 `errors` 가 없는 값은 **타입이 만들
+ * 수조차 없다.** 예전에는 `errors` 가 `ok` 와 무관한 선택 필드라
+ * `{ id, ok: false }`(오류 배열 없음)가 타입 검사를 통과했다 - 그러면
+ * (그 시절의) `classify` 가 `actionForErrors([])`(banner)로 떨어져 그
+ * 건이 `retryable` 통에 들어가는데, 보여줄 사유가 없어 `reasonOf` 가
+ * `undefined` 를 돌려주고 화면은 "—" 만 그린다 - 실패는 확실한데 **왜**
+ * 실패했는지 운영자가 알 방법이 없는 행이 생긴다.
+ *
+ * 이 저장소에 있는 유일한 생성 지점(`actions.ts` 의 `bulkDeleteExampleAction`)
+ * 은 사실 이미 이 계약을 지키고 있었다 - `request()` 가 돌려주는
+ * `JsonApiResult`(lib/jsonapi/client.ts) 자체가 `{ ok: false; errors:
+ * ErrorObject[] }` 라 `errors` 가 필수라서다. 그 사실을 `BulkOutcome` 의
+ * 타입이 반영하지 않고 있었을 뿐이다 - 이 합집합은 이미 참인 것을 타입이
+ * 알게 할 뿐, 새 제약을 만드는 것이 아니다.
+ *
+ * `bucket` 도 같은 이유로 `ok` 와 함께 판별된다 - `ok: true` 인데
+ * `bucket: 'retryable'` 같은 모순도 타입이 만들 수 없다. **이 필드는
+ * `run` 콜백(`actions.ts`)이 채운다 - 이 실행기는 그 값을 만들지도, 읽지도,
+ * 판단에 쓰지도 않는다**(파일 머리말의 "값 import 를 두지 않는다" 절과
+ * 같은 경계 - 판정 자체가 `lib/jsonapi/errors` 를 값으로 끌어오므로 이
+ * 파일에 들어오면 안 된다). 예전에는 이 판정이
+ * `components/grid/bulk-result.tsx`(`'use client'`)에 있어서 그 파일이
+ * `actionForErrors` 를 값으로 import 했고, 그 값 import 는 `lib/jsonapi/
+ * errors.ts` → `client.ts` → `lib/config/settings.ts` 까지 이어져 클라이언트
+ * 번들의 값-import 그래프에 서버 전용 설정 코드가 들어오는 경로를 열어
+ * 뒀다(트리 셰이킹이 우연히 쳐낼 뿐 강제하는 규칙이 없었다 -
+ * `test/unit/components/boundary-policy.test.ts` 의 역방향 단정이 지금은
+ * 그것을 기계적으로 막는다). 판정을 Server Action 쪽으로 옮기고 이미
+ * 판정된 값만 결과에 실어 보내면, 화면은 그 값을 읽기만 하면 되고 저
+ * 값 import 자체가 필요 없어진다.
+ */
+export type BulkOutcome =
+  | { readonly id: string; readonly ok: true; readonly bucket: 'ok' }
+  | {
+      readonly id: string
+      readonly ok: false
+      /**
+       * 백엔드가 낸 오류 배열을 **그대로** 들고 간다. `status`·`detail` 만
+       * 뽑아 복사하지 않는 이유는 `code` 가 버려지기 때문이다 - `code` 는
+       * `lib/jsonapi/errors.ts` 의 오류 라우팅 전체가 기대는 유일한 필드이고,
+       * 그것을 버리면 다음 태스크가 HTTP 상태 문자열로 정책을 다시 판단하게
+       * 되어 이미 있는 결정을 둘로 나눈다. `bucket` 이 이미 그 판정의 결과를
+       * 담고 있어도 `errors` 를 지우지 않는 이유는 `reasonOf`(bulk-result.tsx)
+       * 가 여전히 이 배열에서 사람이 읽을 사유 문구를 뽑기 때문이다 - `bucket`
+       * 은 "어느 통인가"만 답하고 "왜"는 여전히 `errors` 의 몫이다.
+       *
+       * `exactOptionalPropertyTypes: true` 이므로 그래도 복사해서 담고
+       * 싶어지면 `{ status: error.status }` 는 `string | undefined` 를
+       * `status?: string` 에 넣으려 해 컴파일이 안 된다. 오류 객체를 그대로
+       * 들고 가면 그 자리가 생기지 않는다.
+       */
+      readonly errors: readonly ErrorObject[]
+      readonly bucket: Exclude<BulkOutcomeBucket, 'ok'>
+    }
 
 export interface BulkReport {
   readonly outcomes: readonly BulkOutcome[]

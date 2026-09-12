@@ -79,4 +79,15 @@ describe('deleteExampleRequest', () => {
     expect(options.method).toBe('DELETE')
     expect(options.acceptLanguage).toBe('ko')
   })
+
+  it('signal 을 넘기면 옵션에 그대로 실린다', () => {
+    const controller = new AbortController()
+    const [, options] = deleteExampleRequest('e1', TOKEN, null, controller.signal)
+    expect(options.signal).toBe(controller.signal)
+  })
+
+  it('signal 을 넘기지 않으면(undefined) 그 옵션 자체가 없다 - exactOptionalPropertyTypes', () => {
+    const [, options] = deleteExampleRequest('e1', TOKEN, null)
+    expect(options).not.toHaveProperty('signal')
+  })
 })

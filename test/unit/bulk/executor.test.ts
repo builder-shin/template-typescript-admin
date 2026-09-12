@@ -1,14 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
-import { MAX_BULK_ITEMS, runBulk } from '@/lib/bulk/executor'
+import { MAX_BULK_ITEMS, runBulk, type BulkOutcome } from '@/lib/bulk/executor'
 
-const ok = (id: string) => ({ id, ok: true })
+// 반환 타입을 명시한다 - 안 그러면 `ok: true` 가 리터럴이 아니라 `boolean`
+// 으로 넓혀져(이 자리엔 기대 타입이 없다) `BulkOutcome`(판별 합집합)에
+// 대입할 수 없다.
+//
+// `bucket` 을 채운다 - 이 파일은 `runBulk` 의 순서·취소·상한만 잰다.
+// `bucket` 의 값 자체가 무엇을 뜻하는지는 이 실행기가 몰라도 된다(그 판정은
+// `app/(admin)/examples/bulk-outcome.ts` 의 몫 - lib/bulk/executor.ts 의
+// `BulkOutcomeBucket` 주석 참고) - 여기서는 그저 타입을 만족시키는 값을
+// 채울 뿐이라 그 뜻에 맞는 값(`gone` → `alreadyGone`)을 골랐다.
+const ok = (id: string): BulkOutcome => ({ id, ok: true, bucket: 'ok' })
 // 실증된 실패 모양이다: 삭제는 성공하면 204, 그 행이 이미 없으면 404.
 // 백엔드는 삭제에 422 를 내지 않는다 - 참조 무결성 거절 경로가 없다.
 // code 를 같이 싣는다 - Task 12 가 이걸 보고 재시도 가능 여부를 가른다.
-const gone = (id: string) => ({
+const gone = (id: string): BulkOutcome => ({
   id,
   ok: false,
   errors: [{ status: '404', code: 'RESOURCE_NOT_FOUND', detail: '그 자원을 찾을 수 없습니다' }],
+  bucket: 'alreadyGone',
 })
 
 describe('runBulk', () => {
@@ -55,7 +65,10 @@ describe('runBulk', () => {
       Promise.resolve(id === 'b' ? gone(id) : ok(id)),
     )
     expect(report.outcomes.map((o) => o.ok)).toEqual([true, false, true])
-    expect(report.outcomes[1]!.errors?.[0]?.code).toBe('RESOURCE_NOT_FOUND')
+    // 판별 합집합이라 `errors` 는 `ok: false` 쪽에만 있다 - 좁혀야 닿는다.
+    const failedOutcome = report.outcomes[1]!
+    if (failedOutcome.ok) throw new Error('outcomes[1] 은 실패(gone)여야 한다')
+    expect(failedOutcome.errors[0]?.code).toBe('RESOURCE_NOT_FOUND')
     expect(report.cancelled).toBe(false)
   })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { gridQuery } from '@/lib/grid/query'
-import { readGridState } from '@/lib/grid/state'
+import { gridQuery, MAX_PAGE_SIZE } from '@/lib/grid/query'
+import { readGridState, type GridState } from '@/lib/grid/state'
 import { resourceByType } from '@/lib/resources'
 
 const EXAMPLES = resourceByType('examples')!
@@ -52,6 +52,21 @@ describe('gridQuery', () => {
     const query = gridQuery(EXAMPLES, state)
     expect(query['page[after]']).toBe('next-token')
     expect(query['page[before]']).toBe('prev-token')
+  })
+
+  it('GridState.pageSize 가 상한을 넘겨 들어와도(readGridState 를 거치지 않은 호출자) 와이어에는 자른 값만 나간다', () => {
+    // readGridState 는 이미 자르므로, 이 테스트는 그것을 거치지 않고
+    // GridState 를 직접 만드는 호출자(app/(admin)/recent.ts 의
+    // recentExamplesRequest 가 실제로 이렇게 한다)를 흉내낸다 - gridQuery
+    // 자신이 자르는지가 이 테스트의 대상이다.
+    const state: GridState = {
+      filters: {},
+      sort: null,
+      pageQuery: {},
+      pageSize: 500,
+      hiddenColumns: [],
+    }
+    expect(gridQuery(EXAMPLES, state)['page[size]']).toBe(String(MAX_PAGE_SIZE))
   })
 
   it('include 가 없는 자원은 include 파라미터를 내지 않는다', () => {

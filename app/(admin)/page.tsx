@@ -1,12 +1,7 @@
 import { headers } from 'next/headers'
 import { ChartAreaInteractive } from '@/components/chart-area-interactive'
 import { DataTable } from '@/components/data-table'
-import {
-  buildRecentRows,
-  describeSort,
-  recentExamplesRequest,
-  resolveSort,
-} from '@/components/data-table-query'
+import { describeSort, resolveSort } from '@/components/data-table-query'
 import { FormBanner } from '@/components/form/form-banner'
 import { SectionCards } from '@/components/section-cards'
 import { request, type JsonApiResult } from '@/lib/jsonapi/client'
@@ -16,6 +11,7 @@ import { countRequest, readTotal } from './count'
 import { classifyHealth, healthRequest } from './health'
 import { toSearchParams } from './examples/list'
 import { messageForReadFailure } from './read-result'
+import { buildRecentRows, recentExamplesRequest } from './recent'
 
 /**
  * 네 요청(카운트 셋 · 목록 하나) 공통의 "성공했고 본문이 있다" 를 한 곳에서
