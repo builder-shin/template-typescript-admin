@@ -78,10 +78,10 @@ null 이다(실측 `app/controllers/concerns/crud_actions.py:162,179-213`) - 표
 
 ## 주요 파일
 
-| 파일        | 역할                                                                     |
-| ----------- | ------------------------------------------------------------------------ |
-| `state.ts`  | URL `↔` `GridState` 변환(`readGridState` · `writeGridState`), 쪽당 건수 상한. |
-| `query.ts`  | `GridState` `→` JSON:API 쿼리 파라미터(`gridQuery`) - 필터 연산자, 항상 켜는 `include`·`page[totals]`, 커서 통과. |
+| 파일       | 역할                                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- |
+| `state.ts` | URL `↔` `GridState` 변환(`readGridState` · `writeGridState`), 쪽당 건수 상한.                                     |
+| `query.ts` | `GridState` `→` JSON:API 쿼리 파라미터(`gridQuery`) - 필터 연산자, 항상 켜는 `include`·`page[totals]`, 커서 통과. |
 
 ## 검증과 의존성
 
