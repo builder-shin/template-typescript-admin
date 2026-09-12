@@ -8,7 +8,7 @@ import { clearSession } from '@/lib/auth/session'
 import { request } from '@/lib/jsonapi/client'
 import type { ErrorObject, SingleDocument } from '@/lib/jsonapi/document'
 import { actionForErrors } from '@/lib/jsonapi/errors'
-import { bucketForFailure } from './bulk-outcome'
+import { bucketForFailure, isAlreadyGone } from './bulk-outcome'
 import { examplesFormState } from './flow'
 import type { ExamplesFormState } from './form-state'
 import { createExampleRequest, deleteExampleRequest, updateExampleRequest } from './write'
@@ -195,6 +195,22 @@ export async function updateExampleAction(
  * -> 204, 본문 없음. 실패는 폼 필드가 없는 동작이라 examplesFormState 로
  * 받지 않고 던진다 - `app/error.tsx`가 받는다(읽기 경로와 같은 선택,
  * lib/jsonapi/client.ts 의 request() 문서화된 선택지).
+ *
+ * **404 는 이 "실패" 에서 뺀다 - 성공으로 다룬다.** `isAlreadyGone`
+ * (./bulk-outcome.ts - 이름은 "일괄"이지만 이 함수는 일괄 삭제의
+ * `bucketForFailure` 와 이 단건 경로 둘 다 쓰는 공용 판정이다)이 그 행은
+ * 이미 없다고 답하면 운영자가 지우려던 의도는 이미 달성됐다. 다시 지워도
+ * 영원히 같은 404 뿐이고, "실패했다"고 던지면 이 화면에서 가장 나쁜
+ * 조합이 나온다 - 백엔드가 실제로 응답했고(404) 행도 실제로 없는데
+ * (운영자의 목적 달성), `error.tsx` 는 "백엔드에 연결할 수 없습니다"를
+ * 보여준다.
+ *
+ * 이 함수 자체는(이 파일의 다른 Action 과 같은 이유로) 단위 테스트가 부를
+ * 수 없다 - `requireSession()` 안의 `cookies()`가 요청 스코프를 요구한다.
+ * 그래서 판정(`isAlreadyGone`)만 떼어 `test/unit/examples/bulk-outcome.test.ts`
+ * 가 직접 잰다 - "404 를 받으면 이 함수가 실제로 목록으로 리다이렉트하는지"
+ * 자체는 이 저장소의 단위 계층 밖이다(e2e 의 몫으로 남는다, 아직 그
+ * 시나리오는 없다).
  */
 export async function deleteExampleAction(id: string): Promise<void> {
   const session = await requireSession()
@@ -210,7 +226,9 @@ export async function deleteExampleAction(id: string): Promise<void> {
 
   if (!result.ok) {
     await redirectToLoginOnSessionDeath(result.errors)
-    throw new Error(result.errors[0]?.detail ?? '삭제하지 못했습니다.')
+    if (!isAlreadyGone(result.errors)) {
+      throw new Error(result.errors[0]?.detail ?? '삭제하지 못했습니다.')
+    }
   }
   redirect('/examples')
 }

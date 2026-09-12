@@ -27,8 +27,23 @@ import type { BulkOutcomeBucket } from '@/lib/bulk/executor'
  * 옮겼다).
  */
 export function bucketForFailure(errors: readonly ErrorObject[]): Exclude<BulkOutcomeBucket, 'ok'> {
+  if (isAlreadyGone(errors)) return 'alreadyGone'
   const action = actionForErrors(errors)
-  if (action === 'notFound') return 'alreadyGone'
   if (action === 'destroySession') return 'sessionLost'
   return 'retryable'
+}
+
+/**
+ * `errors` 가 "그 자원이 이미 없다"(404 `RESOURCE_NOT_FOUND`)로 판정되는지 -
+ * 파일 이름은 "일괄"이지만 이 함수는 단건 삭제(`actions.ts` 의
+ * `deleteExampleAction`)와 일괄 삭제(위 `bucketForFailure` 의 `alreadyGone`
+ * 갈래) 둘 다 쓴다. 판단은 하나다: 이미 없는 행을 지우려던 시도는 실패가
+ * 아니라 **운영자의 의도가 이미 달성된 것**이다 - 다시 지워도 영원히 같은
+ * 404 뿐이다. `result.status === '404'` 같은 상태 코드 문자열이 아니라
+ * `actionForErrors` 로 판정하는 이유는, 판정이 코드 문자열 기준 하나로
+ * 남아야 백엔드가 오류 코드를 바꾸는 날 이 저장소 안에 두 벌의 판정이
+ * 조용히 갈리지 않기 때문이다.
+ */
+export function isAlreadyGone(errors: readonly ErrorObject[]): boolean {
+  return actionForErrors(errors) === 'notFound'
 }
