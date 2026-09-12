@@ -1,5 +1,6 @@
 'use client'
 
+import { logoutAction } from '@/app/(auth)/actions'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -87,9 +88,23 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            {/*
+              나머지 항목(Account·Billing·Notifications)과 이 메뉴의 가짜
+              사용자 데이터(`app-sidebar.tsx` 의 "shadcn"·"m@example.com"·
+              "Acme Inc.")는 shadcn 대시보드 블록이 남긴 장식이고, 이 항목만
+              실제로 존재하는 기능(로그아웃)에 대응한다 - 나머지를 실재하게
+              만드는 것은 이 태스크의 범위 밖이다.
+
+              `logoutAction`(app/(auth)/actions.ts)을 직접 호출한다 -
+              `<form action>` 이 아니라 이 파일의 다른 예(resource-grid.tsx 의
+              `bulkDeleteExampleAction`)와 같은 방식이다. 인자도 폼 상태도
+              필요 없는 Action 이라(그 파일 머리말 - "useFormStatus 도 필요
+              없고, 진입점은 평범한 <form action={logoutAction}> 이면
+              된다") 어느 쪽으로 불러도 쿠키 삭제 순서·리다이렉트는 같다.
+            */}
+            <DropdownMenuItem onClick={() => void logoutAction()}>
               <LogOutIcon />
-              Log out
+              로그아웃
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
