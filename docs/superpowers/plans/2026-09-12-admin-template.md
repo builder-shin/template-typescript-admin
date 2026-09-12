@@ -2028,7 +2028,7 @@ UI."
 
 **Files:**
 - Create: `components/grid/selection-bar.tsx`, `components/grid/bulk-confirm.tsx`, `components/grid/bulk-result.tsx`
-- Modify: `app/(admin)/examples/actions.ts`, `components/grid/resource-grid.tsx`
+- Modify: `app/(admin)/examples/actions.ts`, `components/grid/resource-grid.tsx`, **`app/(admin)/examples/[id]/page.tsx`** — Task 10 이 남긴 확인 없는 단건 삭제가 거기 있다(Step 4)
 - Test: `test/unit/components/bulk-result.test.ts`
 
 **Interfaces:**
@@ -2131,9 +2131,25 @@ Run: `pnpm vitest run test/unit/components/bulk-result.test.ts` → FAIL → 구
 
 선택이 하나 이상일 때만 나타난다. 선택 건수와 **나갈 요청 수**를 적고, `MAX_BULK_ITEMS` 를 **읽어** 상한을 함께 알린다(값을 박지 않는다).
 
-- [ ] **Step 4: 확인 줄을 만든다**
+- [ ] **Step 4: 확인 줄을 만들고, 단건 삭제도 같은 경로를 타게 한다**
 
-삭제를 누르면 실행 전에 "벌크 엔드포인트가 없어 DELETE 요청 N 회를 순차로 보낸다 · 일부만 실패할 수 있다 · 이미 보낸 요청은 되돌리지 않는다"를 알린다. **누르기 전에 알리는 것이 스펙 6.2 의 요구다.**
+일괄 삭제를 누르면 실행 전에 "벌크 엔드포인트가 없어 DELETE 요청 N 회를 순차로 보낸다 · 일부만 실패할 수 있다 · 이미 보낸 요청은 되돌리지 않는다"를 알린다. **누르기 전에 알리는 것이 스펙 6.2 의 요구다.**
+
+**단건 삭제도 이 Step 이 소유한다.** Task 10 이 만든 `app/(admin)/examples/[id]/page.tsx` 의 삭제에는 확인 단계가 없다. 실측(2026-09-12)으로 그 상태는 문장보다 나쁘다:
+
+```tsx
+<form action={deleteExampleAction.bind(null, id)} className="max-w-lg">
+  <SubmitButton label="삭제" variant="destructive" />
+</form>
+```
+
+`SubmitButton`(`components/form/submit-button.tsx`)은 `className="w-full"` 을 무조건 붙이고, **바로 위 `ExampleForm` 의 저장 버튼도 같은 부품이다.** 그래서 화면에는 같은 모양·같은 너비의 전폭 제출 버튼 둘이 수직으로 맞붙어 있고, 아래쪽이 되돌릴 수 없다 — **색이 유일한 구별이다.** 되돌릴 방법은 없다(백엔드에 복원 경로가 없다).
+
+세 가지를 함께 한다:
+
+1. **확인 문구를 N=1 에 맞게 쓴다.** 위 일괄용 문구를 그대로 재사용하지 마라 — 단건에서 "요청 N 회를 순차로"와 "일부만 실패할 수 있다"는 **둘 다 거짓이다.** 확인 부품이 건수를 받아 1 일 때와 여럿일 때 다른 문장을 내게 하고, 어느 쪽이든 "되돌리지 않는다"는 공통으로 남긴다.
+2. **버튼 배치를 함께 고친다.** 저장과 삭제가 같은 폭·같은 위치를 공유하지 않게 한다. 색만으로 파괴적 동작을 구별하지 마라 — 색각 이상에서 무너지고, 맞붙은 전폭 버튼에서는 그나마의 구별도 조준에 도움이 되지 않는다.
+3. **`alert-dialog` 는 미설치다.** 실측: dashboard-01 이 가져온 `components/ui/` 22 개에 없다. 필요하면 `npx shadcn@latest add alert-dialog` 로 더하되, 더했으면 그것이 이 계약의 일부가 됐다는 사실을 `components/AGENTS.md` 에 적어라(Task 14 가 그 파일을 쓴다). 더하지 않고 폼 안의 두 단계(`확인` 상태를 거치는 제출)로 풀어도 된다 — **판단은 구현자의 것이고, 확인 단계가 존재한다는 결과만 필수다.**
 
 - [ ] **Step 5: 결과 표를 만든다**
 
