@@ -72,8 +72,11 @@ add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아�
 
 `components/grid/`의 순수 헬퍼(`format.ts`)는 `test/unit/`이 지킨다. 선택·
 일괄 작업·폼 참여 같은 실제 DOM 동작은 `test/e2e/`만 지킨다(이 저장소에는
-DOM 테스트 하네스가 없다). 운영자 조회(`app/(admin)/operator.ts`)는
-`test/unit/components/sidebar.test.ts`가 지킨다. 최종 검증은
-`./scripts/check.sh`다.
+DOM 테스트 하네스가 없다). 지시어 경계(위 "`'use client'` 정책"과 별개로,
+루트 `AGENTS.md` 규칙 6번 - 비-클라이언트 모듈이 `'use client'` 모듈의 값을
+호출하지 않는다)는 `test/unit/components/boundary-policy.test.ts`가 저장소
+전체(`app`·`components`·`lib`)를 훑어 기계적으로 지킨다. 운영자 조회
+(`app/(admin)/operator.ts`)는 `test/unit/components/sidebar.test.ts`가
+지킨다. 최종 검증은 `./scripts/check.sh`다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
