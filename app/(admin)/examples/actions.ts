@@ -3,6 +3,7 @@
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import type { BulkOutcome } from '@/lib/bulk/executor'
+import { requireSession } from '@/lib/auth/guard'
 import { request, withAcceptLanguage } from '@/lib/jsonapi/client'
 import type { SingleDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
@@ -37,6 +38,15 @@ import {
  * exactOptionalPropertyTypes 함정이 실제로 발동하지 않지만, JSON:API 의
  * 계약 자체가 생성 요청에는 `id` 를 아예 싣지 말라는 것이라(이 저장소는
  * 클라이언트가 id 를 고르지 않는다) 스프레드로 키를 통째로 뺀다.
+ *
+ * **네 Action 모두 `requireSession()`(lib/auth/guard.ts)을 먼저 부르고
+ * `accessToken` 을 `request()` 에 싣는다.** 실측(Task 13, 실제 백엔드
+ * 상대 E2E): 이 호출이 없으면 네 Action 전부가 Authorization 헤더 없이
+ * 나가 백엔드가 401 `AUTHENTICATION_REQUIRED` 로 거절한다 - mock 을 상대로
+ * 는 이 누락이 전혀 드러나지 않았다. `guard.ts` 의 `requireSession()` 은
+ * 정확히 이 용도로 설계돼 있었다("호출자(쓰기 Action)가
+ * session.accessToken 을 request({accessToken})에 실어야 한다" - 그 파일
+ * 주석) - 그 배선이 이 파일에 빠져 있었을 뿐이다.
  */
 
 const EXAMPLES = resourceByType('examples')!
@@ -100,10 +110,14 @@ export async function createExampleAction(
   _previous: ExamplesFormState,
   formData: FormData,
 ): Promise<ExamplesFormState> {
+  const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<SingleDocument>(
     EXAMPLES.path,
-    withAcceptLanguage({ method: 'POST', body: writeBody(formData) }, acceptLanguage),
+    withAcceptLanguage(
+      { method: 'POST', body: writeBody(formData), accessToken: session.accessToken },
+      acceptLanguage,
+    ),
   )
 
   if (!result.ok) return examplesFormState(result.errors)
@@ -125,10 +139,14 @@ export async function updateExampleAction(
   _previous: ExamplesFormState,
   formData: FormData,
 ): Promise<ExamplesFormState> {
+  const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<SingleDocument>(
     `${EXAMPLES.path}/${id}`,
-    withAcceptLanguage({ method: 'PATCH', body: writeBody(formData, id) }, acceptLanguage),
+    withAcceptLanguage(
+      { method: 'PATCH', body: writeBody(formData, id), accessToken: session.accessToken },
+      acceptLanguage,
+    ),
   )
 
   if (!result.ok) return examplesFormState(result.errors)
@@ -142,10 +160,11 @@ export async function updateExampleAction(
  * lib/jsonapi/client.ts 의 request() 문서화된 선택지).
  */
 export async function deleteExampleAction(id: string): Promise<void> {
+  const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<never>(
     `${EXAMPLES.path}/${id}`,
-    withAcceptLanguage({ method: 'DELETE' }, acceptLanguage),
+    withAcceptLanguage({ method: 'DELETE', accessToken: session.accessToken }, acceptLanguage),
   )
 
   if (!result.ok) {
@@ -178,10 +197,11 @@ export async function deleteExampleAction(id: string): Promise<void> {
  *    를 `status?: string` 에 넣으려 해서다).
  */
 export async function bulkDeleteExampleAction(id: string): Promise<BulkOutcome> {
+  const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<never>(
     `${EXAMPLES.path}/${id}`,
-    withAcceptLanguage({ method: 'DELETE' }, acceptLanguage),
+    withAcceptLanguage({ method: 'DELETE', accessToken: session.accessToken }, acceptLanguage),
   )
 
   if (result.ok) return { id, ok: true }
