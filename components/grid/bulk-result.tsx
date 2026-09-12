@@ -88,12 +88,19 @@ export function summarize(report: BulkReport): BulkSummary {
  *
  * 순서는 `previous` 를 따른다 - `retry` 는 재시도를 요청한 부분집합뿐이라
  * 원래 표의 행 순서 정보를 갖지 않는다.
+ *
+ * `cancelled` 는 **한쪽이라도 참이면 참**이다 - 이 보고서 계보 어딘가에서
+ * 한 번이라도 취소된 적이 있으면 계속 참이어야 한다. 재시도 자체가 끝까지
+ * 완주해(`retry.cancelled === false`) 이 값을 덮어쓰면, 원래 실행이 취소돼
+ * 애초에 시도조차 되지 않은 행이 있었다는 사실이 병합된 표에서 사라진다 -
+ * "깨끗하게 끝난 척하는 표"가 되어 버려, 이 태스크가 막으려는 바로 그
+ * 실수(부분 실패를 뭉갠다)를 병합 단계에서 저지르게 된다.
  */
 export function mergeRetryReport(previous: BulkReport, retry: BulkReport): BulkReport {
   const retried = new Map(retry.outcomes.map((outcome) => [outcome.id, outcome]))
   return {
     outcomes: previous.outcomes.map((outcome) => retried.get(outcome.id) ?? outcome),
-    cancelled: retry.cancelled,
+    cancelled: previous.cancelled || retry.cancelled,
   }
 }
 
@@ -155,25 +162,46 @@ function bucketBadge(bucket: Bucket) {
  * 행은 남은 전건이 같은 401 을 받으므로 재시도 버튼이 있으면 누를 때마다
  * 같은 표를 다시 만드는 무한 루프가 된다. `sessionLost` 가 참이면 재시도
  * 버튼 자체를 그리지 않는다 - 다시 로그인만 뜻이 있다.
+ *
+ * `requested` 는 `report` 안에 없다 - `BulkReport`(lib/bulk/executor.ts)는
+ * 실제로 보낸 요청의 결과만 담고, 순수 실행기는 애초에 몇 건이 "요청됐는지"
+ * 라는 개념을 모른다. 그 수는 호출부(`resource-grid.tsx`)가 최초 실행 시점의
+ * 선택 건수로 따로 들고 있다가 재시도에도 그대로 물려준다 - 재시도는
+ * `report.outcomes.length` 를 늘리지 않으므로(재시도 대상이었던 기존 행의
+ * 결과만 갈아 끼운다) `requested` 가 `report.outcomes.length` 보다 크면 그
+ * 차이가 곧 "한 번도 시도되지 않은 건수"다. 어떤 아이디였는지는 이 표도
+ * 모른다 - 실행기가 몰라도 되는 것과 같은 이유(그 정보를 원하면 실행기에게
+ * 원래 입력 목록을 기억하라고 가르쳐야 하는데, 순수 실행기는 그럴 필요가
+ * 없어야 한다).
  */
 export function BulkResultTable({
   report,
+  requested,
   onRetry,
   onClose,
   reauthHref,
 }: {
   report: BulkReport
+  requested: number
   onRetry: (ids: readonly string[]) => void
   onClose: () => void
   reauthHref: string
 }) {
   const summary = summarize(report)
   const showRetry = summary.retryable.length > 0 && !summary.sessionLost
+  const attempted = report.outcomes.length
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3">
       <p className="text-sm">
-        {report.outcomes.length}건 중 {summary.failed}건 실패
+        {attempted < requested ? (
+          <span className="tabular-nums">
+            {attempted} / {requested}건 시도 ·{' '}
+          </span>
+        ) : (
+          `${attempted}건 중 `
+        )}
+        {summary.failed}건 실패
         {report.cancelled && ' · 취소됨(남은 건은 보내지 않았습니다)'}
       </p>
 

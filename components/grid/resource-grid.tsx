@@ -294,12 +294,19 @@ export function sortTokenFromState(sorting: SortingState): string | null {
  * 일괄 삭제 진행 상태. `idle` 은 선택 바만(있다면) 보이는 평시고, `confirming` 은
  * 실행 전 확인 문구가 뜬 상태, `running` 은 `runBulk` 가 실제로 요청을 보내는
  * 중(진행률만 표시, 텍스트 없음), `done` 은 결과 표가 뜬 상태다.
+ *
+ * `done.requested` 는 **최초** 확인에서 선택했던 건수다 - `BulkReport` 에는
+ * 없는 값이다(순수 실행기는 "몇 건이 요청됐는지"를 모른다 - lib/bulk/
+ * executor.ts). 재시도해도 이 값은 갈지 않는다 - 12건 중 3건만 재시도해도
+ * "요청 12건"이라는 사실은 그대로이기 때문이다. `bulk-result.tsx` 의
+ * `BulkResultTable` 이 이 값과 `report.outcomes.length` 를 비교해 "한
+ * 번도 시도되지 않은 건수"가 있는지를 보여준다.
  */
 type BulkPhase =
   | { kind: 'idle' }
   | { kind: 'confirming' }
   | { kind: 'running'; done: number; total: number; controller: AbortController }
-  | { kind: 'done'; report: BulkReport }
+  | { kind: 'done'; report: BulkReport; requested: number }
 
 /**
  * `useSearchParams()` 를 쓰므로 Suspense 경계 안에 있어야 빌드가 정적 셸을
@@ -426,12 +433,18 @@ function ResourceGridInner({
    * `onProgress` 가 건마다 실제로 갱신되고, `signal` 취소가 다음 요청을 막을 수
    * 있다 - 이 실행이 서버 한 번의 요청·응답으로 묶여 있었다면 둘 다 불가능했다.
    *
-   * `previousReport` 가 있으면(재시도) 결과를 통째로 갈지 않고
-   * `mergeRetryReport` 로 합친다 - 재시도한 몇 건만 담긴 작은 보고서로 표
-   * 전체를 바꾸면 이미 확인된 나머지 건의 결과가 화면에서 사라진다.
+   * `previous` 가 있으면(재시도) 결과를 통째로 갈지 않고 `mergeRetryReport` 로
+   * 합친다 - 재시도한 몇 건만 담긴 작은 보고서로 표 전체를 바꾸면 이미 확인된
+   * 나머지 건의 결과가 화면에서 사라진다. `previous.requested` 를 그대로
+   * 물려받는 이유도 같다 - 재시도는 최초 선택 건수를 바꾸지 않는다(12건 중
+   * 3건만 재시도해도 "요청 12건"은 그대로다).
    */
-  async function startBulkDelete(ids: readonly string[], previousReport?: BulkReport) {
+  async function startBulkDelete(
+    ids: readonly string[],
+    previous?: { report: BulkReport; requested: number },
+  ) {
     if (bulkDeleteAction === undefined || ids.length === 0) return
+    const requested = previous?.requested ?? ids.length
     const controller = new AbortController()
     setBulkPhase({ kind: 'running', done: 0, total: ids.length, controller })
     const result = await runBulk(ids, bulkDeleteAction, {
@@ -440,9 +453,9 @@ function ResourceGridInner({
         setBulkPhase((prev) => (prev.kind === 'running' ? { ...prev, done } : prev))
       },
     })
-    const report = previousReport === undefined ? result : mergeRetryReport(previousReport, result)
+    const report = previous === undefined ? result : mergeRetryReport(previous.report, result)
     setRowSelection({})
-    setBulkPhase({ kind: 'done', report })
+    setBulkPhase({ kind: 'done', report, requested })
   }
 
   return (
@@ -493,8 +506,9 @@ function ResourceGridInner({
       {bulkPhase.kind === 'done' && (
         <BulkResultTable
           report={bulkPhase.report}
+          requested={bulkPhase.requested}
           onRetry={(ids) => {
-            void startBulkDelete(ids, bulkPhase.report)
+            void startBulkDelete(ids, { report: bulkPhase.report, requested: bulkPhase.requested })
           }}
           onClose={() => setBulkPhase({ kind: 'idle' })}
           reauthHref={reauthHref}

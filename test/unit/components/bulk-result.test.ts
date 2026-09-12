@@ -114,9 +114,19 @@ describe('mergeRetryReport', () => {
     expect(merged.outcomes.map((outcome) => outcome.id)).toEqual(['a', 'b'])
   })
 
-  it('cancelled 는 재시도 실행 자체의 값을 따른다', () => {
+  it('재시도 자체가 취소되면 cancelled 는 참이다', () => {
     const previous = { outcomes: [failed('a', '500', 'HTTP_ERROR')], cancelled: false }
     const retry = { outcomes: [], cancelled: true }
+    expect(mergeRetryReport(previous, retry).cancelled).toBe(true)
+  })
+
+  it('이전 실행이 취소됐었다면 재시도가 끝까지 완주해도 cancelled 는 참으로 남는다', () => {
+    // retry 자체는 끝까지 갔으므로 retry.cancelled 는 거짓이다. 그래도
+    // previous 가 취소된 적이 있다는 사실을 병합 결과가 잃으면, 한 번도
+    // 시도되지 않은 행이 있었는데도 표는 "깨끗하게 끝났다"고 말하게 된다 -
+    // 부분 실패를 뭉개는 토스트와 같은 실수를 병합 단계에서 저지르는 것이다.
+    const previous = { outcomes: [failed('a', '500', 'HTTP_ERROR')], cancelled: true }
+    const retry = { outcomes: [{ id: 'a', ok: true }], cancelled: false }
     expect(mergeRetryReport(previous, retry).cancelled).toBe(true)
   })
 })
