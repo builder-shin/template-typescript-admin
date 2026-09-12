@@ -1558,7 +1558,7 @@ git commit -m "feat: drive the grid from the server instead of the loaded page
 
 The block ships client-side filtering, sorting and pagination over static
 JSON with pageSize in component state. Against a server-paginated list that
-sorts only the rows already loaded while looking entirely correct, so the
+sorts only the rows already loaded while looking entirely correct, so
 the three client row models are removed and manualPagination is set with the
 server's rowCount. manualSorting and manualFiltering do not exist in the
 installed v9 — omitting the row models is what makes sorting server-side.
@@ -1638,15 +1638,31 @@ Run: `pnpm vitest run test/unit/resources/count.test.ts` → FAIL → 구현 →
 
 - [ ] **Step 4: 카드를 자원 카운트로 바꾼다**
 
-`section-cards.tsx` 의 Total Revenue `$1,250.00` · New Customers · Active Accounts · Growth Rate 를 **`examples` · 분류 · 라벨의 실제 총합**으로 바꾼다. 카드 레이아웃과 타이포그래피는 건드리지 않는다. 참조 자원 카드에는 "읽기 전용"을 적는다.
+실측한 구조(`components/section-cards.tsx`, 99행): **동기 컴포넌트**가 `<Card>` 넷을 하드코딩하고, 각 카드는 `CardDescription`(라벨) · `CardTitle`(값) · `CardAction > Badge variant="outline"`(추세 %) · `CardFooter`(추세 문장 둘)로 되어 있다.
+
+세 가지를 정해야 한다.
+
+**1. 카드는 넷인데 자원은 셋이다.** 네 번째는 **백엔드 상태**로 둔다 — `/health` 는 계약에 있는 표면이고(2.1), 운영자가 가장 먼저 묻는 것이다. 넷은 `examples` 총합 · 분류 총합 · 라벨 총합 · `/health` 가 된다. 참조 자원 카드에는 "읽기 전용"을 적는다.
+
+**2. 추세 배지와 `CardFooter` 의 추세 문장은 지운다.** 우리 계약에 과거 데이터가 없고 지표 엔드포인트도 없어서 `+12.5%` 를 만들 방법이 **없다.** 숫자를 지어내는 대신 없애는 것이다 — 디자인을 단순화하는 게 아니라 **날조를 거부하는 것**이다. 카드 레이아웃과 타이포그래피(`text-2xl` · `tabular-nums` · `@[250px]/card:text-3xl` · `@container/card`)는 그대로 둔다.
+
+`CardAction` 자리가 비면 그 요소를 지운다. 빈 배지를 남기지 마라.
+
+**3. 카운트는 비동기다.** 이 컴포넌트는 동기이고 카운트 셋은 요청 셋을 요구한다. **카운트를 props 로 받게 바꾸고** `app/(admin)/page.tsx` 가 세 요청을 해서 넘긴다 — 그러면 카드는 순수 렌더링이 되어 단위 테스트가 가능하고, `headers()` 를 부르는 자리가 화면 하나로 유지된다(Task 8 과 같은 이유).
 
 - [ ] **Step 5: 차트를 남기되 표본임을 화면이 말하게 한다**
 
 `chart-area-interactive.tsx` 의 `chartData` 배열은 **그대로 둔다**(스펙 3.4.1). 대신 카드에 **백엔드에 연결되지 않은 표본 데이터**임을 적는다 — 운영자가 이 숫자를 읽고 판단하면 안 된다는 것을 화면에서 알 수 있어야 한다. 이것이 차트를 남기는 조건이다.
 
+실측한 구조: `CardHeader` 안에 `CardTitle`("Total Visitors") · `CardDescription` · `CardAction`(시간 범위 `ToggleGroup`/`Select`)이 있다. **라벨은 `CardDescription` 에 넣는다** — 이미 부제가 있는 자리다.
+
+`CardAction` 의 시간 범위 컨트롤은 **무력한 것이 아니라 그 박힌 배열 위에서 실제로 동작한다**(3개월·30일·7일로 걸러낸다). 지어낸 데이터를 거르는 셈이지만, 표본이라고 적어 두면 일관된다 — 그러니 컨트롤을 없애지 마라.
+
 - [ ] **Step 6: 표와 헤더를 바꾼다**
 
 `app/(admin)/data.json`(68행 `reviewer: "Eddie Lake"`)을 지우고 대시보드의 표를 `examples` 최근 수정 목록으로 바꾼다. `site-header.tsx` 의 하드코딩된 `Documents` 를 화면 이름으로 바꾼다.
+
+**Task 8 이 남긴 한 과업짜리 창을 여기서 닫는다.** Task 8 이 `components/data-table.tsx` 의 클라이언트 행 모델을 지웠지만 대시보드는 아직 정적 `data.json` 을 넘기고 있어서, **그 표의 정렬·필터·페이지 컨트롤이 지금 아무것도 하지 않는다.** 표를 `examples` 로 바꾼 뒤 **그 컨트롤들이 서버에 대해 실제로 동작하는지 확인하라** — 값이 그려지는 것만으로는 알 수 없다. 정렬을 바꿨을 때 첫 행이 실제로 바뀌는지 보는 것이 최소 확인이다.
 
 대시보드 표에 **변경한 사람 열을 두지 않는다** — 백엔드에 감사로그 계약이 없어 누가 바꿨는지 알 수 없다(스펙 2.3 · 10장). 수정일 내림차순 정렬이라는 사실을 표 아래에 한 줄로 적는다.
 
@@ -1768,7 +1784,11 @@ Run: `pnpm vitest run test/unit/resources/form.test.ts` → FAIL → 구현 → 
 
 - [ ] **Step 3: 상세 화면을 만든다**
 
-`detail.ts` 에 `detailRequest(resource, id, acceptLanguage)` 를 두고 `page.tsx` 는 그것 하나에 넘긴다(Task 8 과 같은 모양). 속성·관계·메타를 그린다. 관계 이름을 보이려면 `include=category,tags` 가 실려야 한다.
+`detail.ts` 에 `detailRequest(resource, id, acceptLanguage)` 를 두고 `page.tsx` 는 그것 하나에 넘긴다.
+
+**모양은 `app/(admin)/examples/list.ts` 를 읽어서 맞춘다** — Task 8 이 이미 만든 `listRequest` 가 정본이다. 산문으로 옮겨 적지 않는 이유는 그 사본이 드리프트하기 때문이다. 지금 그것은 `[path, options]` 튜플을 돌려주고 화면이 `request(...detailRequest(...))` 로 펼친다. `RequestOptions.query` 가 `URLSearchParams` 라는 점과 `withAcceptLanguage(options, lang)` 헬퍼가 있다는 점도 그 파일에서 확인된다.
+
+상세는 `include` 가 필요하다 — 관계 이름을 보여야 하므로 `include=category,tags` 를 실어야 하고, 빼먹으면 배지가 UUID 로 그려지거나 조용히 "분류 없음"이 된다. 목록의 `gridQuery` 는 그것을 이미 싣는다. 속성·관계·메타를 그린다. 관계 이름을 보이려면 `include=category,tags` 가 실려야 한다.
 
 인라인 편집은 **저장이 취소와 다른 일을 하게** 만든다 — 저장은 `PATCH` 요청 하나를 보내고 제출 중에는 스피너만 남긴다.
 
