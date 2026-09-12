@@ -314,6 +314,17 @@ export function ResourceGrid(props: {
    * 파일이 어떤 자원인지 분기해서 판단하지 않는다.
    */
   bulkDeleteAction?: (id: string) => Promise<BulkOutcome>
+  /**
+   * 세션이 끊긴 뒤 "다시 로그인"이 걸 링크. 이 컴포넌트가 직접 조립하지
+   * 않는다 - 되돌아올 경로(그리드의 현재 필터·정렬·페이지 전부가 URL 에
+   * 있다)를 만들려면 `proxy.ts` 의 `LOGIN_REDIRECT_PARAM` 이 필요한데, 그
+   * 상수를 여기서 값으로 import 하면 `proxy.ts` 가 `lib/auth/session.ts` 를
+   * 통해 값으로 끌어오는 `next/headers` 까지 클라이언트 번들에 끌려
+   * 들어간다(실측: `pnpm build` 가 "Server Components 밖에서 next/headers"
+   * 로 깨진다). 서버 컴포넌트인 호출부(`app/(admin)/examples/page.tsx`)는
+   * 그 경로 조립을 안전하게 할 수 있으므로 완성된 문자열만 받는다.
+   */
+  reauthHref: string
 }) {
   return (
     <React.Suspense fallback={null}>
@@ -326,10 +337,12 @@ function ResourceGridInner({
   resource,
   document,
   bulkDeleteAction,
+  reauthHref,
 }: {
   resource: ResourceDef
   document: CollectionDocument
   bulkDeleteAction?: (id: string) => Promise<BulkOutcome>
+  reauthHref: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -406,15 +419,6 @@ function ResourceGridInner({
   const prevHref = pageHref(pathname, searchParams, document.links?.prev)
   const nextHref = pageHref(pathname, searchParams, document.links?.next)
   const selectedIds = table.getFilteredSelectedRowModel().rows.map((row) => row.id)
-
-  // '/login' 하나만 링크한다 - 되돌아올 경로(proxy.ts 의 LOGIN_REDIRECT_PARAM)를
-  // 싣고 싶어도 그 상수를 여기서 가져올 수 없다(실측: proxy.ts 는
-  // lib/auth/session.ts 를 통해 next/headers 를 값으로 import 하고 있어, 이
-  // 클라이언트 컴포넌트가 그 상수 하나만 쓰려 해도 그 전체가 클라이언트
-  // 번들에 끌려 들어가 빌드가 깨진다 - "Server Components 밖에서 next/headers"
-  // 오류). 세션이 죽은 뒤의 재로그인이라 어차피 이 페이지로 돌아올 필요가
-  // 크지 않다고 보고 복귀 경로는 포기한다.
-  const reauthHref = '/login'
 
   /**
    * `runBulk` 를 실제로 돌린다 - 클라이언트가 `ids` 하나마다 `bulkDeleteAction`

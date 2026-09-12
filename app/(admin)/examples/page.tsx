@@ -3,6 +3,7 @@ import { ResourceGrid } from '@/components/grid/resource-grid'
 import { request } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
+import { LOGIN_REDIRECT_PARAM } from '@/proxy'
 import { bulkDeleteExampleAction } from './actions'
 import { listRequest, toSearchParams } from './list'
 
@@ -23,6 +24,13 @@ import { listRequest, toSearchParams } from './list'
  * `bulkDeleteAction` 은 `./actions.ts` 가 이미 채운 Action 을 그대로 건넨다 -
  * `examples` 라는 이름은 이 화면과 `actions.ts` 안에만 있고, `ResourceGrid`
  * 는 그 이름을 몰라도 되는 Action 참조 하나만 받는다.
+ *
+ * `reauthHref` 도 여기서 완성해 건넨다 - `ResourceGrid` 는 클라이언트
+ * 컴포넌트라 `proxy.ts`(그 안의 `LOGIN_REDIRECT_PARAM`)를 값으로 import 하면
+ * `lib/auth/session.ts` 를 거쳐 `next/headers` 가 클라이언트 번들에 끌려
+ * 들어간다(실측: `pnpm build` 가 그 자리에서 깨진다). 이 화면은 서버
+ * 컴포넌트라 그 걱정이 없고, 마침 그리드의 현재 필터·정렬·페이지를 담은
+ * `searchParams` 도 이미 갖고 있어 되돌아올 경로를 그대로 실을 수 있다.
  */
 export default async function ExamplesPage({
   searchParams,
@@ -30,12 +38,9 @@ export default async function ExamplesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const resource = resourceByType('examples')!
+  const currentParams = toSearchParams(await searchParams)
   const result = await request<CollectionDocument>(
-    ...listRequest(
-      resource,
-      toSearchParams(await searchParams),
-      (await headers()).get('accept-language'),
-    ),
+    ...listRequest(resource, currentParams, (await headers()).get('accept-language')),
   )
 
   // 읽기 경로는 던져서 error.tsx 를 띄우는 쪽을 고른다(lib/jsonapi/client.ts
@@ -50,11 +55,16 @@ export default async function ExamplesPage({
     throw new Error('목록 응답에 본문이 없습니다.')
   }
 
+  const currentQuery = currentParams.toString()
+  const currentUrl = currentQuery === '' ? '/examples' : `/examples?${currentQuery}`
+  const reauthHref = `/login?${LOGIN_REDIRECT_PARAM}=${encodeURIComponent(currentUrl)}`
+
   return (
     <ResourceGrid
       resource={resource}
       document={result.document}
       bulkDeleteAction={bulkDeleteExampleAction}
+      reauthHref={reauthHref}
     />
   )
 }
