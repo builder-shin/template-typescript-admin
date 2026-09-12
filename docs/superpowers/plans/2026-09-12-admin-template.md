@@ -1341,7 +1341,7 @@ Expected: FAIL — 모듈이 없다.
 - [ ] **Step 5: 테스트를 돌려 통과를 확인한다**
 
 Run: `pnpm vitest run test/unit/grid`
-Expected: PASS (8 tests)
+Expected: PASS (10 tests)
 
 - [ ] **Step 6: `lib/grid/AGENTS.md` 를 쓰고 커밋**
 
@@ -1368,12 +1368,24 @@ UUID badges on one, a silent 'no category' on another."
 **Files:**
 - Create: `lib/grid/table.ts`, `components/grid/resource-grid.tsx`
 - Create: `app/(admin)/examples/page.tsx`, `app/(admin)/examples/loading.tsx`, `app/(admin)/examples/list.ts`
-- Modify: `app/(admin)/components/data-table.tsx` (블록이 쓴 파일)
+- Modify: `components/data-table.tsx` (블록이 쓴 파일 — `app/(admin)/` 아래가 아니라 루트 `components/` 에 있다), `app/(admin)/page.tsx`
 - Test: `test/unit/grid/table.test.ts`
 
 **Interfaces:**
 - Consumes: Task 7 의 `gridQuery`·`readGridState`, Task 6 의 `ResourceDef`, Task 2 의 `lib/jsonapi` 클라이언트
-- Produces: `serverDrivenTableOptions(rowCount: number): { manualPagination: true; rowCount: number }`, `listRequest(resource, params, acceptLanguage)` — 화면이 부르는 **조립 함수 하나**
+- Produces: `serverDrivenTableOptions(rowCount: number): { manualPagination: true; rowCount: number }`, 그리고 화면이 부르는 **조립 함수 하나**:
+
+```ts
+export function listRequest(
+  resource: ResourceDef,
+  params: URLSearchParams,
+  acceptLanguage: string | null,
+): [path: string, options: RequestOptions]
+```
+
+**튜플을 돌려주는 이유는 복사해 온 클라이언트의 시그니처다**(실측 `lib/jsonapi/client.ts`): `request<T>(path, options)` 는 인자를 **둘** 받고, `RequestOptions.query` 는 평범한 객체가 아니라 **`URLSearchParams`** 이며, `acceptLanguage` 를 얹는 `withAcceptLanguage(options, lang)` 헬퍼가 이미 있다(`null`·`undefined` 면 그대로 돌려준다). 그러니 `listRequest` 는 `[resource.path, withAcceptLanguage({ query: new URLSearchParams(gridQuery(...)) }, acceptLanguage)]` 를 만들고, 화면은 한 번 펼친다 — `await request(...listRequest(...))`.
+
+그러면 경로 · 질의 · 언어 셋이 **한 호출에서 만들어지고** 단위 테스트 하나가 그 셋을 고정한다. 화면에 남는 무방비는 펼침 한 줄이다.
 
 **설치된 것은 `@tanstack/react-table@9.2.4` 다**(실측). v9 에서 서버 사이드를 켜는 방법은 v8 과 다르므로 아래를 그대로 따른다.
 
@@ -1396,7 +1408,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { serverDrivenTableOptions } from '@/lib/grid/table'
 
-const TABLE = 'app/(admin)/components/data-table.tsx'
+const TABLE = 'components/data-table.tsx'
 
 describe('serverDrivenTableOptions', () => {
   it('페이지를 서버에 맡기고 총합을 함께 넘긴다', () => {
@@ -1437,7 +1449,44 @@ Expected: FAIL — `lib/grid/table.ts` 가 없고, 블록의 `data-table.tsx` �
 
 - [ ] **Step 4: 블록의 `data-table.tsx` 를 서버 구동으로 고친다**
 
-`createFilteredRowModel()` · `createSortedRowModel()` · `createPaginatedRowModel()` 등록을 지우고 `...serverDrivenTableOptions(rowCount)` 를 넣는다. `rowCount` 는 서버가 준 총합이다 — 없으면 표가 전체 쪽 수를 계산할 수 없다. 컴포넌트 안의 `pagination` `useState`(`pageSize: 10`)를 지우고 페이지·정렬·필터 상태를 **URL 에서 받는다**. 행 선택과 열 표시/숨김은 TanStack 에 남긴다.
+**두 자리를 따로 고친다.** 실측한 구조(2026-09-12, `components/data-table.tsx`)는 이렇다.
+
+```ts
+// 모듈 수준 (110행 부근) - 행 모델이 feature 와 같은 객체에 들어 있다
+const features = tableFeatures({
+  columnFilteringFeature,
+  columnVisibilityFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+  filteredRowModel: createFilteredRowModel(),   // ← 이 셋만 지운다
+  paginatedRowModel: createPaginatedRowModel(),
+  sortedRowModel: createSortedRowModel(),
+})
+
+// 컴포넌트 안 (362행 부근)
+const table = useTable({
+  features,
+  data,
+  columns,
+  state: { sorting, columnVisibility, rowSelection, columnFilters, pagination },
+  getRowId: (row) => row.id.toString(),
+  enableRowSelection: true,
+  onRowSelectionChange: setRowSelection,
+  onSortingChange: setSorting,
+  onColumnFiltersChange: setColumnFilters,
+  onColumnVisibilityChange: setColumnVisibility,
+  onPaginationChange: setPagination,
+})
+```
+
+**`tableFeatures()` 에서는 행 모델 세 줄만 지운다. feature 다섯 개는 남긴다** — `rowSortingFeature` 를 함께 지우면 정렬 상태와 API 자체가 사라져 헤더의 정렬 컨트롤이 죽는다. v9 에서 feature 는 "이 기능을 쓴다"이고 행 모델은 "클라이언트가 그 계산을 한다"로, 서버 구동은 앞을 남기고 뒤를 빼는 것이다. 블록 자신의 주석이 등록하지 않은 것은 번들에서 tree-shake 된다고 적는다 — 지우면 번들도 줄어든다.
+
+**`...serverDrivenTableOptions(rowCount)` 는 `useTable({...})` 쪽에 넣는다**(행 모델을 지운 객체가 아니다). `rowCount` 는 서버가 준 총합이다 — 없으면 표가 전체 쪽 수를 계산할 수 없다.
+
+**상태 배선.** `sorting` · `columnFilters` · `pagination` 셋은 이제 URL 이 정본이므로, 해당 `on*Change` 가 로컬 `setState` 대신 URL 을 바꿔야 한다. `columnVisibility` 와 `rowSelection` 은 화면 안의 일이라 로컬에 남는다 — 열 표시와 선택은 백엔드에 보내지 않는다.
+
+**`getFilteredRowModel()` 을 쓰는 자리를 확인하라.** 505행 부근이 "N of M row(s) selected" 를 그리는데, `filteredRowModel` 등록을 지우면 그 호출은 필터 이전(= 불러온 쪽 전체) 행을 돌려준다. 서버 필터에서는 그게 정직한 값이지만 **문구가 전체 결과를 뜻하는 것처럼 읽힌다** — 불러온 쪽 기준임이 드러나게 문구를 고치거나, 총합을 쓰도록 바꾼다. 컴포넌트 안의 `pagination` `useState`(`pageSize: 10`)를 지우고 페이지·정렬·필터 상태를 **URL 에서 받는다**. 행 선택과 열 표시/숨김은 TanStack 에 남긴다.
 
 **dnd-kit 드래그 정렬은 손대지 않는다**(스펙 3.4.2). 서버에 순서가 없어 지속되지 않지만, 나중에 백엔드가 순서를 갖추면 배선만 하면 된다.
 
@@ -1475,7 +1524,7 @@ export default async function ExamplesPage({
 }) {
   const resource = resourceByType('examples')!
   const document = await request(
-    listRequest(
+    ...listRequest(
       resource,
       toSearchParams(await searchParams),
       (await headers()).get('accept-language'),
@@ -1533,7 +1582,7 @@ in the family's repo."
 
 **Interfaces:**
 - Consumes: Task 6 의 `RESOURCES`, Task 2 의 `lib/jsonapi`
-- Produces: `countRequest(resource)` · `readTotal(document): number`
+- Produces: `countRequest(resource): [path: string, options: RequestOptions]` (Task 8 의 `listRequest` 와 같은 튜플 모양) · `readTotal(document): number`
 
 - [ ] **Step 1: 총합의 계약을 확인한다 — 이미 실측돼 있다**
 
@@ -1556,13 +1605,18 @@ const EXAMPLES = resourceByType('examples')!
 
 describe('자원 카운트', () => {
   it('한 건만 받고 총합을 켜서 받는다', () => {
-    const query = countRequest(EXAMPLES).query
-    expect(query['page[size]']).toBe('1')
-    expect(query['page[totals]']).toBe('true')
+    const [, options] = countRequest(EXAMPLES)
+    expect(options.query?.get('page[size]')).toBe('1')
+    expect(options.query?.get('page[totals]')).toBe('true')
   })
 
   it('include 를 싣지 않는다', () => {
-    expect(countRequest(EXAMPLES).query.include).toBeUndefined()
+    const [, options] = countRequest(EXAMPLES)
+    expect(options.query?.get('include')).toBeNull()
+  })
+
+  it('경로는 그 자원의 것이다', () => {
+    expect(countRequest(EXAMPLES)[0]).toBe(EXAMPLES.path)
   })
 
   it('meta.totalCount 를 읽는다', () => {
