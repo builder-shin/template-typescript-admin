@@ -1,7 +1,8 @@
 'use client'
 
 import { logoutAction } from '@/app/(auth)/actions'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import type { Operator } from '@/app/(admin)/operator'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,15 +26,16 @@ import {
   LogOutIcon,
 } from 'lucide-react'
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}) {
+/**
+ * `operator`가 `null`인 두 경우 - 서버 조회 자체가 실패했거나(`layout.tsx`가
+ * `operatorFromResult`로 이미 접어 둔다), 계약이 이메일마저 안 준 경우
+ * (`app/(admin)/operator.ts`의 `operatorFromDocument`). 어느 쪽이든 이 파일은
+ * 그 자리를 비운다 - "알 수 없는 사용자" 같은 문구를 만들지 않는다. 아바타는
+ * `avatars/shadcn.jpg`처럼 존재하지 않는 경로를 가리키지 않도록 이미지 자체를
+ * 없애고 일반 아이콘 하나만 그린다(Task 15, `docs/superpowers/plans/
+ * 2026-09-12-admin-template.md`의 "사이드바가 실재하는 것만 말하게 한다").
+ */
+export function NavUser({ operator }: { operator: Operator | null }) {
   const { isMobile } = useSidebar()
   return (
     <SidebarMenu>
@@ -43,12 +45,12 @@ export function NavUser({
             render={<SidebarMenuButton size="lg" className="aria-expanded:bg-muted" />}
           >
             <Avatar className="size-8 rounded-lg grayscale">
-              <AvatarImage src={user.avatar} alt={user.name} />
-              <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+              <AvatarFallback className="rounded-lg">
+                <CircleUserRoundIcon className="size-4" />
+              </AvatarFallback>
             </Avatar>
             <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-medium">{user.name}</span>
-              <span className="truncate text-xs text-foreground/70">{user.email}</span>
+              {operator !== null && <span className="truncate font-medium">{operator.email}</span>}
             </div>
             <EllipsisVerticalIcon className="ml-auto size-4" />
           </DropdownMenuTrigger>
@@ -62,12 +64,14 @@ export function NavUser({
               <DropdownMenuLabel className="p-0 font-normal">
                 <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                   <Avatar className="size-8">
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                    <AvatarFallback className="rounded-lg">
+                      <CircleUserRoundIcon className="size-4" />
+                    </AvatarFallback>
                   </Avatar>
                   <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+                    {operator !== null && (
+                      <span className="truncate font-medium">{operator.email}</span>
+                    )}
                   </div>
                 </div>
               </DropdownMenuLabel>
@@ -89,11 +93,11 @@ export function NavUser({
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             {/*
-              나머지 항목(Account·Billing·Notifications)과 이 메뉴의 가짜
-              사용자 데이터(`app-sidebar.tsx` 의 "shadcn"·"m@example.com"·
-              "Acme Inc.")는 shadcn 대시보드 블록이 남긴 장식이고, 이 항목만
-              실제로 존재하는 기능(로그아웃)에 대응한다 - 나머지를 실재하게
-              만드는 것은 이 태스크의 범위 밖이다.
+              나머지 항목(Account·Billing·Notifications)은 shadcn 대시보드
+              블록이 남긴 장식이고 실제 기능이 없다 - 이 항목만 실제로
+              존재하는 기능(로그아웃)에 대응한다. 나머지를 실재하게 만들거나
+              지우는 것은 Task 15(사이드바 정리)의 Step 1 표에도 없던 별개
+              항목이라 그대로 남긴다 - 지우는 판단은 이 저장소의 남은 과제다.
 
               `logoutAction`(app/(auth)/actions.ts)을 직접 호출한다 -
               `<form action>` 이 아니라 이 파일의 다른 예(resource-grid.tsx 의

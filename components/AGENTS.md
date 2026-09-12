@@ -15,9 +15,19 @@
 | `components/form/`    | 화면 공용 폼 UI(제출 버튼·필드 오류·폼 배너) - 자원을 모른다                                                                                   |
 | 그 밖의 최상위 `.tsx` | `dashboard-01` 블록이 들여온 대시보드·사이드바 부품(`section-cards`·`site-header`·`chart-area-interactive`·`app-sidebar`·`nav-*`·`data-table`) |
 
-**사이드바 부품(`app-sidebar.tsx`·`nav-main.tsx`·`nav-documents.tsx`·`nav-secondary.tsx`·`nav-user.tsx`)의
-현재 구성(항목·가짜 운영자 정보)은 여기 적지 않는다** - 곧 다른 과업이 그
-구성을 바꾼다. 여기서 다루는 것은 그 파일들이 아니라 아래 두 규칙이다.
+**사이드바 부품 다섯 중 셋만 호출된다**(Task 15, 실측 2026-09-12) - `app-sidebar.tsx`
+는 `nav-main.tsx`·`nav-user.tsx`만 부른다. `nav-documents.tsx`·`nav-secondary.tsx`는
+블록이 들여온 항목(Data Library·Reports·Word Assistant, Settings·Get Help·Search)
+전부가 `url: '#'`이고 이 저장소에 대응하는 화면이 없어 **더 이상 호출되지
+않는다** - 파일 자체는 블록의 일부로 남겼다. 빈 섹션 제목만 남기지 않는다는
+판단이다 - 빈 섹션은 "곧 생긴다"고 약속하는 것이고 이 템플릿은 약속하지 않는다.
+
+**운영자 정보는 화면이 직접 `fetch`하지 않고 prop으로 내려온다** - `app/`에서
+`fetch`를 직접 부르면 위반이라는 위 계층 소유권 규칙이 여기도 그대로
+적용된다. `app/(admin)/layout.tsx`가 `/api/v1/users/me`를 조회해 `AppSidebar`에
+`operator: { email: string } | null`을 내려주고, `NavUser`는 그 값이
+`null`이면(조회 실패·계약 위반 - `user` 모델에 `name`이 없다) 그 영역을
+비운다 - 대체 문구를 만들지 않는다(`app/(admin)/operator.ts`).
 
 ## 자원 이름으로 분기하지 않는다
 
@@ -62,6 +72,8 @@ add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아�
 
 `components/grid/`의 순수 헬퍼(`format.ts`)는 `test/unit/`이 지킨다. 선택·
 일괄 작업·폼 참여 같은 실제 DOM 동작은 `test/e2e/`만 지킨다(이 저장소에는
-DOM 테스트 하네스가 없다). 최종 검증은 `./scripts/check.sh`다.
+DOM 테스트 하네스가 없다). 운영자 조회(`app/(admin)/operator.ts`)는
+`test/unit/components/sidebar.test.ts`가 지킨다. 최종 검증은
+`./scripts/check.sh`다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
