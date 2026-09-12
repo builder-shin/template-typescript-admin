@@ -145,8 +145,8 @@ export function hasFilterParams(params: URLSearchParams): boolean {
  * "필터 지우기" 가 이것을 쓴다. 그 컨트롤은 필터 바가 그릴 수 있는 것만이
  * 아니라 **URL 에 있는 필터 전부**를 지워야 한다 - 바가 표현하지 못하는 필터를
  * 남기면 사용자가 지우기를 눌러도 조건이 남고, 그것을 없앨 컨트롤이 화면에
- * 하나도 없다. `filterQuery`(다음 조건으로 이동)와는 판정이 다르다 - 그쪽은
- * 바가 **소유한** 이름만 다시 쓰고 나머지는 그대로 옮긴다.
+ * 하나도 없다. 바가 **소유한** 이름만 다시 쓰고 나머지는 그대로 옮기는
+ * 경로와는 판정이 다르다.
  */
 export function isFilterParameter(name: string): boolean {
   return FILTER_PATTERN.test(name)
