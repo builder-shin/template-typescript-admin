@@ -20,12 +20,28 @@ import { Button } from '@/components/ui/button'
  *
  * `useFormStatus` 는 **자신을 감싼 form 의** 상태를 읽으므로 이 컴포넌트가
  * form 밖에 있으면 항상 `pending: false` 다 - 반드시 form 안에 둔다.
+ *
+ * `variant` 의 기본값은 `'default'` 다 - 기존 호출부(`CredentialsForm` 등)는
+ * 이 prop 을 몰라도 그대로 동작한다. 삭제처럼 파괴적인 제출에는
+ * `variant="destructive"` 를 넘겨 다른 제출과 시각적으로 구별한다.
  */
-export function SubmitButton({ label }: { label: string }) {
+export function SubmitButton({
+  label,
+  variant = 'default',
+}: {
+  label: string
+  variant?: 'default' | 'destructive'
+}) {
   const { pending } = useFormStatus()
 
   return (
-    <Button type="submit" className="w-full" disabled={pending} aria-label={label}>
+    <Button
+      type="submit"
+      variant={variant}
+      className="w-full"
+      disabled={pending}
+      aria-label={label}
+    >
       {pending ? <Loader2 className="animate-spin" /> : label}
     </Button>
   )

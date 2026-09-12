@@ -89,6 +89,15 @@ describe('placeError', () => {
     // 테스트도 구별하지 못했다.
     expect(placeError({ source: { pointer: '/data/meta/nested' } })).toEqual({ kind: 'document' })
   })
+
+  it.each(['/data/id', '/data/type', '/data/relationships'])(
+    '%s 는 문서 오류다 - 백엔드가 실제로 내는 pointer 다',
+    (pointer) => {
+      // 실측: document_parsing·crud_actions 가 이 셋을 낸다. 네 번째
+      // 세그먼트가 없으므로 붙일 필드가 없고, 배너로 가야 한다.
+      expect(placeError({ source: { pointer } })).toEqual({ kind: 'document' })
+    },
+  )
 })
 
 describe('actionForErrors', () => {
