@@ -2028,7 +2028,7 @@ UI."
 
 **Files:**
 - Create: `components/grid/selection-bar.tsx`, `components/grid/bulk-confirm.tsx`, `components/grid/bulk-result.tsx`
-- Modify: `app/(admin)/examples/actions.ts`, `components/grid/resource-grid.tsx`, **`app/(admin)/examples/[id]/page.tsx`** — Task 10 이 남긴 확인 없는 단건 삭제가 거기 있다(Step 4)
+- Modify: `app/(admin)/examples/actions.ts`, `components/grid/resource-grid.tsx`, `app/(admin)/examples/page.tsx`(그리드를 그리는 화면 - 일괄 Action 을 여기서 넘긴다), **`app/(admin)/examples/[id]/page.tsx`** — Task 10 이 남긴 확인 없는 단건 삭제가 거기 있다(Step 4)
 - Test: `test/unit/components/bulk-result.test.ts`
 
 **Interfaces:**
@@ -2220,7 +2220,7 @@ MSG
 - Create: `docker-compose.e2e.yml`, `Dockerfile`, `.dockerignore`, `playwright.config.ts`
 - Create: `test/e2e/{stack.ts,matrix.ts,fixtures.ts,probe-email.ts}`, `test/e2e/seed/{examples.sql,examples.rails.sql,README.md}`
 - Create: `test/e2e/{auth.spec.ts,examples.spec.ts,bulk.spec.ts}`
-- Modify: `scripts/check.sh`, `package.json`
+- Modify: `scripts/check.sh`, `package.json`, `.prettierignore`, `eslint.config.mjs`
 - Test: `test/unit/e2e/matrix.test.ts`, `test/unit/e2e/probe-email.test.ts`
 
 **Interfaces:**
@@ -2401,6 +2401,18 @@ Task 8 이 소스 텍스트로만 지킨 것을 여기서 동작으로 잡는다
 - [ ] **Step 10: 알려진 차이 보고를 만든다**
 
 `reportKnownDivergences()` 가 **매 실행 건수를 출력**한다 — 0 건이어도 출력한다. **침묵은 "안 돌았다"와 구별되지 않는다.** 다음 드리프트를 `test.fail(조건, 이유)` 로 어떻게 무는지를 `matrix.ts` 의 주석에 남긴다: 드리프트가 그대로면 CI 는 초록이고, 백엔드가 고쳐져 테스트가 실제로 통과해 버리면 그 자리에서 죽는다.
+
+**게이트 무시 목록을 먼저 넓혀라 - 나중에 하면 자기 마지막 Step 에서 터진다.** Playwright 는 실행마다 `playwright-report/`(HTML 리포터, 생성된 JS 포함)와 `test-results/` 를 쓴다. `.gitignore` 는 이미 둘을 덮고 있지만(9-10행) 게이트 세 단계가 각기 다른 목록을 본다 - 실측(2026-09-12):
+
+| 단계 | 무엇을 보나 | playwright 산출물 |
+| --- | --- | --- |
+| `[2/9] lint` = `eslint .` | `eslint.config.mjs` 의 `ignores`(현재 `.next/**` · `node_modules/**` · `next-env.d.ts` 뿐) | **걸린다.** `recommendedTypeChecked` 라 tsconfig 프로젝트 밖 JS 는 경성 오류다 |
+| `[3/9] format` = `prettier --check .` | `.prettierignore`(현재 0건) | **걸린다** |
+| `[4/9] secretlint` | `--secretlintignore .gitignore` | 안 걸린다 - gitignore 를 읽는다 |
+
+`.prettierignore` 가 `.superpowers/` 에 대해 이미 같은 이유를 적어 뒀다 - "자신의 .gitignore 로 커밋에서는 빠지지만, prettier --check 는 gitignore 를 읽지 않아 작업 트리에 있으면 그대로 걸린다." 두 디렉터리에 글자 그대로 같은 문장이 적용된다.
+
+**증상이 늦게 온다.** 두 디렉터리는 첫 E2E 실행 전에는 존재하지 않으므로, 넓히지 않으면 Step 13 의 `./scripts/check.sh` 에서 **자기가 쓰지도 않은 생성 파일** 때문에 처음 터진다 - 가장 큰 과업의 맨 끝에서.
 
 - [ ] **Step 11: 게이트를 아홉 단계로 완성한다**
 
