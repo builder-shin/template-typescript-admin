@@ -179,11 +179,24 @@ test.describe('가입(프로비저닝) · 로그인 · 로그아웃', () => {
 
     // POST_LOGOUT_PATH(logout.ts)는 '/' 이지만 그 경로도 보호 대상이라
     // (proxy.ts, `/login` 만 예외) 세션이 사라진 채로 다시 그 경로에 닿으면
-    // 곧장 로그인으로 되돌아온다 - 로그아웃이 실제로 세션을 지웠다는 증거다.
+    // 곧장 로그인으로 되돌아온다 - 그래도 이 한 줄은 "URL 이 /login 이 됐다"
+    // 이상을 증명하지 않는다(예: logoutAction 자체가 그냥 /login 으로
+    // 보내도 같은 URL 이 된다). 실제로 세션이 사라졌다는 증거는 쿠키가
+    // 비었다는 것과, 아래에서 **별도로** 보호 경로를 다시 찔러 보는 것 -
+    // 브라우저 쿠키가 아니라 서버가 그 요청에서 세션을 인정하지 않는다는
+    // 것까지 확인한다.
     await expect(page).toHaveURL(/\/login(\?|$)/)
     expect(await sessionCookies(context), '로그아웃 뒤 세션 쿠키 둘 다 남지 않아야 한다').toEqual(
       [],
     )
+
+    // 별도의, 명시적인 재확인 - 로그아웃과 무관한 보호 경로(`/examples`)를
+    // 새로 찔러 서버가 이 세션을 더 이상 인정하지 않는지 직접 본다. 쿠키가
+    // 실제로는 남아 있는데 우연히 /login 에 서 있었을 뿐인 경우를 이
+    // 단언이 잡는다 - 세션이 살아 있었다면 이 이동은 /examples 에 그대로
+    // 머물렀을 것이다.
+    await page.goto('/examples')
+    await expect(page).toHaveURL(/\/login\?next=%2Fexamples/)
   })
 
   test('보호 경로에서 막힌 뒤 로그인하면 원래 경로(쿼리 포함)로 돌아온다', async ({ page }) => {
