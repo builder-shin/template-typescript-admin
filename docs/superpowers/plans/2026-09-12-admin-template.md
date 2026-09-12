@@ -2426,9 +2426,12 @@ having run."
 ### Task 14: 문서와 3-백엔드 CI 매트릭스
 
 **Files:**
-- Create: `AGENTS.md`, `README.md`
-- Create: `app/AGENTS.md`, `components/AGENTS.md`, `lib/AGENTS.md`, `test/AGENTS.md`, `scripts/AGENTS.md`, `docs/AGENTS.md`, `.github/AGENTS.md`
+- **Modify**: `AGENTS.md` — **이미 있다.** `next dev` 가 만든 9행짜리 `<!-- BEGIN:nextjs-agent-rules -->` ~ `<!-- END:nextjs-agent-rules -->` 블록이 전부다(실측 2026-09-12; 마커 이름은 `node_modules/next/dist/server/lib/generate-agent-files.js` 와 일치). 계층 계약은 그 블록 **위에** 쓰고 블록은 파일 끝에 그대로 남긴다 — Step 0 참고
+- Create: `README.md`
+- Create: `app/AGENTS.md`, `components/AGENTS.md`, `hooks/AGENTS.md`, `lib/AGENTS.md`, `test/AGENTS.md`, `scripts/AGENTS.md`, `docs/AGENTS.md`, `.github/AGENTS.md`
 - Create: `.github/workflows/ci.yml`
+
+**이미 있는 `AGENTS.md` 를 다시 만들지 마라.** 실측(2026-09-12)으로 존재하는 것: 루트 · `lib/auth/` · `lib/config/` · `lib/grid/` · `lib/jsonapi/` · `lib/resources/` · `test/fixtures/` · `test/unit/auth/` · `test/unit/config/` · `test/unit/jsonapi/`. 앞 과업들이 만든 것이고 그 계약은 이미 유효하다 — 낡은 서술이 있으면 고치되, 새로 쓰지는 마라. `lib/bulk/AGENTS.md` 는 Task 11 이 만든다.
 
 **Interfaces:**
 - Consumes: 앞의 모든 과업
@@ -2473,7 +2476,8 @@ having run."
 
 | 경로 | 소유하는 로컬 계약 |
 | --- | --- |
-| `lib/jsonapi/AGENTS.md` | "자원을 모른다" 규칙과 그 위반의 정의 |
+| `lib/AGENTS.md` | 네 하위 디렉터리의 **의존 방향** — 누가 누구를 import 할 수 있는가. 이 저장소에서 실제로 틀린 자리가 두 번 여기였다(`lib/resources/` 가 `lib/jsonapi/` 를 값으로 소비, 오류 문서 파서를 `lib/resources/` 에 두려 함) |
+| `lib/jsonapi/AGENTS.md` | "자원을 모른다" 규칙과 그 위반의 정의 (Task 2 가 만들었고 Task 9 가 갱신했다) |
 | `lib/resources/AGENTS.md` | "선언은 데이터다" 규칙과 새 자원을 더하는 절차 (Task 6 이 만들었다) |
 | `lib/grid/AGENTS.md` | URL ↔ 질의 경계, 커서를 해석하지 않는 이유 (Task 7 이 만들었다) |
 | `lib/bulk/AGENTS.md` | 벌크 엔드포인트가 없다는 사실이 정하는 것 셋 (Task 11 이 만들었다) |
