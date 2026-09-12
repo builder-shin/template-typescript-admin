@@ -67,11 +67,18 @@ import {
  * `hide` 로 URL 에 남아 lib/grid/state.ts 가 이미 왕복시키는 값을 그대로
  * 쓴다(질의에는 영향이 없다 - lib/grid/AGENTS.md). rowSelection 만 로컬이다 -
  * 화면 선택은 URL 에도 백엔드 질의에도 나타나지 않는다.
+ *
+ * `extractCell`·`buildRows`·`readRowCount`·`pageHref`·`sortingStateFromToken`·
+ * `sortTokenFromState`(와 관련 타입)를 내보내는 것은 이 컴포넌트가 아니라
+ * `test/unit/grid/resource-grid.test.ts`를 위해서다 - 이 저장소에는 DOM 렌더
+ * 테스트 장비(`@testing-library/react` 등)가 없어 React 부분은 검증할 수
+ * 없지만, 이 함수들은 순수 로직이라 직접 단위 테스트할 수 있고 그래야 한다
+ * (lib/grid/의 순수 변환과 같은 이유).
  */
 
-type GridCellValue = string | number | null | readonly string[]
+export type GridCellValue = string | number | null | readonly string[]
 
-interface GridRow {
+export interface GridRow {
   readonly id: string
   readonly cells: Readonly<Record<string, GridCellValue>>
 }
@@ -99,7 +106,7 @@ function relationshipLabel(target: ResourceObject | ResourceIdentifier): string 
  * 같으면(`category`·`tags`) relationships 를 먼저 본다 - attributes 에는
  * 관계 이름의 키가 애초에 없으므로 순서가 아니라 존재 여부로 갈린다.
  */
-function extractCell(
+export function extractCell(
   column: ColumnDef,
   object: ResourceObject,
   index: ResourceIndex,
@@ -115,7 +122,7 @@ function extractCell(
   return null
 }
 
-function buildRows(resource: ResourceDef, document: CollectionDocument): GridRow[] {
+export function buildRows(resource: ResourceDef, document: CollectionDocument): GridRow[] {
   const index = indexResources(document.included)
   return document.data.map((object) => ({
     id: object.id,
@@ -130,7 +137,7 @@ function buildRows(resource: ResourceDef, document: CollectionDocument): GridRow
  * lib/grid/query.ts). 없으면 조용히 0 을 그리지 않고 던진다 - 표가 전체
  * 쪽 수를 모르는 채로 "0건"을 그리면 있는 데이터를 없다고 말하는 것이다.
  */
-function readRowCount(document: CollectionDocument): number {
+export function readRowCount(document: CollectionDocument): number {
   const total = document.meta?.totalCount
   if (typeof total !== 'number') {
     throw new Error(
@@ -229,7 +236,7 @@ const PAGE_POSITION_PATTERN = /^page\[(number|after|before)\]$/
  * 커서 자체는 해석하지 않는다(lib/grid/AGENTS.md 와 같은 원칙) - page 위치
  * 키만 갈아 끼우고 필터·정렬·pageSize 는 지금 URL 그대로 둔다.
  */
-function pageHref(
+export function pageHref(
   pathname: string,
   current: URLSearchParams,
   link: string | null | undefined,
@@ -247,12 +254,12 @@ function pageHref(
   return query === '' ? pathname : `${pathname}?${query}`
 }
 
-function sortingStateFromToken(sort: string | null): SortingState {
+export function sortingStateFromToken(sort: string | null): SortingState {
   if (sort === null) return []
   return [{ id: sort.startsWith('-') ? sort.slice(1) : sort, desc: sort.startsWith('-') }]
 }
 
-function sortTokenFromState(sorting: SortingState): string | null {
+export function sortTokenFromState(sorting: SortingState): string | null {
   const [first] = sorting
   if (first === undefined) return null
   return first.desc ? `-${first.id}` : first.id
