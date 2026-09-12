@@ -420,10 +420,9 @@ const LINK_PARSE_ORIGIN = 'http://links.invalid'
  * **두 방향의 소비자가 이 함수 하나를 공유한다** - 백엔드 링크를 이 화면의
  * 주소로 바꾸는 쪽과, 백엔드 링크를 다음 백엔드 요청으로 바꾸는 쪽(커서
  * 순회)은 방향이 반대이지만 "링크 문자열에서 쿼리만 뽑는다"는 판단은
- * 하나다. `resourcePath`(`lib/resources/define.ts`)의 주석과 같은 이유로
- * 한 자리에 모았다 - 조립 규칙이 두 곳에 흩어지면 한쪽만 고치는 사고가 난다.
- * 커서 값 자체는 이 함수도 해석하지 않는다 - `URLSearchParams`가
- * 쥐는 것은 여전히 opaque 문자열이다.
+ * 하나다. 조립과 해석의 규칙이 두 곳에 흩어지면 한쪽만 고치는 사고가
+ * 나기 때문에 한 자리에 모았다. 커서 값 자체는 이 함수도 해석하지 않는다
+ * - `URLSearchParams`가 쥐는 것은 여전히 opaque 문자열이다.
  */
 export function linkQuery(link: string): URLSearchParams | null {
   try {
