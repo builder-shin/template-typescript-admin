@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   closestCenter,
   DndContext,
@@ -24,9 +25,6 @@ import {
   columnFilteringFeature,
   columnVisibilityFeature,
   createColumnHelper,
-  createFilteredRowModel,
-  createPaginatedRowModel,
-  createSortedRowModel,
   FlexRender,
   rowPaginationFeature,
   rowSelectionFeature,
@@ -35,6 +33,7 @@ import {
   useTable,
   type ColumnFiltersState,
   type ColumnVisibilityState,
+  type PaginationState,
   type Row,
   type SortingState,
 } from '@tanstack/react-table'
@@ -43,6 +42,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { useIsMobile } from '@/hooks/use-mobile'
+import { serverDrivenTableOptions } from '@/lib/grid/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -107,15 +107,19 @@ import {
 
 // New in v9: declare the features this table uses — anything you don't
 // register is tree-shaken out of the bundle.
+//
+// 서버 구동: 행 모델 세 줄(filteredRowModel · paginatedRowModel ·
+// sortedRowModel)을 등록하지 않는다 - 정렬·필터·페이지는 백엔드가 계산해서
+// 이미 잘린 한 쪽만 이 표로 들어온다. feature 다섯은 그대로 남긴다 - v9 에서
+// feature 는 "이 표가 그 기능을 쓴다"이고 행 모델은 "클라이언트가 그 계산을
+// 한다"라 서로 다른 질문이다. rowSortingFeature 를 함께 지우면 정렬 상태와
+// API 자체가 사라져 헤더의 정렬 컨트롤이 죽는다.
 const features = tableFeatures({
   columnFilteringFeature,
   columnVisibilityFeature,
   rowPaginationFeature,
   rowSelectionFeature,
   rowSortingFeature,
-  filteredRowModel: createFilteredRowModel(),
-  paginatedRowModel: createPaginatedRowModel(),
-  sortedRowModel: createSortedRowModel(),
 })
 
 const columnHelper = createColumnHelper<typeof features, z.infer<typeof schema>>()
@@ -342,16 +346,87 @@ function DraggableRow({ row }: { row: Row<typeof features, z.infer<typeof schema
     </TableRow>
   )
 }
-export function DataTable({ data: initialData }: { data: z.infer<typeof schema>[] }) {
+
+// 이 표는 특정 자원(ResourceDef)을 모르는 블록 자체의 데모 컴포넌트라
+// lib/grid 의 URL 어휘를 그대로 쓰지 않는다 - 이 파일만의 작은 왕복 규칙을
+// 둔다. sort 토큰 표기(`-field`)만 lib/grid 와 맞춘다(서로 다른 관례를 만들
+// 이유가 없다).
+const SORT_PARAM = 'sort'
+const FILTER_PARAM_PREFIX = 'filter_'
+const PAGE_PARAM = 'page'
+const PAGE_SIZE_PARAM = 'pageSize'
+const DEFAULT_PAGE_SIZE = 10
+
+function sortingFromParams(params: URLSearchParams): SortingState {
+  const raw = params.get(SORT_PARAM)
+  if (raw === null || raw === '') return []
+  return raw.split(',').map((token) => ({
+    id: token.startsWith('-') ? token.slice(1) : token,
+    desc: token.startsWith('-'),
+  }))
+}
+
+function sortingToToken(sorting: SortingState): string | null {
+  if (sorting.length === 0) return null
+  return sorting.map((entry) => (entry.desc ? `-${entry.id}` : entry.id)).join(',')
+}
+
+function columnFiltersFromParams(params: URLSearchParams): ColumnFiltersState {
+  const filters: ColumnFiltersState = []
+  for (const [key, value] of params.entries()) {
+    if (key.startsWith(FILTER_PARAM_PREFIX))
+      filters.push({ id: key.slice(FILTER_PARAM_PREFIX.length), value })
+  }
+  return filters
+}
+
+/** 없거나 정수가 아니거나 1 미만인 `page`/`pageSize` 는 첫 쪽·기본 쪽 크기로 접는다. */
+function paginationFromParams(params: URLSearchParams): PaginationState {
+  const rawPageSize = Number(params.get(PAGE_SIZE_PARAM))
+  const pageSize =
+    Number.isInteger(rawPageSize) && rawPageSize > 0 ? rawPageSize : DEFAULT_PAGE_SIZE
+  const rawPage = Number(params.get(PAGE_PARAM))
+  const pageIndex = Number.isInteger(rawPage) && rawPage > 0 ? rawPage - 1 : 0
+  return { pageIndex, pageSize }
+}
+
+/**
+ * `useSearchParams()` 를 쓰는 컴포넌트는 Suspense 경계 안에 있어야 빌드가
+ * 정적 셸을 만들 수 있다(Next 규약) - 호출부가 그 경계를 잊지 않도록 여기서
+ * 감싼다. 안쪽 `DataTableInner` 가 실제 몸통이다.
+ *
+ * **`data` 는 이미 그 쪽 한 장만 담고 있어야 한다.** `paginatedRowModel` 을
+ * 등록하지 않으므로 이 컴포넌트는 더 이상 `data` 를 잘라 보여주지 않는다 -
+ * 표가 전체 쪽 수를 아는 데는 `rowCount` 하나면 충분하지만, 실제로 보여줄
+ * 행을 그 쪽만큼 고르는 것은 호출자(서버)의 몫이다.
+ */
+export function DataTable(props: { data: z.infer<typeof schema>[]; rowCount: number }) {
+  return (
+    <React.Suspense fallback={null}>
+      <DataTableInner {...props} />
+    </React.Suspense>
+  )
+}
+
+function DataTableInner({
+  data: initialData,
+  rowCount,
+}: {
+  data: z.infer<typeof schema>[]
+  rowCount: number
+}) {
   const [data, setData] = React.useState(() => initialData)
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({})
-  const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
-  const [sorting, setSorting] = React.useState<SortingState>([])
-  const [pagination, setPagination] = React.useState({
-    pageIndex: 0,
-    pageSize: 10,
-  })
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+  // sorting · columnFilters · pagination 은 이제 URL 이 정본이다 - 로컬
+  // useState 로 거울 상태를 만들지 않는다(두 원본이 어긋날 자리가 생긴다).
+  // 매 렌더마다 현재 URL 에서 다시 읽는다.
+  const sorting = sortingFromParams(searchParams)
+  const columnFilters = columnFiltersFromParams(searchParams)
+  const pagination = paginationFromParams(searchParams)
   const sortableId = React.useId()
   const sensors = useSensors(
     useSensor(MouseSensor, {}),
@@ -359,6 +434,15 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof schema>[
     useSensor(KeyboardSensor, {}),
   )
   const dataIds = React.useMemo<UniqueIdentifier[]>(() => data?.map(({ id }) => id) || [], [data])
+
+  /** 현재 URL 파라미터를 복제해 고치고 그 결과로 옮겨간다(스크롤 위치는 유지). */
+  function navigate(mutate: (params: URLSearchParams) => void) {
+    const params = new URLSearchParams(searchParams)
+    mutate(params)
+    const query = params.toString()
+    router.replace(query === '' ? pathname : `${pathname}?${query}`, { scroll: false })
+  }
+
   const table = useTable({
     features,
     data,
@@ -370,13 +454,41 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof schema>[
       columnFilters,
       pagination,
     },
+    ...serverDrivenTableOptions(rowCount),
     getRowId: (row) => row.id.toString(),
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
-    onPaginationChange: setPagination,
+    onSortingChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(sorting) : updater
+      navigate((params) => {
+        const token = sortingToToken(next)
+        if (token === null) params.delete(SORT_PARAM)
+        else params.set(SORT_PARAM, token)
+      })
+    },
+    onColumnFiltersChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(columnFilters) : updater
+      navigate((params) => {
+        for (const key of new Set(params.keys())) {
+          if (key.startsWith(FILTER_PARAM_PREFIX)) params.delete(key)
+        }
+        for (const filter of next) {
+          if (typeof filter.value === 'string' && filter.value !== '') {
+            params.set(`${FILTER_PARAM_PREFIX}${filter.id}`, filter.value)
+          }
+        }
+      })
+    },
+    onPaginationChange: (updater) => {
+      const next = typeof updater === 'function' ? updater(pagination) : updater
+      navigate((params) => {
+        if (next.pageIndex === 0) params.delete(PAGE_PARAM)
+        else params.set(PAGE_PARAM, String(next.pageIndex + 1))
+        if (next.pageSize === DEFAULT_PAGE_SIZE) params.delete(PAGE_SIZE_PARAM)
+        else params.set(PAGE_SIZE_PARAM, String(next.pageSize))
+      })
+    },
   })
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -502,8 +614,15 @@ export function DataTable({ data: initialData }: { data: z.infer<typeof schema>[
         </div>
         <div className="flex items-center justify-between px-4">
           <div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
-            {table.getFilteredSelectedRowModel().rows.length} of{' '}
-            {table.getFilteredRowModel().rows.length} row(s) selected.
+            {/*
+              filteredRowModel 을 등록하지 않으므로 getFilteredRowModel() 은
+              필터 이전, 즉 이 쪽에 불러온 행 전부를 돌려준다(서버 필터에서는
+              정직한 값이다). 그 값을 "row(s) selected" 라고만 적으면 전체
+              결과처럼 읽히므로 "on this page" 로 분모의 정체를 밝히고, 총
+              건수(rowCount)를 별도로 덧붙인다.
+            */}
+            {table.getFilteredSelectedRowModel().rows.length} of {table.getRowModel().rows.length}{' '}
+            row(s) on this page selected ({rowCount} total).
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
