@@ -445,6 +445,17 @@ services:
       # `getSettings().sessionCookieSecure` 를 실제로 읽는다는 계약을 이
       # 파일만 보고도 알 수 있게 한다.
       SESSION_COOKIE_SECURE: 'true'
+      # 정본은 여기 `TZ`(예: America/Denver)를 준다 - 자신의 `formatDateTime`
+      # 이 로컬 시각으로 그리는 결함을 잡기 위해서다. 이 저장소의
+      # `formatDateTime`(`components/grid/format.ts`)은 `Date` 객체도
+      # `Intl`도 쓰지 않는 순수 문자열 슬라이스(`value.split('T')`)라
+      # 컨테이너의 TZ 에 애초에 의존하지 않는다 - 그대로 옮겨 적으면
+      # examples 화면에서는 아무것도 지키지 못하는 죽은 설정이 된다.
+      # **저장소 전체가 로케일 의존 포맷팅에서 자유롭다는 뜻은 아니다** -
+      # `components/chart-area-interactive.tsx`(대시보드 데모 차트)는
+      # `new Date`·`toLocaleDateString('en-US')`를 쓴다. 다만 그 렌더는
+      # 클라이언트(`'use client'`)에서 일어나 브라우저의 로케일을 따르므로
+      # 이 컨테이너의 TZ 와는 애초에 무관하고, examples 화면과도 무관하다.
     ports:
       # 포트를 고정하지 않는다 - 개발 서버(`pnpm dev`)가 이미 3000 을 쓰고
       # 있으면 E2E 가 뜨지 못한다. 기본값 3000 은 사람이 손으로
