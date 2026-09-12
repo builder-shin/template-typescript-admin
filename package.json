@@ -16,9 +16,11 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "secretlint": "secretlint --secretlintignore .gitignore \"**/*\"",
     "check": "./scripts/check.sh",
-    "seed:operator": "node --experimental-strip-types scripts/seed-operator.ts"
+    "seed:operator": "node --experimental-strip-types scripts/seed-operator.ts",
+    "compose:verify": "docker compose --profile fastapi --profile nestjs --profile rails -f docker-compose.e2e.yml config --quiet"
   },
   "dependencies": {
     "@base-ui/react": "1.8.0",
@@ -41,6 +43,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@secretlint/secretlint-rule-preset-recommend": "13.0.5",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "24.13.3",

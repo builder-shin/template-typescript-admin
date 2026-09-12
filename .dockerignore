@@ -1,0 +1,19 @@
+node_modules
+.next
+.git
+.superpowers
+# 정본(template-typescript-nextjs)은 `docs`(디렉터리 통째로) 한 줄이다. 이
+# 저장소는 그대로 두면 이미지가 죽는다 - `next build`의 tsc 단계가 tsconfig
+# 의 `include`(`**/*.ts`)를 따라 `test/unit/scripts/check-provenance.test.ts`
+# 도 형식 검사하는데, 그 파일이 `../../../docs/provenance/copied-core.json`
+# 을 값으로 import 한다(실측: `docs`를 통째로 뺀 빌드 컨텍스트로 `docker build`
+# 하면 "Cannot find module '../../../docs/provenance/copied-core.json'"로
+# 타입 검사가 죽는다 - 정본에는 이 provenance 추적 파일이 없어 드러나지
+# 않았던 차이다). `docs/*` + `!docs/provenance`로 그 한 파일(8KB)만 컨텍스트에
+# 남기고 나머지 문서(계획·스펙 산문)는 그대로 뺀다.
+docs/*
+!docs/provenance
+coverage
+*.tsbuildinfo
+.env
+.env.local

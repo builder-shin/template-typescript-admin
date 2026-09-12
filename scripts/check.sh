@@ -9,3 +9,5 @@ echo "=== [5/9] 인용 ==="; ./scripts/check-citations.sh
 echo "=== [5b/9] 출처 ==="; ./scripts/check-provenance.sh
 echo "=== [6/9] unit ==="; pnpm test
 echo "=== [7/9] build ==="; pnpm build
+echo "=== [8/9] compose ==="; pnpm compose:verify
+echo "=== [9/9] e2e ==="; pnpm test:e2e

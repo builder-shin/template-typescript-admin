@@ -10,3 +10,10 @@ docs/
 # 커밋에서는 빠지지만, prettier --check 는 gitignore 를 읽지 않아 작업
 # 트리에 있으면 그대로 걸린다.
 .superpowers/
+
+# Playwright 산출물(HTML 리포터가 생성한 JS 포함 · 트레이스/스크린샷). 둘 다
+# .gitignore 가 이미 덮고 있지만(커밋에서는 빠진다) 같은 이유로 prettier
+# --check 는 gitignore 를 읽지 않는다 - 첫 E2E 실행 전에는 존재하지 않다가,
+# 한 번 돌고 나면 작업 트리에 생겨 그대로 걸린다.
+playwright-report/
+test-results/
