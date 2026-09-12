@@ -1,0 +1,1941 @@
+# TypeScript 어드민 템플릿 구현 계획
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 1.1 계약을 `BACKEND_URL` 하나로 소비하는 운영자용 어드민 템플릿을, shadcn `dashboard-01` 블록 위에 세운다.
+
+**Architecture:** 코어(`lib/jsonapi` · `lib/auth` · `lib/config` · `proxy.ts`)는 `template-typescript-nextjs`에서 **복사**해 독립시킨다. UI 셸과 부품은 shadcn 레지스트리에서 받는다. 출처가 둘이고 이유가 다르다. 정렬·필터·페이지는 백엔드가 소유하고 TanStack Table 은 불러온 쪽만 그린다. 일괄 작업은 벌크 엔드포인트가 없으므로 요청 N 회의 순차 실행이고 부분 실패가 1급 결과다.
+
+**Tech Stack:** Next.js 16.3.4 App Router · React 19.2.8 · TypeScript 6.0.3 (strict · `noUncheckedIndexedAccess` · `exactOptionalPropertyTypes`) · Tailwind 4.3.3 (CSS 우선, config 파일 없음) · shadcn 4.21.0 (`base-nova`) · @base-ui/react 1.8.0 · lucide-react 1.41.0 · @tanstack/react-table · vitest 5.0.0 · Playwright 1.63.0 · pnpm 11.22.0
+
+**Spec:** `docs/superpowers/specs/2026-09-12-admin-template-design.md`
+
+## Global Constraints
+
+- **필수 환경 변수에 코드상의 암묵적 기본값을 두지 않는다.** `BACKEND_URL` 이 없으면 `BACKEND_URL is required` 로 **시작에 실패**한다. (스펙 7.4)
+- **앱이 읽는 변수는 둘뿐이다** — `BACKEND_URL`, `SESSION_COOKIE_SECURE`(기본 `NODE_ENV === 'production'`, `true`/`false` 만). E2E 전용 다섯(`E2E_WEB_PORT`=3000 · `E2E_API_PORT`=4100 · `BACKEND_KIND`=fastapi · `E2E_KEEP_STACK` · `CI`)은 **앱이 하나도 모른다.** (스펙 7.4)
+- **로딩 상태에 텍스트를 쓰지 않는다.** 스켈레톤 또는 스피너(`Loader2`) 하나만 둔다. 열 수는 선언에서 가져오고 박지 않는다. (스펙 5.3)
+- **계층 위반의 정의** (스펙 4장): `lib/jsonapi/`·`lib/grid/`·`lib/bulk/` 에 이 저장소의 실제 자원 이름 문자열 리터럴이 **코드로** 나타나면 위반. `lib/resources/*.ts`·`lib/grid/*.ts`·`lib/bulk/*.ts` 에 JSX 가 있으면 위반. `app/` 에서 `fetch` 직접 호출은 위반. `components/grid/*` 에 자원 이름 분기는 위반.
+- **`lib/resources/index.ts` 의 `RESOURCES` 는 손으로 채운다.** 자동 탐색(glob · `import.meta.glob` · 동적 `import`)을 쓰면 계약이 사라진다. (스펙 4장)
+- **정렬·필터·페이지는 백엔드가 소유한다.** TanStack 은 `manualSorting`·`manualFiltering`·`manualPagination` 셋을 **함께** 켜고 돈다. (스펙 4.2)
+- **일괄 작업 상한은 50 건, 동시성 1(순차)이며 선언된 자리 하나에 있다.** 화면이 그 값을 읽어 누르기 전에 알린다. (스펙 6.2)
+- **오류 문구의 정본은 백엔드다.** 프론트엔드가 실패 이유 문장을 만들지 않는다. 요청 스코프의 모든 백엔드 호출이 그 요청의 `Accept-Language` 를 전달한다. (스펙 6.3)
+- **사라질 자리를 인용하지 않는다.** 계획 문서·세션 스크래치패드를 코드·문서 주석에서 인용하면 게이트 `[5/9]` 가 죽인다. 근거는 사실 문장으로 적는다.
+- **넣지 않는 것** (스펙 10장): 역할·권한 UI · 감사로그 · 사용자 관리 화면 · `/register` 화면 · 계약 실험실 `(lab)` · 제네릭 화면 생성기 · 일괄 작업 보상 트랜잭션 · 백엔드 어댑터 계층.
+- **커밋 메시지에 AI 관련 태그를 넣지 않는다.**
+
+## File Structure
+
+| 위치 | 책임 | 출처 |
+| --- | --- | --- |
+| `lib/config/settings.ts` | 환경 변수 해석의 정본, 필수 변수 시작 실패 | 복사 |
+| `lib/jsonapi/{client,document,errors,normalize,query}.ts` | 문서 파싱 · `included` 정규화 · 쿼리 직렬화 · 오류 분류 · HTTP 협상 | 복사 |
+| `lib/auth/{credentials,flow,form-state,guard,logout,rotation,session,tokens}.ts` | 쿠키 세션 · 만료 판정 · 토큰 회전 · 가드 | 복사 |
+| `proxy.ts` | 보호 경로 목록 · 경로 가드 · 토큰 회전 | 복사 후 목록 교체 |
+| `lib/resources/{define,example,category,tag,index}.ts` | 자원 타입 · 필터 · 정렬 · 폼 스키마 · 표시 라벨 | 신규 |
+| `lib/grid/{state,query}.ts` | URL ↔ JSON:API 질의 변환, URL 직렬화 | 신규 |
+| `lib/bulk/executor.ts` | 순차 실행 · 상한 · 부분 실패 집계 · 취소 | 신규 |
+| `components/ui/*` | shadcn 부품 | `shadcn add` |
+| `components/grid/*` | 선언을 읽는 획일 그리드 UI | 신규 |
+| `components/form/submit-button.tsx` | 제출 중 스피너 하나 | 신규 |
+| `app/(admin)/*` | 사이드바 셸 · 대시보드 · 자원 화면 | 블록 + 신규 |
+| `app/(auth)/login/*` | 로그인 | 신규 |
+| `scripts/{check.sh,check-citations.sh,check-provenance.sh,seed-operator.ts}` | 단일 게이트 · 인용 검사 · 출처 검사 · 첫 운영자 시드 | 신규 |
+| `docs/provenance/copied-core.json` | 복사 출처 커밋의 기계 검사 가능한 기록 | 신규 |
+| `test/unit/**` | 순수 함수 | 복사 + 신규 |
+| `test/e2e/**` | 실제 백엔드 브라우저 시나리오 | 신규 |
+
+---
+
+### Task 1: 앱 골격과 정적 게이트
+
+**Files:**
+- Create: `package.json`, `tsconfig.json`, `next.config.ts`, `postcss.config.mjs`, `eslint.config.mjs`, `.prettierrc`, `.prettierignore`, `.secretlintrc.json`, `.gitignore`, `.gitattributes`, `.npmrc`, `.env.example`
+- Create: `app/globals.css`, `app/layout.tsx`, `app/page.tsx`
+- Create: `scripts/check.sh`, `scripts/check-citations.sh`
+- Test: `test/unit/scripts/check-citations.test.ts`, `vitest.config.ts`
+
+**Interfaces:**
+- Consumes: 없음 (첫 과업)
+- Produces: `pnpm check` 게이트 진입점. `@/*` → 저장소 루트 별칭. `app/globals.css` 의 토큰 이름(`--background` · `--foreground` · `--primary` · `--secondary` · `--muted` · `--accent` · `--destructive` · `--border` · `--input` · `--ring` · `--radius` · `--sidebar*` · `--chart-1..5`)
+
+- [ ] **Step 1: pnpm 프로젝트를 만들고 의존성을 고정한다**
+
+`package.json` 을 만든다. 버전은 `template-typescript-nextjs@34d0b10` 과 **정확히 같게** 둔다 — 복사해 올 코어가 그 버전에서 컴파일되던 코드다.
+
+```json
+{
+  "name": "template-typescript-admin",
+  "private": true,
+  "packageManager": "pnpm@11.22.0",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "secretlint": "secretlint --secretlintignore .gitignore \"**/*\"",
+    "check": "./scripts/check.sh"
+  },
+  "dependencies": {
+    "@base-ui/react": "1.8.0",
+    "class-variance-authority": "0.7.1",
+    "cn": "0.2.5",
+    "lucide-react": "1.41.0",
+    "next": "16.3.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tw-animate-css": "1.4.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@secretlint/secretlint-rule-preset-recommend": "13.0.5",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "eslint": "10.10.0",
+    "eslint-config-prettier": "10.1.8",
+    "postcss": "8.5.28",
+    "prettier": "3.9.6",
+    "secretlint": "13.0.5",
+    "shadcn": "4.21.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.68.0",
+    "vitest": "5.0.0"
+  }
+}
+```
+
+`cn` 은 별칭이 아니라 **실제 npm 패키지**다(`import { cn } from 'cn'`). 빼면 복사해 온 부품과 `shadcn add` 가 쓴 부품이 함께 깨진다.
+
+- [ ] **Step 2: tsconfig 를 만든다**
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "ES2022"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
+    "allowJs": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
+}
+```
+
+`.next/types` 와 `.next/dev/types` 를 둘 다 include 하는 것이 의도다. 라우트 파일을 옮기거나 지운 뒤 `[1/9] typecheck` 가 `.next/…/types/validator.ts` 의 `TS2307` 로 죽으면 **`rm -rf .next`** 한다. `.next/dev` 만 지우면 안 된다 — `.next/types` 쪽 오염은 `pnpm build` 가 스스로 재생성해 넘어가므로 빌드만 돌려서는 보이지 않고 typecheck 에서만 드러난다.
+
+- [ ] **Step 3: 디자인 토큰을 `app/globals.css` 에 둔다**
+
+`template-typescript-nextjs` 의 `app/globals.css` 를 그대로 가져온다. Tailwind 4 는 CSS 우선 설정이라 `tailwind.config.js` 가 없고 이 파일이 설정의 자리다. 반드시 함께 오는 것 셋:
+
+1. `@custom-variant dark` 블록 — `.dark` 클래스가 없어도 `dark:` 유틸리티가 시스템 선호를 따르게 한다.
+2. `:root` 의 라이트 토큰과 `@media (prefers-color-scheme: dark) { :root:not(.light) }` 의 다크 토큰.
+3. `.dark {}` 블록 — 값이 2번과 **같아야 한다**. 팔레트를 바꾸면 두 곳을 함께 고친다.
+
+`--sidebar*` 토큰이 이미 들어 있고 nextjs 는 쓰지 않는다. **어드민이 그 토큰의 첫 소비자다** — shadcn `sidebar` 부품이 그것을 요구한다(스펙 3.4).
+
+- [ ] **Step 4: 루트 레이아웃을 만든다 — 화면 껍데기를 두지 않는다**
+
+```tsx
+import type { Metadata } from 'next'
+import './globals.css'
+import { Geist } from 'next/font/google'
+import { cn } from '@/lib/utils'
+
+const geist = Geist({ subsets: ['latin'], variable: '--font-sans' })
+
+export const metadata: Metadata = {
+  title: 'JSON:API 어드민 템플릿',
+  description: '세 백엔드 템플릿이 공유하는 JSON:API 1.1 계약을 운영자 관점에서 소비하는 어드민 템플릿',
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="ko" className={cn('font-sans', geist.variable)}>
+      <body>{children}</body>
+    </html>
+  )
+}
+```
+
+**세션 바·사이드바 같은 화면 껍데기를 여기 두지 마라.** 이 자리는 `(admin)` 과 `(auth)` 를 모두 덮는다. 세션에 따라 달라지는 것을 여기 두면 모든 라우트가 동적 렌더링이 되고, 로그인한 채 `/login` 을 열면 헤더 높이만큼 세로 스크롤이 생긴다(nextjs 가 실측해 이월한 결함).
+
+`lib/utils.ts` 를 함께 만든다(`cn` 재수출 한 줄).
+
+- [ ] **Step 5: 인용 검사를 만든다 — 게이트 `[5/9]`**
+
+```bash
+#!/usr/bin/env bash
+# 돌아올 수 없는 자리를 코드·문서 주석에서 인용하는 것을 막는다.
+#
+# 계획 문서와 세션 스크래치패드는 계획 종료·세션 종료와 함께 사라져 모든
+# 인용이 죽은 링크가 된다. 인용을 남긴 쪽은 그것이 죽는 것을 보지 못하고,
+# 몇 달 뒤 그 줄을 읽는 사람은 근거를 찾을 수 없다.
+#
+# 잡는 패턴 둘:
+#   1. 선행 점이 붙은 `.superpowers/`  — 장래의 하위 트리까지 덮는다
+#   2. 점 없이 쓰인 `superpowers/sdd`
+# `docs/superpowers/` 는 앞이 `/` 라 어느 쪽에도 걸리지 않는다 — 그 자리는
+# 커밋되므로 인용해도 된다.
+#
+# 종료 코드: 0 = 위반 없음, 1 = 위반 있음(위반 줄을 찍는다).
+# 예외 장치(--exclude · 허용 목록 · 무시 주석)는 하나도 두지 않는다.
+set -uo pipefail
+
+TARGETS=(app components lib test proxy.ts)
+PATTERN='(^|[^A-Za-z0-9_/-])\.superpowers/|(^|[^./A-Za-z0-9_-])superpowers/sdd'
+
+existing=()
+for target in "${TARGETS[@]}"; do
+  [ -e "$target" ] && existing+=("$target")
+done
+if [ ${#existing[@]} -eq 0 ]; then
+  echo "검사 대상이 아직 없다"
+  exit 0
+fi
+
+if grep -rInE "$PATTERN" "${existing[@]}"; then
+  echo
+  echo "위반: 사라질 자리를 인용했다. 근거는 사실 문장으로 적거나 docs/superpowers/ 를 가리켜라."
+  exit 1
+fi
+
+echo "인용 위반 0건"
+exit 0
+```
+
+`chmod +x scripts/check-citations.sh` 를 잊지 마라 — Step 10 이 권한을 박는다.
+
+- [ ] **Step 6: 인용 검사의 테스트를 쓴다 — 실패를 먼저 본다**
+
+검사 대상에 `test/` 가 들어 있어서 **이 테스트 파일 자신이 검사 대상이다.** 그래서 금지 인용을 리터럴로 적으면 `[5/9]` 가 이 파일을 죽인다. 픽스처 문자열을 **조각으로 이어붙인다** — 픽스처 몸통만이 아니라 **검사 이름 · 단언 · 주석까지 전부** 해당된다.
+
+```ts
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, writeFileSync, mkdirSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+const FORBIDDEN_DOT = '.' + 'superpowers/notes/x.md'
+const FORBIDDEN_BARE = 'superpowers' + '/sdd'
+const ALLOWED = 'docs/superpowers/specs/2026-09-12-admin-template-design.md'
+
+function runCheck(body: string): { code: number } {
+  const dir = mkdtempSync(join(tmpdir(), 'cit-'))
+  mkdirSync(join(dir, 'lib'))
+  writeFileSync(join(dir, 'lib', 'sample.ts'), body, 'utf8')
+  try {
+    execFileSync('bash', [join(process.cwd(), 'scripts/check-citations.sh')], { cwd: dir })
+    return { code: 0 }
+  } catch (error) {
+    return { code: (error as { status: number }).status }
+  }
+}
+
+describe('check-citations', () => {
+  it('돌아올 수 없는 자리를 가리키면 0 이 아닌 코드로 죽는다', () => {
+    expect(runCheck(`// ${FORBIDDEN_DOT}\n`).code).not.toBe(0)
+    expect(runCheck(`// ${FORBIDDEN_BARE}\n`).code).not.toBe(0)
+  })
+
+  it('커밋되는 자리를 가리키면 통과한다', () => {
+    expect(runCheck(`// ${ALLOWED}\n`).code).toBe(0)
+  })
+})
+```
+
+`ALLOWED` 는 **리터럴 그대로** 적는다 — 누가 패턴을 `superpowers` 전체로 넓히면 이 리터럴이 위반이 되어 게이트가 빨개진다. 그게 이 줄의 역할이다.
+
+- [ ] **Step 7: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/scripts/check-citations.test.ts`
+Expected: FAIL — `scripts/check-citations.sh` 가 없거나 아직 아무것도 잡지 않는다.
+
+- [ ] **Step 8: 검사를 구현해 테스트를 통과시킨다**
+
+Run: `pnpm vitest run test/unit/scripts/check-citations.test.ts`
+Expected: PASS (2 tests)
+
+- [ ] **Step 9: 단일 게이트를 만든다**
+
+`scripts/check.sh` 를 만든다. 이 시점에는 여섯 단계이고 `[8/9] compose`·`[9/9] e2e` 는 Task 13 이 붙인다.
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== [1/9] typecheck ==="; pnpm typecheck
+echo "=== [2/9] lint ==="; pnpm lint
+echo "=== [3/9] format ==="; pnpm format:check
+echo "=== [4/9] secretlint ==="; pnpm secretlint
+echo "=== [5/9] 인용 ==="; ./scripts/check-citations.sh
+echo "=== [6/9] unit ==="; pnpm test
+echo "=== [7/9] build ==="; pnpm build
+```
+
+**단계 순서에 근거가 있다** — 분 단위인 `[9/9]` 앞에 2초짜리 정적 검사를 두어, 오타 하나로 도커 스택을 띄우지 않는다. `[5/9]` 가 secretlint 바로 뒤인 것도 같은 규율이다(작업 트리를 훑는 grep 하나라 도구 체인도 빌드도 필요 없다).
+
+- [ ] **Step 10: 실행 권한을 박고 확인한다**
+
+```bash
+chmod +x scripts/check.sh scripts/check-citations.sh
+git update-index --chmod=+x scripts/check.sh scripts/check-citations.sh
+git ls-tree HEAD scripts/
+```
+
+Expected: 두 파일이 `100755`.
+
+**이 저장소를 포함해 `core.filemode=false` 인 개발 머신에서는 권한이 빠져도 `git status` 로 드러나지 않는다.** 권한이 죽으면 CI 의 게이트가 실행조차 안 된다.
+
+- [ ] **Step 11: 게이트를 돌려 초록을 확인한다**
+
+Run: `pnpm install --frozen-lockfile && ./scripts/check.sh`
+Expected: 일곱 단계 전부 통과.
+
+- [ ] **Step 12: 커밋**
+
+```bash
+git add -A
+git commit -m "feat: scaffold Next.js app and the single verification gate
+
+Pins every dependency to template-typescript-nextjs@34d0b10 so the core
+copied in the next task compiles against the versions it was written for.
+Gate step [5/9] enforces the no-dead-citation rule from the start: the
+family moved that rule into its gate after it failed three times in human
+memory, so the admin starts with it rather than repeating that."
+```
+
+---
+
+### Task 2: 코어 복사 1 — `lib/config` · `lib/jsonapi` 와 출처 기록
+
+**Files:**
+- Create: `lib/config/settings.ts`, `lib/config/AGENTS.md`
+- Create: `lib/jsonapi/{client,document,errors,normalize,query}.ts`, `lib/jsonapi/AGENTS.md`
+- Create: `docs/provenance/copied-core.json`, `scripts/check-provenance.sh`
+- Create: `.env.example`
+- Test: 복사해 온 `test/unit/jsonapi/*.test.ts`, `test/unit/config/*.test.ts`, `test/unit/scripts/check-provenance.test.ts`
+- Modify: `scripts/check.sh` (인용 단계 뒤에 출처 검사를 더한다)
+
+**Interfaces:**
+- Consumes: Task 1 의 `@/*` 별칭, `pnpm check`
+- Produces: `lib/config/settings.ts` 가 `BACKEND_URL`·`SESSION_COOKIE_SECURE` 해석의 정본. `lib/jsonapi/` 의 export 표면 — **Step 4 가 기록한 목록이 정본이고, 뒤 과업은 그 파일을 읽어 시그니처를 확인한다.**
+
+- [ ] **Step 1: 출처 커밋을 고정해 받아 온다**
+
+```bash
+git clone --depth 1 https://github.com/builder-shin/template-typescript-nextjs /tmp/ttn
+git -C /tmp/ttn rev-parse HEAD
+```
+
+Expected: `34d0b1057d65693645e75bec4e9558dcf6838822`. 다르면 **멈추고** 새 SHA 를 Step 3 의 기록과 커밋 메시지에 함께 반영한다 — 기록과 실물이 갈리면 3.3 의 감사 가능성이 사라진다.
+
+- [ ] **Step 2: 파일과 그 단위 테스트를 함께 복사한다**
+
+```bash
+cp -r /tmp/ttn/lib/config lib/config
+cp -r /tmp/ttn/lib/jsonapi lib/jsonapi
+mkdir -p test/unit/jsonapi test/unit/config
+cp -r /tmp/ttn/test/unit/jsonapi/. test/unit/jsonapi/
+cp /tmp/ttn/.env.example .env.example
+```
+
+**테스트를 빼고 코드만 가져오지 마라.** 이 코어의 가치는 938개 단위 테스트가 지켜 온 데서 나온다. `test/unit/config/` 가 원본에 없으면 만들지 않는다.
+
+- [ ] **Step 3: 출처를 기계가 읽을 수 있게 기록한다**
+
+`docs/provenance/copied-core.json`:
+
+```json
+{
+  "source": "https://github.com/builder-shin/template-typescript-nextjs",
+  "commit": "34d0b1057d65693645e75bec4e9558dcf6838822",
+  "copiedAt": "2026-09-12",
+  "paths": ["lib/config", "lib/jsonapi", "test/unit/jsonapi"],
+  "note": "복사본이다. 원본에서 계약 버그가 고쳐지면 이 커밋과 원본을 비교해 반영 여부를 판단한다."
+}
+```
+
+`paths` 는 Task 3 이 `lib/auth`·`proxy.ts`·그 테스트를 더한다.
+
+- [ ] **Step 4: export 표면을 기록에 박는다**
+
+```bash
+grep -hoE '^export (async )?(function|const|type|interface|class) [A-Za-z_][A-Za-z0-9_]*' \
+  lib/jsonapi/*.ts lib/config/*.ts | awk '{print $NF}' | sort -u
+```
+
+출력을 `docs/provenance/copied-core.json` 의 `exports` 배열에 넣는다. **뒤 과업은 이 목록으로 무엇이 있는지 알고, 시그니처는 해당 파일을 열어 확인한다.** 계획이 시그니처를 베껴 적으면 그 사본이 드리프트한다.
+
+- [ ] **Step 5: 출처 검사의 테스트를 쓴다**
+
+```ts
+import { execFileSync } from 'node:child_process'
+import { describe, expect, it } from 'vitest'
+import record from '../../../docs/provenance/copied-core.json'
+
+describe('copied-core provenance', () => {
+  it('40자 커밋 SHA 를 갖는다', () => {
+    expect(record.commit).toMatch(/^[0-9a-f]{40}$/)
+  })
+
+  it('기록된 경로가 전부 실재한다', () => {
+    expect(record.paths.length).toBeGreaterThan(0)
+    expect(() => execFileSync('bash', ['scripts/check-provenance.sh'])).not.toThrow()
+  })
+})
+```
+
+- [ ] **Step 6: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/scripts/check-provenance.test.ts`
+Expected: FAIL — `scripts/check-provenance.sh` 가 없다.
+
+- [ ] **Step 7: `scripts/check-provenance.sh` 를 구현한다**
+
+```bash
+#!/usr/bin/env bash
+# 복사해 온 코어의 출처 기록이 살아 있는지 확인한다.
+#
+# 출처가 적히지 않은 사본은 드리프트를 감사할 수 없다 — 몇 달 뒤 "이 버그가
+# 원본에서도 고쳐졌나"를 물을 수 있어야 한다. 기록을 사람의 기억에 두면
+# 다음 복사에서 갱신되지 않으므로 검사가 확인한다(스펙 3.3).
+#
+# 종료 코드: 0 = 기록이 유효, 1 = 없거나 깨졌거나 가리키는 경로가 사라졌다.
+set -uo pipefail
+
+RECORD=docs/provenance/copied-core.json
+
+if [ ! -f "$RECORD" ]; then
+  echo "위반: $RECORD 가 없다. 복사해 온 계층은 출처 커밋을 기록해야 한다."
+  exit 1
+fi
+
+node --input-type=module -e '
+import { readFileSync, existsSync } from "node:fs"
+const record = JSON.parse(readFileSync("docs/provenance/copied-core.json", "utf8"))
+const fail = (message) => { console.error("위반: " + message); process.exit(1) }
+
+if (!/^[0-9a-f]{40}$/.test(record.commit ?? "")) fail("commit 이 40자 16진수 SHA 가 아니다")
+if (!record.source) fail("source 가 비어 있다")
+if (!Array.isArray(record.paths) || record.paths.length === 0) fail("paths 가 비어 있다")
+
+const missing = record.paths.filter((path) => !existsSync(path))
+if (missing.length > 0) fail("기록된 경로가 사라졌다: " + missing.join(", "))
+
+console.log(`출처 기록 유효 — ${record.commit.slice(0, 7)}, 경로 ${record.paths.length}개`)
+'
+```
+
+`chmod +x scripts/check-provenance.sh` 와 `git update-index --chmod=+x scripts/check-provenance.sh` 를 함께 한다.
+
+- [ ] **Step 8: 게이트에 단계를 더한다**
+
+`scripts/check.sh` 의 `[5/9] 인용` 바로 뒤에 넣는다.
+
+```bash
+echo "=== [5b/9] 출처 ==="; ./scripts/check-provenance.sh
+```
+
+- [ ] **Step 9: 게이트를 돌린다**
+
+Run: `./scripts/check.sh`
+Expected: 전부 통과. 복사해 온 `test/unit/jsonapi/*` 가 `[6/9]` 에서 함께 돈다.
+
+- [ ] **Step 10: 커밋**
+
+```bash
+git add -A
+git commit -m "feat: copy the JSON:API core and record its provenance
+
+lib/config and lib/jsonapi are copied from
+template-typescript-nextjs@34d0b10 with their unit tests. A copy with no
+recorded origin cannot be audited, so the commit SHA, the copied paths and
+the export surface are written to docs/provenance/copied-core.json and a
+gate step verifies the record instead of trusting anyone to remember it."
+```
+
+---
+
+### Task 3: 코어 복사 2 — `lib/auth` 와 `proxy.ts`
+
+**Files:**
+- Create: `lib/auth/{credentials,flow,form-state,guard,logout,rotation,session,tokens}.ts`, `lib/auth/AGENTS.md`
+- Create: `proxy.ts`
+- Test: 복사해 온 `test/unit/auth/*.test.ts`, `test/unit/proxy.test.ts`
+- Modify: `docs/provenance/copied-core.json`
+
+**Interfaces:**
+- Consumes: Task 2 의 `lib/jsonapi`, `lib/config/settings.ts`, 출처 기록
+- Produces: `proxy.ts` 의 `PROTECTED_PATH_PATTERNS` — **어드민에서는 `/login` 을 뺀 전부.** `lib/auth/session.ts` 의 세션 읽기(정확한 이름은 Task 2 Step 4 의 `exports` 목록을 본다)
+
+- [ ] **Step 1: 복사한다**
+
+```bash
+cp -r /tmp/ttn/lib/auth lib/auth
+cp /tmp/ttn/proxy.ts proxy.ts
+mkdir -p test/unit/auth
+cp -r /tmp/ttn/test/unit/auth/. test/unit/auth/
+cp /tmp/ttn/test/unit/proxy.test.ts test/unit/proxy.test.ts
+```
+
+- [ ] **Step 2: 보호 경로 목록을 어드민의 것으로 바꾸는 테스트를 먼저 쓴다**
+
+nextjs 는 목록·상세가 공개이고 쓰기만 보호된다. **어드민은 읽기조차 운영자만 본다.** 복사해 온 `test/unit/proxy.test.ts` 에 더한다.
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { PROTECTED_PATH_PATTERNS } from '@/proxy'
+
+function isProtected(path: string): boolean {
+  return PROTECTED_PATH_PATTERNS.some((pattern) => pattern.test(path))
+}
+
+describe('어드민의 보호 경로', () => {
+  it('공개는 /login 하나다', () => {
+    expect(isProtected('/login')).toBe(false)
+  })
+
+  it.each(['/', '/examples', '/examples/abc', '/examples/new', '/examples/abc/edit'])(
+    '%s 는 보호된다',
+    (path) => {
+      expect(isProtected(path)).toBe(true)
+    },
+  )
+
+  it('가입 경로는 존재하지 않는다', () => {
+    expect(isProtected('/register')).toBe(true)
+  })
+})
+```
+
+마지막 검사가 중요하다 — `/register` 화면을 만들지 않기로 했으므로(스펙 7.1) 그 경로가 **열려 있으면 안 된다.** 없는 화면이 공개로 남으면 나중에 누가 만들 때 보호를 잊는다.
+
+- [ ] **Step 3: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/proxy.test.ts`
+Expected: FAIL — 복사해 온 목록은 `/examples` 를 공개로 둔다.
+
+- [ ] **Step 4: `PROTECTED_PATH_PATTERNS` 를 교체한다**
+
+`/login` 만 빠지는 목록으로 바꾼다. 막힌 요청은 `/login?next=<원래 경로>` 로 보내고 로그인 성공 후 그 경로로 돌아온다 — 그 배선은 복사해 온 코드가 이미 갖고 있다.
+
+- [ ] **Step 5: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/proxy.test.ts`
+Expected: PASS
+
+- [ ] **Step 6: 출처 기록을 갱신한다**
+
+`docs/provenance/copied-core.json` 의 `paths` 에 `lib/auth` · `proxy.ts` · `test/unit/auth` · `test/unit/proxy.test.ts` 를 더한다. `note` 에 **`proxy.ts` 의 보호 경로 목록은 어드민에서 의도적으로 갈라졌다**는 사실을 적는다 — 적지 않으면 다음 사람이 원본과 비교하며 드리프트로 오해한다.
+
+- [ ] **Step 7: 게이트를 돌리고 커밋**
+
+Run: `./scripts/check.sh`
+Expected: 전부 통과.
+
+```bash
+git add -A
+git commit -m "feat: copy the auth core and close every path but /login
+
+lib/auth and proxy.ts come from the same pinned commit with their tests.
+PROTECTED_PATH_PATTERNS deliberately diverges from the source: the admin has
+no public surface, so /login is the only unprotected path and /register is
+protected even though no such screen exists, so that adding one later cannot
+quietly ship it open. The divergence is recorded in the provenance note."
+```
+
+---
+
+### Task 4: shadcn 초기화와 `dashboard-01` 설치
+
+**Files:**
+- Create: `components.json`
+- Create: `components/ui/*` (레지스트리가 쓴다), `app/(admin)/**` (블록이 쓴다)
+- Modify: `package.json` (레지스트리가 의존성을 더한다), `components/ui/table.tsx`, `components/ui/label.tsx`
+- Test: `test/unit/components/registry-policy.test.ts`
+
+**Interfaces:**
+- Consumes: Task 1 의 `app/globals.css` 토큰(특히 `--sidebar*`), `cn` 패키지
+- Produces: `components/ui/` 의 shadcn 부품 19개. `SidebarProvider` · `SidebarInset` · `AppSidebar` · `SiteHeader` · `SectionCards` · `ChartAreaInteractive` · `DataTable` 부품. `@tanstack/react-table` · `@dnd-kit/*` · `zod` 의존성
+
+- [ ] **Step 1: `components.json` 을 만든다**
+
+`template-typescript-nextjs` 의 것과 같은 설정으로 둔다 — `style: "base-nova"`, `baseColor: "neutral"`, `cssVariables: true`, `iconLibrary: "lucide"`, `rsc: true`, `tsx: true`, `css: "app/globals.css"`, 별칭 `@/components` · `@/lib/utils` · `@/components/ui` · `@/lib` · `@/hooks`. 스타일이 다르면 블록이 패밀리와 다른 생김새로 온다.
+
+- [ ] **Step 2: 블록을 설치한다**
+
+```bash
+npx shadcn@latest add dashboard-01
+```
+
+- [ ] **Step 3: 받은 것을 확인한다**
+
+```bash
+ls components/ui/
+git diff --stat package.json
+```
+
+Expected — 레지스트리 부품 19개(`sidebar` · `breadcrumb` · `separator` · `label` · `chart` · `card` · `select` · `tabs` · `table` · `toggle-group` · `badge` · `button` · `checkbox` · `dropdown-menu` · `drawer` · `input` · `avatar` · `sheet` · `sonner`)와 의존성 여섯(`@tanstack/react-table` · `@dnd-kit/core` · `@dnd-kit/modifiers` · `@dnd-kit/sortable` · `@dnd-kit/utilities` · `zod`).
+
+빠진 것이 있으면 멈추고 원인을 찾는다. 설치된 `@tanstack/react-table` 의 버전을 적어 둔다 — Task 8 이 그 버전의 옵션 이름을 확인해야 한다.
+
+- [ ] **Step 4: 패밀리의 `'use client'` 정책을 되돌리는 테스트를 쓴다**
+
+**이 단계를 빼면 목록 화면이 조용히 무거워진다.** 레지스트리는 `table.tsx` 와 `label.tsx` 에 `'use client'` 를 붙여 보내는데, 그 여덟 컴포넌트는 훅도 이벤트 핸들러도 브라우저 API 도 없는 순수 마크업이다. 지시어를 남기면 목록이 RSC 인데도 **표 전체가 클라이언트 경계 안으로 들어가 행·칸 마크업이 통째로 번들과 flight 페이로드에 실린다.** nextjs 저장소의 `table.tsx` 주석이 "다시 돌리면 지시어가 되살아난다, 되살아난 것을 보면 다시 빼라"고 경고하는 그 자리다.
+
+```ts
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+const PURE_MARKUP = ['components/ui/table.tsx', 'components/ui/label.tsx']
+
+describe('레지스트리 부품의 use client 정책', () => {
+  it.each(PURE_MARKUP)('%s 에 use client 가 없다', (path) => {
+    expect(readFileSync(path, 'utf8')).not.toMatch(/^\s*['"]use client['"]/m)
+  })
+})
+```
+
+판단 기준은 **훅 · 이벤트 핸들러 · 브라우저 API 가 하나도 없으면 뺀다**다. 다른 부품에도 해당하면 `PURE_MARKUP` 에 더한다 — 다만 실제로 훅을 쓰는 것(`sidebar` · `chart` · `dropdown-menu` · `drawer` · `sheet` · `sonner` · `select` · `tabs` · `toggle-group` · `checkbox`)은 건드리지 않는다.
+
+- [ ] **Step 5: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/components/registry-policy.test.ts`
+Expected: FAIL — 방금 설치한 두 파일에 지시어가 있다.
+
+- [ ] **Step 6: 지시어를 빼고 그 이유를 파일에 남긴다**
+
+두 파일에서 `'use client'` 를 지우고, **왜 뺐는지와 `shadcn add` 를 다시 돌리면 되살아난다는 사실**을 주석으로 적는다. 주석이 없으면 다음 사람이 "레지스트리와 다르다"며 되돌린다.
+
+- [ ] **Step 7: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/components/registry-policy.test.ts`
+Expected: PASS
+
+- [ ] **Step 8: 블록의 화면을 `(admin)` 그룹으로 옮긴다**
+
+블록이 쓴 `page.tsx` 와 그 `components/` 를 `app/(admin)/` 아래로 옮긴다. 라우트 그룹은 URL 에 세그먼트를 더하지 않으므로 대시보드는 `/` 다.
+
+**import 경로를 확인한다.** 레지스트리 원본은 `@/registry/base-nova/blocks/dashboard-01/components/...` 와 `@/registry/base-nova/ui/sidebar` 를 가리킨다. CLI 가 `components.json` 의 별칭으로 다시 써 주지만, 남아 있으면 해석되지 않는다.
+
+```bash
+grep -rn '@/registry/' app/ components/ || echo "레지스트리 경로 잔재 0건"
+```
+
+잔재가 있으면 `@/components/ui/...` 와 `@/app/(admin)/components/...` 로 고친다.
+
+`(admin)/layout.tsx` 를 만들어 셸을 그 자리로 내린다 — `SidebarProvider` 와 `SidebarInset` 과 `SiteHeader` 는 `page.tsx` 가 아니라 레이아웃이 갖는다. 그래야 `/examples` 같은 자원 화면이 같은 셸 안에 들어온다.
+
+```tsx
+export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SidebarProvider
+      style={
+        {
+          '--sidebar-width': 'calc(var(--spacing) * 72)',
+          '--header-height': 'calc(var(--spacing) * 12)',
+        } as React.CSSProperties
+      }
+    >
+      <AppSidebar variant="inset" />
+      <SidebarInset>
+        <SiteHeader />
+        {children}
+      </SidebarInset>
+    </SidebarProvider>
+  )
+}
+```
+
+**`(admin)` 안에서 `min-h-svh` 를 쓰지 마라.** 높이는 셸이 갖는다 — 화면이 다시 잡으면 헤더 높이만큼 넘친다.
+
+- [ ] **Step 9: 게이트를 돌린다**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+Expected: 전부 통과. 라우트 파일을 옮겼으니 `.next` 를 먼저 지운다(Task 1 Step 2 의 함정).
+
+- [ ] **Step 10: 커밋**
+
+```bash
+git add -A
+git commit -m "feat: install the shadcn dashboard-01 block as the admin shell
+
+The admin UI is not hand-designed: the block is the design. Style base-nova
+matches the family, and the 13 components new to the family are exactly the
+parts the admin needed and the family lacked, which is also why globals.css
+already defines unused --sidebar-* tokens.
+
+The registry ships table.tsx and label.tsx with 'use client', which the
+family deliberately removes: those files are pure markup, and leaving the
+directive pulls the whole table into the client boundary on a list screen
+that renders on the server. A unit test now holds that policy, so running
+shadcn add again cannot quietly undo it."
+```
+
+---
+
+### Task 5: 로그인 화면과 첫 운영자 시드
+
+**Files:**
+- Create: `app/(auth)/layout.tsx`, `app/(auth)/login/page.tsx`, `app/(auth)/actions.ts`, `app/(auth)/credentials-form.tsx`
+- Create: `components/form/submit-button.tsx`, `components/form/field-error.tsx`, `components/form/form-banner.tsx`
+- Create: `scripts/seed-operator.ts`, `lib/auth/provision.ts`
+- Test: `test/unit/auth/provision.test.ts`
+
+**Interfaces:**
+- Consumes: Task 3 의 `lib/auth`, Task 2 의 `lib/config/settings.ts`
+- Produces: `provisionOperator({ backendUrl, email, password }): Promise<{ id: string }>` — `POST /auth/register` 를 한 번 호출한다. **Task 13 의 E2E 프로비저닝이 같은 함수를 쓴다.**
+
+- [ ] **Step 1: 프로비저닝 함수의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it, vi } from 'vitest'
+import { provisionOperator } from '@/lib/auth/provision'
+
+describe('provisionOperator', () => {
+  it('가입 경로에 JSON:API 미디어 타입으로 POST 한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: 'u1', type: 'users' } }), {
+        status: 201,
+        headers: { 'content-type': 'application/vnd.api+json' },
+      }),
+    )
+    const result = await provisionOperator(
+      { backendUrl: 'http://api:4000', email: 'ops@example.com', password: 'pw' },
+      fetchMock,
+    )
+    expect(result.id).toBe('u1')
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(url).toBe('http://api:4000/api/v1/auth/register')
+    expect((init.headers as Record<string, string>)['content-type']).toBe('application/vnd.api+json')
+  })
+
+  it('이메일 로컬 파트가 RFC 5321 의 64자를 넘으면 백엔드를 부르기 전에 던진다', async () => {
+    const fetchMock = vi.fn()
+    await expect(
+      provisionOperator(
+        { backendUrl: 'http://api:4000', email: `${'a'.repeat(65)}@example.com`, password: 'pw' },
+        fetchMock,
+      ),
+    ).rejects.toThrow(/64/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+```
+
+둘째 검사가 nextjs 가 실측으로 배운 함정이다 — 로컬 파트가 64자를 넘는 픽스처를 **정본과 Rails 만 받아 줘서** NestJS 갈래의 첫 실행에서 E2E 아홉이 죽었다. 두 백엔드가 우연히 너그러운 동안만 참이던 픽스처다. **도커를 띄우기 전에 던지게 한다.**
+
+- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/auth/provision.test.ts`
+Expected: FAIL — `lib/auth/provision.ts` 가 없다.
+
+- [ ] **Step 3: `lib/auth/provision.ts` 를 구현한다**
+
+`fetch` 를 둘째 인자로 받아 주입 가능하게 둔다(테스트가 그렇게 쓴다). 64자 상한을 백엔드 호출 **전에** 검사한다. 오류 본문은 그대로 올려 보낸다 — 문구를 만들지 않는다.
+
+- [ ] **Step 4: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/auth/provision.test.ts`
+Expected: PASS (2 tests)
+
+- [ ] **Step 5: 시드 스크립트를 만든다**
+
+`scripts/seed-operator.ts` 는 `BACKEND_URL` 과 인자로 받은 이메일·비밀번호로 `provisionOperator` 를 한 번 부른다. 성공하면 만들어진 id 를 찍고, 409 면 "이미 있다"로 0 으로 끝난다(재실행이 안전해야 한다).
+
+`package.json` 에 `"seed:operator": "node --experimental-strip-types scripts/seed-operator.ts"` 를 더한다.
+
+- [ ] **Step 6: 제출 버튼을 만든다 — 텍스트 없이 스피너 하나**
+
+```tsx
+'use client'
+
+import { Loader2 } from 'lucide-react'
+import { useFormStatus } from 'react-dom'
+import { Button } from '@/components/ui/button'
+
+export function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus()
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? <Loader2 className="animate-spin" /> : label}
+    </Button>
+  )
+}
+```
+
+**제출 중에 "로그인 중..." 같은 문구를 쓰지 않는다.** pending 동안 버튼 안에는 스피너 하나만 남는다(전역 규칙, 스펙 5.3).
+
+- [ ] **Step 7: `(auth)` 그룹과 로그인 화면을 만든다**
+
+`app/(auth)/layout.tsx` 는 **헤더 없는 뷰포트 전체**다. `login/page.tsx` 는 이메일·비밀번호와 `SubmitButton`, 실패 배너(`form-banner.tsx`)를 그린다. 실패 문구는 백엔드가 준 것을 쓴다.
+
+화면에 **가입 링크를 두지 않는다.** 대신 "첫 운영자 계정은 시드 스크립트로 만든다"는 안내와 `README` 를 가리키는 한 줄을 둔다 — 클론한 사람이 읽을 자리다.
+
+- [ ] **Step 8: 실제 백엔드로 손으로 확인한다**
+
+```bash
+docker run --rm -d -p 4100:4000 --name api-probe <fastapi 이미지>   # Task 13 이 compose 로 대체한다
+BACKEND_URL=http://localhost:4100 pnpm seed:operator ops@example.com 'pw-long-enough'
+BACKEND_URL=http://localhost:4100 pnpm dev
+```
+
+`/` 를 열면 `/login?next=%2F` 로 보내지고, 시드한 계정으로 들어가면 `/` 의 dashboard-01 셸이 보인다. 확인 후 `docker rm -f api-probe`.
+
+- [ ] **Step 9: 게이트를 돌리고 커밋**
+
+Run: `./scripts/check.sh`
+
+```bash
+git add -A
+git commit -m "feat: add the login screen and seed the first operator
+
+Operators do not self-register, so there is no /register screen. The backend
+has no admin-side account creation either (users exposes only GET /me), so
+the first operator comes from a seed script calling POST /auth/register once.
+
+provisionOperator is shared with the E2E provisioning added later, so the
+documented seed path is executed on every E2E run instead of rotting in the
+README. It rejects an email whose local part exceeds RFC 5321's 64 characters
+before touching the backend: the family lost nine E2E tests to a fixture that
+only two of the three backends happened to accept."
+```
+
+---
+
+### Task 6: `lib/resources` — 자원 선언
+
+**Files:**
+- Create: `lib/resources/define.ts`, `lib/resources/example.ts`, `lib/resources/category.ts`, `lib/resources/tag.ts`, `lib/resources/index.ts`, `lib/resources/AGENTS.md`
+- Test: `test/unit/resources/define.test.ts`, `test/unit/resources/index.test.ts`
+
+**Interfaces:**
+- Consumes: 없음 (순수 선언 계층)
+- Produces:
+
+```ts
+export type FilterOperator = 'eq' | 'contains' | 'gte' | 'lte'
+export type ColumnKind = 'text' | 'badge' | 'badges' | 'datetime'
+
+export interface ColumnDef {
+  readonly key: string
+  readonly label: string
+  readonly kind: ColumnKind
+  readonly sortable: boolean
+}
+
+export interface FilterDef {
+  readonly key: string
+  readonly label: string
+  readonly operator: FilterOperator
+  readonly options?: readonly string[]
+}
+
+export interface ResourceDef {
+  readonly type: string
+  readonly path: string
+  readonly label: string
+  readonly writable: boolean
+  readonly columns: readonly ColumnDef[]
+  readonly filters: readonly FilterDef[]
+  readonly sorts: readonly string[]
+  readonly includes: readonly string[]
+}
+
+export function defineResource(def: ResourceDef): ResourceDef
+export const RESOURCES: readonly ResourceDef[]
+export function resourceByType(type: string): ResourceDef | undefined
+```
+
+- [ ] **Step 1: 선언 계층의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { RESOURCES, resourceByType } from '@/lib/resources'
+
+describe('RESOURCES', () => {
+  it('손으로 채운 배열이고 세 자원을 갖는다', () => {
+    expect(RESOURCES.map((r) => r.type)).toEqual(['examples', 'exampleCategories', 'exampleTags'])
+  })
+
+  it('참조 자원은 쓰기가 불가하다', () => {
+    expect(resourceByType('examples')?.writable).toBe(true)
+    expect(resourceByType('exampleCategories')?.writable).toBe(false)
+    expect(resourceByType('exampleTags')?.writable).toBe(false)
+  })
+
+  it('정렬 가능한 열은 sorts 에도 있어야 한다', () => {
+    for (const resource of RESOURCES) {
+      for (const column of resource.columns.filter((c) => c.sortable)) {
+        expect(resource.sorts).toContain(column.key)
+      }
+    }
+  })
+
+  it('선언이 동결돼 있다', () => {
+    expect(Object.isFrozen(RESOURCES)).toBe(true)
+    expect(() => {
+      ;(RESOURCES[0] as { type: string }).type = 'x'
+    }).toThrow()
+  })
+})
+```
+
+셋째 검사가 선언의 자기 정합성을 지킨다 — 열을 정렬 가능으로 표시했는데 백엔드가 그 필드로 정렬을 안 받으면 화면이 500 을 받는다.
+
+- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/resources`
+Expected: FAIL — 모듈이 없다.
+
+- [ ] **Step 3: `define.ts` 를 구현한다**
+
+`defineResource` 는 받은 객체를 깊게 동결해 돌려준다. **JSX 를 두지 않는다**(계층 위반). 자원 이름을 아는 것은 이 계층의 일이다.
+
+- [ ] **Step 4: 세 자원을 선언한다**
+
+`example.ts` — `type: 'examples'`, `path: '/api/v1/examples'`, `writable: true`. 열은 `title`(text, sortable) · `category`(badge) · `tags`(badges) · `status`(badge, sortable) · `updatedAt`(datetime, sortable). 필터는 `title`(contains) · `status`(eq, options) · `category`(eq). `includes: ['category', 'tags']`.
+
+`category.ts` · `tag.ts` — `path: '/api/v1/categories'` · `/api/v1/tags'`, `writable: false`, 열은 `name` 하나.
+
+**실제 속성 이름은 백엔드에서 확인하고 적는다** — 아래 Step 5 가 그것을 강제한다.
+
+- [ ] **Step 5: 선언을 실제 응답과 맞춘다**
+
+```bash
+curl -s -H 'accept: application/vnd.api+json' \
+  'http://localhost:4100/api/v1/examples?page[size]=1&include=category,tags' | python -m json.tool
+```
+
+`data[0].attributes` 의 키와 선언의 열 `key` 가 일치하는지, `relationships` 의 이름과 `includes` 가 일치하는지 확인하고 다른 것을 고친다. **기억으로 적지 마라** — 관계 이름이 틀리면 배지가 UUID 로 그려지거나 조용히 "분류 없음"이 된다.
+
+- [ ] **Step 6: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/resources`
+Expected: PASS
+
+- [ ] **Step 7: `lib/resources/AGENTS.md` 를 쓰고 커밋**
+
+"선언은 데이터다" 규칙과 새 자원을 더하는 세 단계(선언 파일 만들기 → `RESOURCES` 에 손으로 더하기 → 라우트 손으로 만들기)를 적는다. **자동 탐색을 쓰면 계약이 사라진다**는 사실과 그 이유를 함께 적는다.
+
+```bash
+git add -A
+git commit -m "feat: declare the examples resource and its two reference resources
+
+RESOURCES is a hand-maintained array: a resource absent from it does not
+exist, which mirrors the backends' own explicit route composition. Auto
+discovery would erase that contract. Attribute and relationship names were
+read off a real response rather than recalled, because a wrong relationship
+name renders badges as UUIDs on one backend and silently as 'no category' on
+another."
+```
+
+---
+
+### Task 7: `lib/grid` — URL ↔ JSON:API 질의 변환
+
+**Files:**
+- Create: `lib/grid/state.ts`, `lib/grid/query.ts`, `lib/grid/AGENTS.md`
+- Test: `test/unit/grid/state.test.ts`, `test/unit/grid/query.test.ts`
+
+**Interfaces:**
+- Consumes: Task 6 의 `ResourceDef`
+- Produces:
+
+```ts
+export interface GridState {
+  readonly filters: Readonly<Record<string, string>>
+  readonly sort: string | null
+  readonly pageQuery: Readonly<Record<string, string>>
+  readonly pageSize: number
+  readonly hiddenColumns: readonly string[]
+}
+
+export const DEFAULT_PAGE_SIZE = 50
+export function readGridState(params: URLSearchParams, resource: ResourceDef): GridState
+export function writeGridState(state: GridState): URLSearchParams
+export function gridQuery(resource: ResourceDef, state: GridState): Record<string, string>
+```
+
+- [ ] **Step 1: URL 읽기·쓰기의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { DEFAULT_PAGE_SIZE, readGridState, writeGridState } from '@/lib/grid/state'
+import { resourceByType } from '@/lib/resources'
+
+const EXAMPLES = resourceByType('examples')!
+
+describe('readGridState', () => {
+  it('빈 URL 에서 기본값을 낸다', () => {
+    const state = readGridState(new URLSearchParams(), EXAMPLES)
+    expect(state).toEqual({
+      filters: {},
+      sort: null,
+      pageQuery: {},
+      pageSize: DEFAULT_PAGE_SIZE,
+      hiddenColumns: [],
+    })
+  })
+
+  it('선언에 없는 필터 키를 버린다', () => {
+    const state = readGridState(new URLSearchParams('title=abc&bogus=1'), EXAMPLES)
+    expect(state.filters).toEqual({ title: 'abc' })
+  })
+
+  it('선언에 없는 정렬을 버린다', () => {
+    expect(readGridState(new URLSearchParams('sort=-updatedAt'), EXAMPLES).sort).toBe('-updatedAt')
+    expect(readGridState(new URLSearchParams('sort=-bogus'), EXAMPLES).sort).toBeNull()
+  })
+
+  it('쪽당 건수를 100 으로 제한한다', () => {
+    expect(readGridState(new URLSearchParams('pageSize=1000'), EXAMPLES).pageSize).toBe(100)
+  })
+
+  it('왕복해도 같은 상태다', () => {
+    const params = new URLSearchParams('title=abc&status=public&sort=-updatedAt&hide=tags')
+    const state = readGridState(params, EXAMPLES)
+    expect(readGridState(writeGridState(state), EXAMPLES)).toEqual(state)
+  })
+})
+```
+
+`page[size]=1000` 을 세 백엔드 모두 최대 100 으로 제한한다 — 그 상한을 클라이언트가 먼저 지켜 두면 화면이 받는 값과 요청한 값이 갈리지 않는다.
+
+- [ ] **Step 2: 질의 조립의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { gridQuery } from '@/lib/grid/query'
+import { readGridState } from '@/lib/grid/state'
+import { resourceByType } from '@/lib/resources'
+
+const EXAMPLES = resourceByType('examples')!
+
+describe('gridQuery', () => {
+  it('선언된 연산자로 필터를 조립하고 include 를 반드시 싣는다', () => {
+    const state = readGridState(new URLSearchParams('title=abc&status=public&sort=-updatedAt'), EXAMPLES)
+    expect(gridQuery(EXAMPLES, state)).toEqual({
+      'filter[title][contains]': 'abc',
+      'filter[status][eq]': 'public',
+      sort: '-updatedAt',
+      'page[size]': '50',
+      include: 'category,tags',
+    })
+  })
+
+  it('커서 질의를 해석하지 않고 그대로 전달한다', () => {
+    const state = readGridState(new URLSearchParams('page%5Bafter%5D=opaque-token'), EXAMPLES)
+    expect(gridQuery(EXAMPLES, state)['page[after]']).toBe('opaque-token')
+  })
+
+  it('숨긴 열은 질의에 영향을 주지 않는다', () => {
+    const shown = gridQuery(EXAMPLES, readGridState(new URLSearchParams(), EXAMPLES))
+    const hidden = gridQuery(EXAMPLES, readGridState(new URLSearchParams('hide=tags'), EXAMPLES))
+    expect(hidden).toEqual(shown)
+  })
+})
+```
+
+첫째 검사의 `include` 가 중요하다 — **선언의 `includes` 는 "무엇을 include 할 수 있는가"이지 "무엇을 요청하는가"가 아니다.** 빼먹으면 백엔드마다 다른 증상이 난다: 정본은 linkage 만 주고 이름은 `included` 에만 있어 배지가 UUID 로 그려지고, NestJS 는 linkage 자체를 주지 않아 조용히 "분류 없음"이 된다.
+
+셋째 검사는 숨긴 열이 **표시 상태일 뿐 질의가 아니라는** 경계를 고정한다.
+
+- [ ] **Step 3: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/grid`
+Expected: FAIL — 모듈이 없다.
+
+- [ ] **Step 4: 구현한다**
+
+`state.ts` 와 `query.ts` 를 쓴다. **`lib/grid/` 에 자원 이름 문자열 리터럴을 두지 않는다**(계층 위반) — 전부 `ResourceDef` 에서 읽는다. **JSX 도 `fetch` 도 두지 않는다.**
+
+커서 값은 백엔드가 발급한 불투명한 값으로 다룬다. 페이지 이동은 응답 링크의 query 를 읽어 `pageQuery` 에 담아 그대로 전달하고, 프런트엔드가 커서 내용을 해석하지 않는다.
+
+- [ ] **Step 5: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/grid`
+Expected: PASS (8 tests)
+
+- [ ] **Step 6: `lib/grid/AGENTS.md` 를 쓰고 커밋**
+
+"자원을 모른다" 규칙과 그 위반의 정의를 적는다. 커서를 해석하지 않는 이유도 적는다.
+
+```bash
+git add -A
+git commit -m "feat: convert URL state into JSON:API query parameters
+
+lib/grid owns the URL-to-query conversion and nothing else: no JSX, no fetch,
+no resource-name literals. Unknown filter keys and sorts are dropped against
+the declaration, page size is clamped to the 100 the backends enforce, and
+cursor values pass through opaquely.
+
+gridQuery always sends include: the declaration says what may be included,
+not what is requested, and omitting it fails differently on each backend —
+UUID badges on one, a silent 'no category' on another."
+```
+
+---
+
+### Task 8: 그리드를 서버 구동으로 전환한다
+
+**Files:**
+- Create: `lib/grid/table.ts`, `components/grid/resource-grid.tsx`
+- Create: `app/(admin)/examples/page.tsx`, `app/(admin)/examples/loading.tsx`, `app/(admin)/examples/list.ts`
+- Modify: `app/(admin)/components/data-table.tsx` (블록이 쓴 파일)
+- Test: `test/unit/grid/table.test.ts`
+
+**Interfaces:**
+- Consumes: Task 7 의 `gridQuery`·`readGridState`, Task 6 의 `ResourceDef`, Task 2 의 `lib/jsonapi` 클라이언트
+- Produces: `manualModeOptions(): { manualSorting: true; manualFiltering: true; manualPagination: true }`, `listRequest(resource, params, acceptLanguage)` — 화면이 부르는 **조립 함수 하나**
+
+- [ ] **Step 1: manual 모드의 테스트를 쓴다**
+
+```ts
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { manualModeOptions } from '@/lib/grid/table'
+
+describe('manualModeOptions', () => {
+  it('정렬·필터·페이지 셋을 함께 켠다', () => {
+    expect(manualModeOptions()).toEqual({
+      manualSorting: true,
+      manualFiltering: true,
+      manualPagination: true,
+    })
+  })
+})
+
+describe('DataTable 배선', () => {
+  it('표가 manualModeOptions 를 실제로 펼쳐 넣는다', () => {
+    const source = readFileSync('app/(admin)/components/data-table.tsx', 'utf8')
+    expect(source).toMatch(/\.\.\.manualModeOptions\(\)/)
+  })
+
+  it('클라이언트 행 모델을 등록하지 않는다', () => {
+    const source = readFileSync('app/(admin)/components/data-table.tsx', 'utf8')
+    expect(source).not.toMatch(/createSortedRowModel|createPaginatedRowModel|createFilteredRowModel/)
+  })
+})
+```
+
+둘째·셋째 검사가 **소스 텍스트를 읽는** 것은 의도다. 단위 테스트가 React 내부 옵션을 관측할 수 없고, 이 배선을 지우는 뮤턴트는 **화면상 아무 증상을 내지 않는다** — 값이 그려지므로 목록 전체가 정렬된 것처럼 읽힌다. 실제 동작은 Task 13 의 E2E 가 쪽을 넘으며 잡는다.
+
+- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/grid/table.test.ts`
+Expected: FAIL — `lib/grid/table.ts` 가 없고, 블록의 `data-table.tsx` 는 세 행 모델을 등록한 채다.
+
+- [ ] **Step 3: `lib/grid/table.ts` 를 구현한다**
+
+`manualModeOptions()` 하나를 내보낸다. 설치된 `@tanstack/react-table` 의 버전에서 이 세 옵션 이름이 유효한지 확인한다 — TanStack 소스에서 `manualPagination: true` 는 `createPaginatedRowModel` 등록을 생략한 것과 **같은 분기**로 처리된다.
+
+- [ ] **Step 4: 블록의 `data-table.tsx` 를 서버 구동으로 고친다**
+
+`createFilteredRowModel()` · `createSortedRowModel()` · `createPaginatedRowModel()` 등록을 지우고 `...manualModeOptions()` 를 넣는다. 컴포넌트 안의 `pagination` `useState`(`pageSize: 10`)를 지우고 페이지·정렬·필터 상태를 **URL 에서 받는다**. 행 선택과 열 표시/숨김은 TanStack 에 남긴다.
+
+**dnd-kit 드래그 정렬은 손대지 않는다**(스펙 3.4.2). 서버에 순서가 없어 지속되지 않지만, 나중에 백엔드가 순서를 갖추면 배선만 하면 된다.
+
+- [ ] **Step 5: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/grid/table.test.ts`
+Expected: PASS (3 tests)
+
+- [ ] **Step 6: 목록 화면을 만든다 — 조립을 함수 하나로 모은다**
+
+`app/(admin)/examples/list.ts` 에 `listRequest(resource, params, acceptLanguage)` 를 두고, `page.tsx` 는 그것 하나에 `searchParams` 와 `Accept-Language` 를 넘긴 뒤 결과를 그린다.
+
+`searchParams` 정규화도 `list.ts` 가 갖는다 — 화면에 두면 그만큼이 관측 불가다.
+
+```ts
+// app/(admin)/examples/list.ts
+export function toSearchParams(
+  raw: Record<string, string | string[] | undefined>,
+): URLSearchParams {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(raw)) {
+    if (value === undefined) continue
+    for (const one of Array.isArray(value) ? value : [value]) params.append(key, one)
+  }
+  return params
+}
+```
+
+```tsx
+// app/(admin)/examples/page.tsx
+export default async function ExamplesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
+  const resource = resourceByType('examples')!
+  const document = await request(
+    listRequest(
+      resource,
+      toSearchParams(await searchParams),
+      (await headers()).get('accept-language'),
+    ),
+  )
+  return <ResourceGrid resource={resource} document={document} />
+}
+```
+
+`toSearchParams` 의 단위 테스트도 함께 쓴다 — 배열 값(`?status=a&status=b`)과 `undefined` 를 어떻게 다루는지가 필터 동작을 바꾼다.
+
+**이 파일에는 fetch 와 JSX 만 둔다.** 판단이 여기 남으면 그만큼이 단위 테스트에서 관측 불가다 — `headers()` 가 요청 스코프를 요구해 vitest(node) 에서 던지고, 이 저장소는 그것을 스텁하지 않는 관례를 갖는다.
+
+**조립을 함수 하나로 모으는 것이 핵심이다 — 다시 쪼개지 마라.** `gridQuery()`·`Accept-Language`·`resource.path` 를 각각 부르는 모양은 nextjs 에서 **그 셋을 지우는 뮤턴트가 전부 게이트 초록으로 살아남은** 자리다. 모아 두면 세 값이 단위의 `toEqual` 하나로 고정되고 화면에 남는 무방비는 한 줄이다.
+
+- [ ] **Step 7: `Accept-Language` 전달을 재는 테스트를 더한다**
+
+`listRequest` 를 직접 불러 조립 결과에 `accept-language` 헤더가 실리는지 단언한다. **화면이 그것을 넘기는가는 단위가 볼 수 없다** — 그 셋째 인자를 `null` 로 바꾸는 뮤턴트는 nextjs 에서 게이트 여덟 단계를 전부 통과했다. 가드는 Task 13 의 E2E 가 로케일 다른 컨텍스트 둘로 세운다.
+
+- [ ] **Step 8: 스켈레톤을 만든다**
+
+`app/(admin)/examples/loading.tsx` — **텍스트를 하나도 쓰지 않는다.** 열 수는 `resource.columns` 에서 가져온다(박으면 선언과 갈라진다).
+
+- [ ] **Step 9: 게이트를 돌리고 커밋**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+
+```bash
+git add -A
+git commit -m "feat: drive the grid from the server instead of the loaded page
+
+The block ships client-side filtering, sorting and pagination over static
+JSON with pageSize in component state. Against a server-paginated list that
+sorts only the rows already loaded while looking entirely correct, so the
+three client row models are removed and manualSorting, manualFiltering and
+manualPagination are set together.
+
+Unit tests assert the wiring by reading the source: a mutant that drops it
+produces no visible symptom, so there is nothing else for a unit to observe.
+The list screen holds only fetch and JSX, with query assembly collected into
+one function — the split-out shape let three mutants survive the whole gate
+in the family's repo."
+```
+
+---
+
+### Task 9: 대시보드를 계약에 배선한다
+
+**Files:**
+- Modify: `app/(admin)/components/section-cards.tsx`, `app/(admin)/components/chart-area-interactive.tsx`, `app/(admin)/components/site-header.tsx`, `app/(admin)/page.tsx`
+- Delete: `app/(admin)/data.json`
+- Create: `lib/resources/count.ts`
+- Test: `test/unit/resources/count.test.ts`
+
+**Interfaces:**
+- Consumes: Task 6 의 `RESOURCES`, Task 2 의 `lib/jsonapi`
+- Produces: `countRequest(resource)` · `readTotal(document): number`
+
+- [ ] **Step 1: 총합 메타 키를 실제 응답에서 확인한다**
+
+```bash
+curl -s -H 'accept: application/vnd.api+json' \
+  'http://localhost:4100/api/v1/examples?page[size]=1' | python -m json.tool | head -30
+```
+
+`meta` 아래 총합 키의 **실제 이름을 적어 둔다.** 기억으로 쓰지 마라 — 키가 틀리면 카드가 조용히 0 을 그린다. 세 백엔드에서 같은지도 확인한다(Task 13 의 매트릭스가 재확인한다).
+
+- [ ] **Step 2: 카운트 함수의 테스트를 쓴다**
+
+Step 1 에서 확인한 키를 써서 쓴다. 아래 `<확인한키>` 를 그 이름으로 바꾼다.
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { countRequest, readTotal } from '@/lib/resources/count'
+import { resourceByType } from '@/lib/resources'
+
+const EXAMPLES = resourceByType('examples')!
+
+describe('자원 카운트', () => {
+  it('한 건만 받아 총합을 읽는다', () => {
+    expect(countRequest(EXAMPLES).query['page[size]']).toBe('1')
+  })
+
+  it('include 를 싣지 않는다', () => {
+    expect(countRequest(EXAMPLES).query.include).toBeUndefined()
+  })
+
+  it('메타의 총합을 읽는다', () => {
+    expect(readTotal({ data: [], meta: { '<확인한키>': 1284 } })).toBe(1284)
+  })
+
+  it('총합이 없으면 던진다', () => {
+    expect(() => readTotal({ data: [] })).toThrow()
+  })
+})
+```
+
+둘째 검사가 있어야 카운트가 관계까지 끌어오는 낭비를 막는다. 넷째 검사는 **조용히 0 을 그리지 않게** 한다.
+
+- [ ] **Step 3: 테스트를 돌려 실패를 확인하고 구현한다**
+
+Run: `pnpm vitest run test/unit/resources/count.test.ts` → FAIL → 구현 → PASS (4 tests)
+
+- [ ] **Step 4: 카드를 자원 카운트로 바꾼다**
+
+`section-cards.tsx` 의 Total Revenue `$1,250.00` · New Customers · Active Accounts · Growth Rate 를 **`examples` · 분류 · 라벨의 실제 총합**으로 바꾼다. 카드 레이아웃과 타이포그래피는 건드리지 않는다. 참조 자원 카드에는 "읽기 전용"을 적는다.
+
+- [ ] **Step 5: 차트를 남기되 표본임을 화면이 말하게 한다**
+
+`chart-area-interactive.tsx` 의 `chartData` 배열은 **그대로 둔다**(스펙 3.4.1). 대신 카드에 **백엔드에 연결되지 않은 표본 데이터**임을 적는다 — 운영자가 이 숫자를 읽고 판단하면 안 된다는 것을 화면에서 알 수 있어야 한다. 이것이 차트를 남기는 조건이다.
+
+- [ ] **Step 6: 표와 헤더를 바꾼다**
+
+`app/(admin)/data.json`(68행 `reviewer: "Eddie Lake"`)을 지우고 대시보드의 표를 `examples` 최근 수정 목록으로 바꾼다. `site-header.tsx` 의 하드코딩된 `Documents` 를 화면 이름으로 바꾼다.
+
+대시보드 표에 **변경한 사람 열을 두지 않는다** — 백엔드에 감사로그 계약이 없어 누가 바꿨는지 알 수 없다(스펙 2.3 · 10장). 수정일 내림차순 정렬이라는 사실을 표 아래에 한 줄로 적는다.
+
+- [ ] **Step 7: 게이트를 돌리고 커밋**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+
+```bash
+git add -A
+git commit -m "feat: wire the dashboard to the contract
+
+Cards now read real totals via page[size]=1 and the meta key observed on a
+live response rather than recalled; readTotal throws on a missing total so a
+renamed key cannot render a silent zero. The block's 68-row reviewer dataset
+is replaced by recent examples, and the header stops saying Documents.
+
+The interactive chart keeps the block's own hardcoded array, and the card now
+says on screen that it is sample data not connected to the backend — that
+labelling is the condition for keeping it. The recent-changes table has no
+'changed by' column because no audit log exists to fill one."
+```
+
+---
+
+### Task 10: 상세와 생성 화면
+
+**Files:**
+- Create: `app/(admin)/examples/[id]/page.tsx`, `app/(admin)/examples/[id]/loading.tsx`, `app/(admin)/examples/[id]/detail.ts`, `app/(admin)/examples/[id]/edit-form.tsx`
+- Create: `app/(admin)/examples/new/page.tsx`, `app/(admin)/examples/new/loading.tsx`, `app/(admin)/examples/actions.ts`
+- Create: `lib/resources/form.ts`
+- Test: `test/unit/resources/form.test.ts`
+
+**Interfaces:**
+- Consumes: Task 6 의 `ResourceDef`, Task 2 의 `lib/jsonapi` 오류 분류
+- Produces: `fieldErrors(document): Record<string, string>` — JSON:API `errors[].source.pointer` → 필드 이름
+
+- [ ] **Step 1: 필드 오류 매핑의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { fieldErrors } from '@/lib/resources/form'
+
+describe('fieldErrors', () => {
+  it('pointer 가 가리키는 속성에 백엔드 문구를 그대로 붙인다', () => {
+    const document = {
+      errors: [
+        { status: '422', detail: '제목은 200자를 넘을 수 없습니다', source: { pointer: '/data/attributes/title' } },
+        { status: '422', detail: '선언에 없는 상태 값입니다', source: { pointer: '/data/attributes/status' } },
+      ],
+    }
+    expect(fieldErrors(document)).toEqual({
+      title: '제목은 200자를 넘을 수 없습니다',
+      status: '선언에 없는 상태 값입니다',
+    })
+  })
+
+  it('pointer 가 없는 오류는 필드에 붙이지 않는다', () => {
+    expect(fieldErrors({ errors: [{ status: '500', detail: '서버 오류' }] })).toEqual({})
+  })
+
+  it('관계 pointer 도 읽는다', () => {
+    const document = {
+      errors: [{ status: '422', detail: '없는 분류입니다', source: { pointer: '/data/relationships/category' } }],
+    }
+    expect(fieldErrors(document)).toEqual({ category: '없는 분류입니다' })
+  })
+})
+```
+
+**문구를 만들지 않는다** — 오류 문구의 정본은 백엔드이고 `Accept-Language` 로 협상된 것이다(스펙 6.3).
+
+- [ ] **Step 2: 테스트를 돌려 실패를 확인하고 구현한다**
+
+Run: `pnpm vitest run test/unit/resources/form.test.ts` → FAIL → 구현 → PASS (3 tests)
+
+- [ ] **Step 3: 상세 화면을 만든다**
+
+`detail.ts` 에 `detailRequest(resource, id, acceptLanguage)` 를 두고 `page.tsx` 는 그것 하나에 넘긴다(Task 8 과 같은 모양). 속성·관계·메타를 그린다. 관계 이름을 보이려면 `include=category,tags` 가 실려야 한다.
+
+인라인 편집은 **저장이 취소와 다른 일을 하게** 만든다 — 저장은 `PATCH` 요청 하나를 보내고 제출 중에는 스피너만 남긴다.
+
+- [ ] **Step 4: 생성 화면과 Server Action 을 만든다**
+
+`actions.ts` 에 생성·수정·삭제 Server Action 을 둔다. 실패하면 `fieldErrors` 로 필드에 붙이고 배너에 요약을 낸다. 성공하면 만들어진 자원의 상세로 이동한다.
+
+- [ ] **Step 5: 스켈레톤 둘을 만든다**
+
+`[id]/loading.tsx` 와 `new/loading.tsx` — **텍스트 없이** 스켈레톤만.
+
+- [ ] **Step 6: 게이트를 돌리고 커밋**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+
+```bash
+git add -A
+git commit -m "feat: add the detail and create screens
+
+Field errors come from the backend's JSON:API errors: fieldErrors maps
+source.pointer onto attribute and relationship names and attaches the
+backend's own detail text. The frontend writes no failure wording, because
+the backend negotiates it from Accept-Language.
+
+Save is not wired to the same handler as Cancel — it sends one PATCH and
+shows a spinner while it does."
+```
+
+---
+
+### Task 11: `lib/bulk` — 순차 실행기
+
+**Files:**
+- Create: `lib/bulk/executor.ts`, `lib/bulk/AGENTS.md`
+- Test: `test/unit/bulk/executor.test.ts`
+
+**Interfaces:**
+- Consumes: 없음 (순수 함수)
+- Produces:
+
+```ts
+export const MAX_BULK_ITEMS = 50
+
+export interface BulkOutcome {
+  readonly id: string
+  readonly ok: boolean
+  readonly status?: string
+  readonly detail?: string
+}
+
+export interface BulkReport {
+  readonly outcomes: readonly BulkOutcome[]
+  readonly cancelled: boolean
+}
+
+export async function runBulk(
+  ids: readonly string[],
+  run: (id: string) => Promise<BulkOutcome>,
+  options?: { signal?: AbortSignal; onProgress?: (done: number) => void },
+): Promise<BulkReport>
+```
+
+- [ ] **Step 1: 실행기의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it, vi } from 'vitest'
+import { MAX_BULK_ITEMS, runBulk } from '@/lib/bulk/executor'
+
+const ok = (id: string) => ({ id, ok: true })
+const fail = (id: string) => ({ id, ok: false, status: '422', detail: '참조하는 라벨이 남아 있습니다' })
+
+describe('runBulk', () => {
+  it('선언된 순서대로 하나씩 보낸다', async () => {
+    const seen: string[] = []
+    await runBulk(['a', 'b', 'c'], async (id) => {
+      seen.push(id)
+      return ok(id)
+    })
+    expect(seen).toEqual(['a', 'b', 'c'])
+  })
+
+  it('동시에 보내지 않는다', async () => {
+    let inFlight = 0
+    let peak = 0
+    await runBulk(['a', 'b', 'c'], async (id) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      await Promise.resolve()
+      inFlight -= 1
+      return ok(id)
+    })
+    expect(peak).toBe(1)
+  })
+
+  it('상한을 넘으면 요청을 하나도 보내지 않고 던진다', async () => {
+    const run = vi.fn()
+    const tooMany = Array.from({ length: MAX_BULK_ITEMS + 1 }, (_, i) => String(i))
+    await expect(runBulk(tooMany, run)).rejects.toThrow(String(MAX_BULK_ITEMS))
+    expect(run).not.toHaveBeenCalled()
+  })
+
+  it('일부가 실패해도 남은 것을 계속 보내고 행별로 모은다', async () => {
+    const report = await runBulk(['a', 'b', 'c'], async (id) =>
+      id === 'b' ? fail(id) : ok(id),
+    )
+    expect(report.outcomes.map((o) => o.ok)).toEqual([true, false, true])
+    expect(report.outcomes[1]!.detail).toBe('참조하는 라벨이 남아 있습니다')
+    expect(report.cancelled).toBe(false)
+  })
+
+  it('취소하면 남은 요청을 내지 않고, 이미 보낸 결과는 남는다', async () => {
+    const controller = new AbortController()
+    const run = vi.fn(async (id: string) => {
+      if (id === 'b') controller.abort()
+      return ok(id)
+    })
+    const report = await runBulk(['a', 'b', 'c'], run, { signal: controller.signal })
+    expect(run).toHaveBeenCalledTimes(2)
+    expect(report.cancelled).toBe(true)
+    expect(report.outcomes).toHaveLength(2)
+  })
+
+  it('진행을 건별로 알린다', async () => {
+    const onProgress = vi.fn()
+    await runBulk(['a', 'b'], async (id) => ok(id), { onProgress })
+    expect(onProgress.mock.calls.map(([n]) => n)).toEqual([1, 2])
+  })
+})
+```
+
+셋째 검사가 스펙 6.2 의 상한을, 넷째가 6.3 의 "부분 실패는 1급 결과"를, 다섯째가 6.4 의 "남은 요청을 내지 않는다 · 되돌리지 않는다"를 고정한다. **보상 트랜잭션을 만들지 않는다** — 백엔드 계약이 없다.
+
+- [ ] **Step 2: 테스트를 돌려 실패를 확인한다**
+
+Run: `pnpm vitest run test/unit/bulk`
+Expected: FAIL — 모듈이 없다.
+
+- [ ] **Step 3: 구현한다**
+
+`MAX_BULK_ITEMS = 50` 을 **선언된 자리 하나**에 둔다. `lib/bulk/` 에 JSX 도 자원 이름 분기도 두지 않는다.
+
+- [ ] **Step 4: 테스트를 돌려 통과를 확인한다**
+
+Run: `pnpm vitest run test/unit/bulk`
+Expected: PASS (6 tests)
+
+- [ ] **Step 5: `lib/bulk/AGENTS.md` 를 쓰고 커밋**
+
+벌크 엔드포인트가 없다는 사실과 그것이 정하는 것 셋(순차·상한, 부분 실패가 정상 경로, 취소는 남은 요청만 막는다)을 적는다.
+
+```bash
+git add -A
+git commit -m "feat: add the sequential bulk executor
+
+No bulk, batch or atomic:operations route exists in the backend contract, so
+deleting twelve rows is twelve DELETE requests. The executor sends them one
+at a time under a declared cap of 50, keeps going when one fails, and
+collects a per-row outcome: three of twelve failing with 422 is the normal
+path, not an exception.
+
+Cancelling stops sending and does not undo what was already sent — there is
+no compensating route to call, and pretending otherwise would be a lie in the
+UI."
+```
+
+---
+
+### Task 12: 일괄 작업 UI
+
+**Files:**
+- Create: `components/grid/selection-bar.tsx`, `components/grid/bulk-confirm.tsx`, `components/grid/bulk-result.tsx`
+- Modify: `app/(admin)/examples/actions.ts`, `components/grid/resource-grid.tsx`
+- Test: `test/unit/components/bulk-result.test.ts`
+
+**Interfaces:**
+- Consumes: Task 11 의 `runBulk`·`MAX_BULK_ITEMS`·`BulkReport`, Task 8 의 행 선택 상태
+- Produces: 선택 바 · 확인 줄 · 결과 표. `components/grid/*` 에 **자원 이름 분기를 두지 않는다**
+
+- [ ] **Step 1: 결과 표의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { summarize } from '@/components/grid/bulk-result'
+
+describe('summarize', () => {
+  it('성공과 실패를 따로 센다', () => {
+    const report = {
+      outcomes: [
+        { id: 'a', ok: true },
+        { id: 'b', ok: false, status: '422', detail: 'x' },
+        { id: 'c', ok: true },
+      ],
+      cancelled: false,
+    }
+    expect(summarize(report)).toEqual({ ok: 2, failed: 1, retryable: ['b'], cancelled: false })
+  })
+
+  it('재시도 대상은 실패한 것만이다', () => {
+    const report = {
+      outcomes: [
+        { id: 'a', ok: true },
+        { id: 'b', ok: false, status: '409', detail: 'y' },
+      ],
+      cancelled: false,
+    }
+    expect(summarize(report).retryable).toEqual(['b'])
+  })
+
+  it('전건 성공이면 재시도 대상이 없다', () => {
+    expect(summarize({ outcomes: [{ id: 'a', ok: true }], cancelled: false }).retryable).toEqual([])
+  })
+})
+```
+
+둘째 검사가 "성공한 건은 다시 보내지 않는다"를 고정한다.
+
+- [ ] **Step 2: 테스트를 돌려 실패를 확인하고 `summarize` 를 구현한다**
+
+Run: `pnpm vitest run test/unit/components/bulk-result.test.ts` → FAIL → 구현 → PASS (3 tests)
+
+- [ ] **Step 3: 선택 바를 만든다**
+
+선택이 하나 이상일 때만 나타난다. 선택 건수와 **나갈 요청 수**를 적고, `MAX_BULK_ITEMS` 를 **읽어** 상한을 함께 알린다(값을 박지 않는다).
+
+- [ ] **Step 4: 확인 줄을 만든다**
+
+삭제를 누르면 실행 전에 "벌크 엔드포인트가 없어 DELETE 요청 N 회를 순차로 보낸다 · 일부만 실패할 수 있다 · 이미 보낸 요청은 되돌리지 않는다"를 알린다. **누르기 전에 알리는 것이 스펙 6.2 의 요구다.**
+
+- [ ] **Step 5: 결과 표를 만든다**
+
+**토스트로 뭉개지 않는다.** 행별 성공·실패를 표로 내고, 실패 이유는 백엔드가 준 `status` 와 `detail` 을 그대로 쓴다. 실패한 행만 재시도하는 버튼을 둔다. 진행 중에는 **텍스트 없이** 스피너와 진행률만 둔다(진행 카운트 `7 / 12` 는 데이터이므로 허용).
+
+`sonner` 가 블록과 함께 들어왔지만 **부분 실패에는 쓰지 않는다.**
+
+- [ ] **Step 6: Server Action 을 배선한다**
+
+`actions.ts` 에 일괄 삭제 Action 을 더하고 `runBulk` 로 실행한다. 각 건은 `DELETE /api/v1/examples/{id}` 한 번이다.
+
+- [ ] **Step 7: 게이트를 돌리고 커밋**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+
+```bash
+git add -A
+git commit -m "feat: make partial failure a first-class bulk result
+
+The selection bar reads MAX_BULK_ITEMS rather than restating it and says how
+many requests a bulk action will send before it is pressed. Failures land in
+a per-row result table carrying the backend's own status and detail, with a
+retry that resends only the rows that failed.
+
+sonner arrived with the block but is deliberately not used here: a toast
+collapses twelve outcomes into one line, and three of twelve failing is the
+normal path."
+```
+
+---
+
+### Task 13: 실제 백엔드 E2E 와 게이트 완성
+
+**Files:**
+- Create: `docker-compose.e2e.yml`, `Dockerfile`, `.dockerignore`, `playwright.config.ts`
+- Create: `test/e2e/{stack.ts,matrix.ts,fixtures.ts,probe-email.ts}`, `test/e2e/seed/examples.sql`
+- Create: `test/e2e/{auth.spec.ts,examples.spec.ts,bulk.spec.ts}`
+- Modify: `scripts/check.sh`, `package.json`
+- Test: `test/unit/e2e/matrix.test.ts`, `test/unit/e2e/probe-email.test.ts`
+
+**Interfaces:**
+- Consumes: Task 5 의 `provisionOperator`, Task 1 의 게이트
+- Produces: `pnpm test:e2e`. 게이트 `[8/9] compose` · `[9/9] e2e`. `reportKnownDivergences()` — 매 실행 건수를 출력한다
+
+- [ ] **Step 1: 백엔드 갈래 검증의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { resolveBackendKind } from '@/test/e2e/matrix'
+
+describe('resolveBackendKind', () => {
+  it('셋을 받는다', () => {
+    expect(['fastapi', 'nestjs', 'rails'].map(resolveBackendKind)).toEqual([
+      'fastapi',
+      'nestjs',
+      'rails',
+    ])
+  })
+
+  it('기본은 정본이다', () => {
+    expect(resolveBackendKind(undefined)).toBe('fastapi')
+  })
+
+  it('셋 밖의 값은 도커를 건드리기 전에 던진다', () => {
+    expect(() => resolveBackendKind('fastpai')).toThrow(/fastapi/)
+  })
+})
+```
+
+셋째 검사가 없으면 **오타 하나가 백엔드 없이 뜬 부분 스택 위의 실행을 초록으로 만든다.**
+
+- [ ] **Step 2: 이메일 상한의 테스트를 쓴다**
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { probeEmail } from '@/test/e2e/probe-email'
+
+describe('probeEmail', () => {
+  it('로컬 파트가 64자를 넘지 않는다', () => {
+    const email = probeEmail('bulk-partial-failure-scenario-with-a-long-name')
+    expect(email.split('@')[0]!.length).toBeLessThanOrEqual(64)
+  })
+
+  it('호출마다 다르다', () => {
+    expect(probeEmail('x')).not.toBe(probeEmail('x'))
+  })
+})
+```
+
+둘째 검사가 중요하다 — **중복 가입은 409 라 재실행이 조용히 다른 갈래를 탄다.**
+
+- [ ] **Step 3: 테스트를 돌려 실패를 확인하고 둘을 구현한다**
+
+Run: `pnpm vitest run test/unit/e2e` → FAIL → 구현 → PASS (5 tests)
+
+- [ ] **Step 4: compose 스택을 만든다**
+
+Postgres · Redis · 마이그레이션 · 씨앗 데이터 · 백엔드 하나 · 이 앱의 **프로덕션 빌드**를 띄운다. 이 파일의 **핵심 계약은 네트워크 별칭**이다.
+
+```yaml
+services:
+  web:
+    build: { context: ., dockerfile: Dockerfile }
+    environment:
+      # 세 갈래에서 이 값이 똑같다 - 갈아끼우면서 고치는 값이 하나도 없다.
+      BACKEND_URL: http://api:4000
+      SESSION_COOKIE_SECURE: 'false'
+    ports: ['${E2E_WEB_PORT:-3000}:3000']
+
+  api-fastapi:
+    profiles: ['fastapi']
+    image: ghcr.io/builder-shin/template-python-fastapi:main
+    networks:
+      default:
+        aliases: ['api'] # ← 세 api-* 가 모두 이 별칭을 갖는다
+    ports: ['${E2E_API_PORT:-4100}:4000']
+
+  api-nestjs:
+    profiles: ['nestjs']
+    image: ghcr.io/builder-shin/template-typescript-nestjs:main
+    networks:
+      default:
+        aliases: ['api']
+    ports: ['${E2E_API_PORT:-4100}:4000']
+
+  api-rails:
+    profiles: ['rails']
+    image: ghcr.io/builder-shin/template-ruby-rails:main
+    networks:
+      default:
+        aliases: ['api']
+    ports: ['${E2E_API_PORT:-4100}:4000']
+```
+
+`migrate-fastapi` · `migrate-nestjs` · `migrate-rails` 를 각 profile 에 하나씩 두고, 마이그레이션 뒤 `test/e2e/seed/examples.sql` 을 넣는다. 이미지 태그·포트·의존 관계의 정확한 값은 각 백엔드 저장소의 compose 파일에서 확인해 맞춘다.
+
+**별칭이 셋 다 `api` 인 것이 이 설계의 전부다** — `web` 의 `BACKEND_URL` 이 갈래와 무관하게 같아지고, 그래서 "전환은 `BACKEND_URL` 하나"라는 계약이 E2E 에서도 참이 된다.
+
+- [ ] **Step 5: E2E 픽스처의 가드를 만든다**
+
+`test/e2e/fixtures.ts` — 브라우저 콘솔 오류·경고와 **선언하지 않은** 4xx·5xx 응답을 실패로 만든다. 의도한 실패는 `consoleGuard.expectHttpFailure()` 로 그 테스트 안에 밝힌다.
+
+운영자 프로비저닝은 **Task 5 의 `provisionOperator` 를 부른다.** 어드민에 공개 표면이 없어 어떤 화면에든 닿으려면 운영자가 먼저 있어야 하고, `/register` 화면이 없으므로 백엔드 계약에 직접 만든다. **그래서 시드 절차가 문서에만 있는 죽은 절차가 되지 않는다.**
+
+- [ ] **Step 6: 인증 시나리오를 쓴다**
+
+가입(프로비저닝) · 로그인 · 로그아웃, **보호 경로 복귀**(`/examples` → `/login?next=%2Fexamples` → 로그인 → `/examples`), access 갱신과 쿠키 수명.
+
+**픽스처에 실전 상수와 같은 값을 쓰지 마라** — 복귀 경로로 기본 복귀 경로와 같은 값을 쓰면 복귀가 되든 안 되든 결과가 같다.
+
+- [ ] **Step 7: 목록 시나리오를 쓴다 — 서버 정렬을 실제로 잰다**
+
+Task 8 이 소스 텍스트로만 지킨 것을 여기서 동작으로 잡는다.
+
+- 씨앗 데이터가 **두 쪽 이상**이 되게 넣고, 정렬을 바꾼 뒤 **첫 쪽의 첫 행이 전체의 극값**인지 단언한다. 클라이언트 정렬이면 불러온 쪽 안에서만 바뀌므로 이 단언이 깨진다.
+- 쪽을 넘긴 뒤에도 정렬이 유지되는지 본다.
+
+**목록을 재는 시나리오는 자기 것만 보도록 좁힌다** — `filter[title][contains]=<내 접두사>`. 자기 접두사를 쓰고 남의 접두사는 쓰지 않는다. 좁힐 수 없는 자리(필터가 사라졌다를 보이는 테스트)는 행 단언을 자기 접두사로 걸러서 하고 시작 주소에 넉넉한 `page[size]` 를 얹는다.
+
+- [ ] **Step 8: 다국어 오류를 잰다**
+
+로케일이 다른 컨텍스트 둘로 오류 배너를 띄우고 **영어 쪽에 한글이 없는지** 본다. **한국어 쪽만 단언하면 배선을 지워도 통과한다** — 헤더가 빠지면 백엔드가 `ko` 로 떨어진다. 이것이 Task 8 Step 7 이 예고한 가드다.
+
+- [ ] **Step 9: 일괄 작업 시나리오를 쓴다**
+
+행 여럿을 골라 삭제를 실행하고 **행별 결과 표**가 나오는지, 실패가 섞였을 때 **실패한 것만 재시도**되는지, 취소가 남은 요청을 막는지 본다. 실패를 만들려면 삭제가 422 로 거절되는 상태의 씨앗 행을 심는다.
+
+- [ ] **Step 10: 알려진 차이 보고를 만든다**
+
+`reportKnownDivergences()` 가 **매 실행 건수를 출력**한다 — 0 건이어도 출력한다. **침묵은 "안 돌았다"와 구별되지 않는다.** 다음 드리프트를 `test.fail(조건, 이유)` 로 어떻게 무는지를 `matrix.ts` 의 주석에 남긴다: 드리프트가 그대로면 CI 는 초록이고, 백엔드가 고쳐져 테스트가 실제로 통과해 버리면 그 자리에서 죽는다.
+
+- [ ] **Step 11: 게이트를 아홉 단계로 완성한다**
+
+```bash
+echo "=== [8/9] compose ==="; pnpm compose:verify
+echo "=== [9/9] e2e ==="; pnpm test:e2e
+```
+
+`package.json` 에 더한다.
+
+```json
+"test:e2e": "playwright test",
+"compose:verify": "docker compose --profile fastapi --profile nestjs --profile rails -f docker-compose.e2e.yml config --quiet"
+```
+
+**로컬 게이트는 정본 FastAPI 하나로만 돈다** — 매번 세 스택을 띄우면 게이트가 개발 흐름을 막는다. 3-백엔드 매트릭스는 Task 14 의 CI 전용이다.
+
+- [ ] **Step 12: 세 갈래를 손으로 한 번씩 돌린다**
+
+```bash
+for kind in fastapi nestjs rails; do
+  COMPOSE_PROFILES="$kind" docker compose -f docker-compose.e2e.yml build --pull "api-$kind" "migrate-$kind"
+  BACKEND_KIND="$kind" pnpm test:e2e
+done
+```
+
+`pnpm test:e2e` 는 web 이미지를 매번 빌드하지만 **백엔드 이미지는 이미 있으면 재사용한다** — 그래서 먼저 빌드한다. 남긴 스택을 내릴 때는 **세 프로파일을 다 준다**(띄울 때 쓴 프로파일만 주고 내리면 다른 프로파일의 컨테이너가 남는다).
+
+각 갈래의 통과 건수와 백엔드 커밋을 적어 둔다 — Task 14 의 README 표가 그 값을 쓴다.
+
+- [ ] **Step 13: 게이트를 돌리고 커밋**
+
+Run: `./scripts/check.sh`
+Expected: 아홉 단계 전부 통과.
+
+```bash
+git add -A
+git commit -m "feat: verify against real backends and complete the gate
+
+E2E runs with no mocking against a Compose stack of Postgres, Redis,
+migrations, seed data, one backend and this app's production build. All three
+api services share the network alias api, so BACKEND_URL is identical across
+the three branches and nothing needs editing to switch.
+
+The list scenario measures what Task 8 could only assert by reading source:
+with more than one page of seed rows, changing the sort must put the global
+extreme in the first row — client-side sorting would only reorder the loaded
+page and fail that. The multilingual assertion checks the English context for
+absence of Korean, because asserting the Korean side passes even with the
+header wiring removed.
+
+Operators are provisioned through the same function the seed script uses, so
+the documented procedure runs on every E2E execution. reportKnownDivergences
+prints its count even when it is zero: silence is indistinguishable from not
+having run."
+```
+
+---
+
+### Task 14: 문서와 3-백엔드 CI 매트릭스
+
+**Files:**
+- Create: `AGENTS.md`, `README.md`
+- Create: `app/AGENTS.md`, `components/AGENTS.md`, `lib/AGENTS.md`, `test/AGENTS.md`, `scripts/AGENTS.md`, `docs/AGENTS.md`, `.github/AGENTS.md`
+- Create: `.github/workflows/ci.yml`
+
+**Interfaces:**
+- Consumes: 앞의 모든 과업
+- Produces: 스펙 8.4 의 성공 기준을 만족하는 저장소
+
+- [ ] **Step 1: 루트 `AGENTS.md` 를 쓴다 — 계층 계약의 정본**
+
+스펙 4장의 소유권 표와 **위반의 정의**를 적는다. 표는 **소유 관계이지 파일 목록이 아니다** — 어떤 위치가 비어 있어도 그 행의 계약은 이미 유효하다. 어느 파일이 실재하는지는 저장소를 보면 되므로 적지 않는다(적어 두면 그 목록이 드리프트하고, 읽는 사람은 표가 아니라 그 목록을 믿는다).
+
+반드시 함께 적을 것 다섯:
+
+1. **사라질 자리를 인용하지 마라** — 게이트 `[5/9]` 가 강제한다. 근거는 사실 문장으로 적고, 문서가 필요하면 `docs/superpowers/` 를 가리킨다.
+2. **`(admin)` 안에서 `min-h-svh` 를 쓰지 마라** — 높이는 셸이 갖는다.
+3. **화면 껍데기를 `app/layout.tsx` 에 두지 마라** — 그 자리는 모든 그룹을 덮는다.
+4. **라우트 파일을 옮기거나 지운 뒤 게이트가 `TS2307` 로 죽으면 `rm -rf .next`** — `.next/dev` 만 지우면 안 되고, 빌드만 돌려서는 안 보이고 `[1/9]` 에서만 드러난다.
+5. **`shadcn add` 를 다시 돌리면 `table.tsx`·`label.tsx` 에 `'use client'` 가 되살아난다** — 되살아난 것을 보면 다시 뺀다. 판단 기준은 훅·이벤트 핸들러·브라우저 API 가 하나도 없으면 뺀다.
+
+- [ ] **Step 2: dnd-kit 의 사실을 적는다**
+
+`AGENTS.md` 에 **드래그로 옮긴 순서는 서버에 남지 않고 새로고침하면 사라진다**는 사실과 그 이유(백엔드에 정렬 수서 필드도 재정렬 엔드포인트도 없다)를 적는다. **적지 않으면 다음 사람이 "드래그가 저장 안 되는 버그"로 읽고 없는 엔드포인트를 찾는다**(스펙 3.4.2).
+
+차트가 표본 데이터라는 사실도 같은 자리에 적는다(스펙 3.4.1).
+
+- [ ] **Step 3: 하위 `AGENTS.md` 를 쓴다**
+
+| 경로 | 소유하는 로컬 계약 |
+| --- | --- |
+| `lib/jsonapi/AGENTS.md` | "자원을 모른다" 규칙과 그 위반의 정의 |
+| `lib/resources/AGENTS.md` | "선언은 데이터다" 규칙과 새 자원을 더하는 절차 (Task 6 이 만들었다) |
+| `lib/grid/AGENTS.md` | URL ↔ 질의 경계, 커서를 해석하지 않는 이유 (Task 7 이 만들었다) |
+| `lib/bulk/AGENTS.md` | 벌크 엔드포인트가 없다는 사실이 정하는 것 셋 (Task 11 이 만들었다) |
+| `app/AGENTS.md` | "`fetch` 를 직접 하지 않는다" 규칙과 조립 함수를 다시 쪼개지 말라는 근거 |
+| `components/AGENTS.md` | 자원 이름으로 분기하지 않는다, 레지스트리 부품의 `'use client'` 정책 |
+| `test/AGENTS.md` | E2E 가 지키는 자리와 새 시나리오의 규칙 셋(실전 상수 금지 · 고유 이메일 · 자기 접두사로 좁히기) |
+| `scripts/AGENTS.md` | 단일 게이트 · 인용 검사 · 출처 검사 |
+| `docs/AGENTS.md` | 커밋되는 설계·계획·실측 기록 |
+| `.github/AGENTS.md` | CI 워크플로 설정 |
+
+- [ ] **Step 4: `README.md` 를 쓴다**
+
+들어 있는 것 · 시작하기 · **환경 변수 표 둘**(앱이 읽는 둘, E2E 만 읽는 다섯) · 화면 표 · **첫 운영자 시드 절차** · 백엔드 전환 · 검증 · Task 13 Step 12 에서 적은 3-백엔드 검증 결과 표.
+
+**필수 변수에 암묵적 기본값을 두지 않는다**는 계약과 그 이유(첫 요청에서야 드러나는 설정 오류보다 시작 실패가 낫다)를 적는다.
+
+- [ ] **Step 5: CI 매트릭스를 만든다**
+
+`.github/workflows/ci.yml` — 세 갈래를 `fail-fast: false` 로 실행하고, 각 실행에서 **알려진 차이와 이유를 출력**한다. `CI` 환경 변수가 설정되므로 `forbidOnly` 가 켜져 `test.only` 가 남은 실행이 실패한다.
+
+`pnpm exec playwright install chromium` 을 넣는다 — **의존성 설치에 딸려 오지 않는다.**
+
+- [ ] **Step 6: 성공 기준을 하나씩 확인한다**
+
+스펙 8.4 를 순서대로 짚는다.
+
+1. `./scripts/check.sh` 아홉 단계 전부 초록
+2. 세 백엔드 각각에서 E2E 통과
+3. 알려진 차이 0 건이고 **0 건이 매 실행 출력된다**
+4. 화면 다섯이 전부 있고, `/login` 밖의 넷이 익명 접근에서 `/login?next=<원래 경로>` 로 보내진다
+5. 일괄 작업이 부분 실패를 행별로 내고 실패한 행만 재시도된다
+
+- [ ] **Step 7: 게이트를 돌리고 커밋**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+
+```bash
+git add -A
+git commit -m "docs: write the layer contracts and wire the three-backend CI matrix
+
+AGENTS.md owns the layer ownership table and the definition of a violation.
+It also records two things that are invisible in the code: drag reordering
+does not persist because the backend has no order column or reorder route,
+and the dashboard chart is sample data not connected to the backend. Without
+those lines the next person reads the first as a save bug and hunts for an
+endpoint that does not exist.
+
+CI runs the three branches with fail-fast disabled and prints the known
+divergence count on every run. The local gate stays on the canonical backend:
+bringing up three stacks on every check would block development."
+```
+
+---
+
+## 실행 순서와 의존
+
+Task 1 → 2 → 3 → 4 → 5 까지는 **순서를 지킨다**(골격 없이 복사할 수 없고, 코어 없이 로그인할 수 없다). Task 6 · 7 은 서로 독립이고 Task 5 뒤 아무 때나 병행할 수 있다. Task 8 은 6 · 7 · 4 를 모두 요구한다. Task 9 는 6 을, Task 10 은 6 을, Task 11 은 독립, Task 12 는 11 과 8 을 요구한다. Task 13 은 8 · 10 · 12 를, Task 14 는 전부를 요구한다.
+
