@@ -29,6 +29,7 @@ import {
 
 import { serverDrivenTableOptions } from '@/lib/grid/table'
 import { readGridState, writeGridState, type GridState } from '@/lib/grid/state'
+import { runBulk, type BulkOutcome, type BulkReport } from '@/lib/bulk/executor'
 import type { ColumnDef, ColumnKind, ResourceDef } from '@/lib/resources'
 import type { CollectionDocument, ResourceIdentifier, ResourceObject } from '@/lib/jsonapi/document'
 import {
@@ -55,6 +56,9 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { BulkConfirmPanel } from './bulk-confirm'
+import { BulkProgress, BulkResultTable, mergeRetryReport } from './bulk-result'
+import { SelectionBar } from './selection-bar'
 
 /**
  * `examples`·`exampleCategories`·`exampleTags` 어느 자원이든 그리는 서버 구동
@@ -74,6 +78,12 @@ import {
  * 테스트 장비(`@testing-library/react` 등)가 없어 React 부분은 검증할 수
  * 없지만, 이 함수들은 순수 로직이라 직접 단위 테스트할 수 있고 그래야 한다
  * (lib/grid/의 순수 변환과 같은 이유).
+ *
+ * `bulkDeleteAction` 을 받으면(있는 자원만) 선택 바·확인 줄·진행률·결과 표가
+ * 나타난다 - 어느 것도 자원 이름으로 분기하지 않는다. `runBulk` 을 실제로
+ * 돌리는 것도, `id` 마다 `JsonApiResult` 를 `BulkOutcome` 으로 바꾸는 것도 이
+ * 컴포넌트가 아니라 호출부가 넘긴 Action 의 일이다 - 이 파일은 그 결과를
+ * `bulk-result.tsx` 의 `summarize` 로 읽어 표시만 한다.
  */
 
 export type GridCellValue = string | number | null | readonly string[]
@@ -281,10 +291,30 @@ export function sortTokenFromState(sorting: SortingState): string | null {
 }
 
 /**
+ * 일괄 삭제 진행 상태. `idle` 은 선택 바만(있다면) 보이는 평시고, `confirming` 은
+ * 실행 전 확인 문구가 뜬 상태, `running` 은 `runBulk` 가 실제로 요청을 보내는
+ * 중(진행률만 표시, 텍스트 없음), `done` 은 결과 표가 뜬 상태다.
+ */
+type BulkPhase =
+  | { kind: 'idle' }
+  | { kind: 'confirming' }
+  | { kind: 'running'; done: number; total: number; controller: AbortController }
+  | { kind: 'done'; report: BulkReport }
+
+/**
  * `useSearchParams()` 를 쓰므로 Suspense 경계 안에 있어야 빌드가 정적 셸을
  * 만들 수 있다(Next 규약) - 호출부가 잊지 않도록 여기서 감싼다.
  */
-export function ResourceGrid(props: { resource: ResourceDef; document: CollectionDocument }) {
+export function ResourceGrid(props: {
+  resource: ResourceDef
+  document: CollectionDocument
+  /**
+   * 있으면 선택 바·확인 줄·결과 표가 나타난다. 없으면(읽기 전용 자원) 이
+   * 그리드는 지금과 같이 선택 상태만 갖고 아무것도 실행하지 않는다 - 이
+   * 파일이 어떤 자원인지 분기해서 판단하지 않는다.
+   */
+  bulkDeleteAction?: (id: string) => Promise<BulkOutcome>
+}) {
   return (
     <React.Suspense fallback={null}>
       <ResourceGridInner {...props} />
@@ -295,9 +325,11 @@ export function ResourceGrid(props: { resource: ResourceDef; document: Collectio
 function ResourceGridInner({
   resource,
   document,
+  bulkDeleteAction,
 }: {
   resource: ResourceDef
   document: CollectionDocument
+  bulkDeleteAction?: (id: string) => Promise<BulkOutcome>
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -305,6 +337,7 @@ function ResourceGridInner({
   const gridState = readGridState(searchParams, resource)
 
   const [rowSelection, setRowSelection] = React.useState<RowSelectionState>({})
+  const [bulkPhase, setBulkPhase] = React.useState<BulkPhase>({ kind: 'idle' })
 
   const rowCount = readRowCount(document)
   const rows = React.useMemo(() => buildRows(resource, document), [resource, document])
@@ -372,6 +405,41 @@ function ResourceGridInner({
 
   const prevHref = pageHref(pathname, searchParams, document.links?.prev)
   const nextHref = pageHref(pathname, searchParams, document.links?.next)
+  const selectedIds = table.getFilteredSelectedRowModel().rows.map((row) => row.id)
+
+  // '/login' 하나만 링크한다 - 되돌아올 경로(proxy.ts 의 LOGIN_REDIRECT_PARAM)를
+  // 싣고 싶어도 그 상수를 여기서 가져올 수 없다(실측: proxy.ts 는
+  // lib/auth/session.ts 를 통해 next/headers 를 값으로 import 하고 있어, 이
+  // 클라이언트 컴포넌트가 그 상수 하나만 쓰려 해도 그 전체가 클라이언트
+  // 번들에 끌려 들어가 빌드가 깨진다 - "Server Components 밖에서 next/headers"
+  // 오류). 세션이 죽은 뒤의 재로그인이라 어차피 이 페이지로 돌아올 필요가
+  // 크지 않다고 보고 복귀 경로는 포기한다.
+  const reauthHref = '/login'
+
+  /**
+   * `runBulk` 를 실제로 돌린다 - 클라이언트가 `ids` 하나마다 `bulkDeleteAction`
+   * (Server Action)을 순차로 부른다. 서버 액션 하나가 한 번의 왕복이라
+   * `onProgress` 가 건마다 실제로 갱신되고, `signal` 취소가 다음 요청을 막을 수
+   * 있다 - 이 실행이 서버 한 번의 요청·응답으로 묶여 있었다면 둘 다 불가능했다.
+   *
+   * `previousReport` 가 있으면(재시도) 결과를 통째로 갈지 않고
+   * `mergeRetryReport` 로 합친다 - 재시도한 몇 건만 담긴 작은 보고서로 표
+   * 전체를 바꾸면 이미 확인된 나머지 건의 결과가 화면에서 사라진다.
+   */
+  async function startBulkDelete(ids: readonly string[], previousReport?: BulkReport) {
+    if (bulkDeleteAction === undefined || ids.length === 0) return
+    const controller = new AbortController()
+    setBulkPhase({ kind: 'running', done: 0, total: ids.length, controller })
+    const result = await runBulk(ids, bulkDeleteAction, {
+      signal: controller.signal,
+      onProgress: (done) => {
+        setBulkPhase((prev) => (prev.kind === 'running' ? { ...prev, done } : prev))
+      },
+    })
+    const report = previousReport === undefined ? result : mergeRetryReport(previousReport, result)
+    setRowSelection({})
+    setBulkPhase({ kind: 'done', report })
+  }
 
   return (
     <div className="flex flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
@@ -394,6 +462,41 @@ function ResourceGridInner({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {bulkDeleteAction !== undefined && selectedIds.length > 0 && bulkPhase.kind === 'idle' && (
+        <SelectionBar
+          selectedCount={selectedIds.length}
+          onBulkDelete={() => setBulkPhase({ kind: 'confirming' })}
+        />
+      )}
+      {bulkPhase.kind === 'confirming' && (
+        <BulkConfirmPanel
+          count={selectedIds.length}
+          onCancel={() => setBulkPhase({ kind: 'idle' })}
+          mode="button"
+          onConfirm={() => {
+            void startBulkDelete(selectedIds)
+          }}
+        />
+      )}
+      {bulkPhase.kind === 'running' && (
+        <BulkProgress
+          done={bulkPhase.done}
+          total={bulkPhase.total}
+          onCancel={() => bulkPhase.controller.abort()}
+        />
+      )}
+      {bulkPhase.kind === 'done' && (
+        <BulkResultTable
+          report={bulkPhase.report}
+          onRetry={(ids) => {
+            void startBulkDelete(ids, bulkPhase.report)
+          }}
+          onClose={() => setBulkPhase({ kind: 'idle' })}
+          reauthHref={reauthHref}
+        />
+      )}
+
       <div className="overflow-hidden rounded-lg border">
         <Table>
           <TableHeader className="bg-muted">

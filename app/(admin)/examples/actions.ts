@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import type { BulkOutcome } from '@/lib/bulk/executor'
 import { request, withAcceptLanguage } from '@/lib/jsonapi/client'
 import type { SingleDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
@@ -151,4 +152,38 @@ export async function deleteExampleAction(id: string): Promise<void> {
     throw new Error(result.errors[0]?.detail ?? '삭제하지 못했습니다.')
   }
   redirect('/examples')
+}
+
+/**
+ * 일괄 삭제의 건별 실행 - `components/grid/resource-grid.tsx` 가 이 함수 자체를
+ * `runBulk`(lib/bulk/executor.ts)의 `run` 콜백으로 넘긴다. 그리드는 화면이고
+ * 클라이언트 컴포넌트라, 이 함수는 이 파일의 다른 Action 과 달리 `<form
+ * action>` 이 아니라 클라이언트 쪽 반복문에서 `id` 하나마다 직접 호출된다 -
+ * Next 는 Server Action 을 그렇게 호출하는 것을 그대로 지원한다. 건마다 왕복
+ * 하나씩이라 `runBulk` 의 `onProgress` 가 실제로 갱신되고, 취소 신호가 다음
+ * 요청을 실제로 막을 수 있다.
+ *
+ * `deleteExampleAction` 과 달리 실패해도 던지지 않는다 - 부분 실패가 이
+ * 실행의 정상 경로라(lib/bulk/AGENTS.md), 한 건의 실패로 나머지 실행을
+ * 막으면 안 된다. 성공·실패 모두 `BulkOutcome` 하나로 돌려주고, 판단(재시도
+ * 가능 여부)은 화면(`components/grid/bulk-result.tsx`)이 한다.
+ *
+ * 두 함정을 여기서 피한다(둘 다 실측됨) -
+ * 1. 성공한 삭제는 204·본문 없음이다. `result.status === 204` 로는
+ *    `JsonApiResult` 의 판별자가 섞여 있어 좁혀지지 않는다(client.ts 의
+ *    문서화된 함정) - `ok` 로만 좁힌다. 문서를 읽을 일이 없으니 그걸로 충분하다.
+ * 2. `errors` 배열은 그대로 넘긴다 - `status`·`detail` 만 뽑아 새 객체로
+ *    옮기면 `code` 가 사라지고, `exactOptionalPropertyTypes` 아래서는
+ *    `{ status: error.status }` 조차 컴파일되지 않는다(`string | undefined`
+ *    를 `status?: string` 에 넣으려 해서다).
+ */
+export async function bulkDeleteExampleAction(id: string): Promise<BulkOutcome> {
+  const acceptLanguage = (await headers()).get('accept-language')
+  const result = await request<never>(
+    `${EXAMPLES.path}/${id}`,
+    withAcceptLanguage({ method: 'DELETE' }, acceptLanguage),
+  )
+
+  if (result.ok) return { id, ok: true }
+  return { id, ok: false, errors: result.errors }
 }

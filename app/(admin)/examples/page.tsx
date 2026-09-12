@@ -3,6 +3,7 @@ import { ResourceGrid } from '@/components/grid/resource-grid'
 import { request } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
+import { bulkDeleteExampleAction } from './actions'
 import { listRequest, toSearchParams } from './list'
 
 /**
@@ -18,6 +19,10 @@ import { listRequest, toSearchParams } from './list'
  * 그것을 스텁하지 않는 관례를 갖는다(app/(auth)/actions.ts 와 같은 이유).
  * 그래서 이 한 줄은 단위 테스트가 볼 수 없고, 실제로 넘어가는지는 로케일이
  * 다른 두 컨텍스트로 서는 E2E 의 몫이다.
+ *
+ * `bulkDeleteAction` 은 `./actions.ts` 가 이미 채운 Action 을 그대로 건넨다 -
+ * `examples` 라는 이름은 이 화면과 `actions.ts` 안에만 있고, `ResourceGrid`
+ * 는 그 이름을 몰라도 되는 Action 참조 하나만 받는다.
  */
 export default async function ExamplesPage({
   searchParams,
@@ -45,5 +50,11 @@ export default async function ExamplesPage({
     throw new Error('목록 응답에 본문이 없습니다.')
   }
 
-  return <ResourceGrid resource={resource} document={result.document} />
+  return (
+    <ResourceGrid
+      resource={resource}
+      document={result.document}
+      bulkDeleteAction={bulkDeleteExampleAction}
+    />
+  )
 }

@@ -2,7 +2,7 @@ import { ArrowLeftIcon } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { SubmitButton } from '@/components/form/submit-button'
+import { ConfirmedDeleteForm } from '@/components/grid/bulk-confirm'
 import { formatDateTime, relationshipLabel } from '@/components/grid/resource-grid'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -32,6 +32,12 @@ import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
  * 유일한 예외는 "이 id 의 자원이 없다"(RESOURCE_NOT_FOUND, 또는 200 인데
  * `data: null`) - 이건 `notFound()` 로 보낸다(app/not-found.tsx 가 바로 이
  * 호출부를 기다리고 있었다).
+ *
+ * 삭제는 `ConfirmedDeleteForm`(components/grid/bulk-confirm.tsx) 으로 확인을
+ * 거친다 - 확인 전에는 작은 트리거 버튼만 보여 바로 위 저장 버튼(`w-full`)과
+ * 폭·위치를 공유하지 않는다("위험 구역" 구획으로 상단 경계까지 둔다). 여전히
+ * `deleteExampleAction` 을 `<form action>` 으로 부르므로, 실패를 던져
+ * `error.tsx` 가 받는 그 계약은 그대로다.
  */
 export default async function ExampleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -111,9 +117,10 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
         initialValues={initialValues}
       />
 
-      <form action={deleteExampleAction.bind(null, id)} className="max-w-lg">
-        <SubmitButton label="삭제" variant="destructive" />
-      </form>
+      <div className="max-w-lg space-y-2 border-t pt-4">
+        <h2 className="text-sm font-medium text-muted-foreground">위험 구역</h2>
+        <ConfirmedDeleteForm action={deleteExampleAction.bind(null, id)} />
+      </div>
     </div>
   )
 }
