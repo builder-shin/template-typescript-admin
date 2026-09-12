@@ -72,6 +72,19 @@ describe('어드민의 보호 경로', () => {
   it('가입 경로는 존재하지 않는다', () => {
     expect(isProtectedPath('/register')).toBe(true)
   })
+
+  it('아직 없는 public/ 자산 경로도 오늘은 보호된다 - public/ 에 첫 파일이 생기면 config.matcher 의 예외도 함께 넓혀야 한다', () => {
+    // config.matcher(아래 describe)는 `_next/static`·`_next/image`·
+    // `favicon.ico` 셋만 뺀다 - `public/`에서 직접 서빙되는 파일(로고,
+    // robots.txt, manifest 등)의 경로는 여기 없다. PROTECTED_PATH_PATTERNS 는
+    // `/login`만 빼고 전부 보호하므로, `public/`이 비어 있는 지금은 무해할 뿐
+    // 이 둘의 조합은 이미 함정이다 - 그 자산이 실제로 생기면 익명 사용자에게
+    // 보여야 할 로고·robots.txt 요청이 `/login`으로 리다이렉트된다.
+    // 이 단언은 오늘의 동작(자산 모양 경로도 보호된다)을 고정해 둔다 -
+    // public/ 에 첫 파일을 추가하는 사람이 이 문구를 보고 config.matcher 의
+    // 예외 목록도 함께 넓혀야 함을 알도록 하기 위해서다.
+    expect(isProtectedPath('/logo.png')).toBe(true)
+  })
 })
 
 describe('config.matcher — 정적 자산 제외', () => {

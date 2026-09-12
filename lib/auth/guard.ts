@@ -1,10 +1,16 @@
 /**
  * Server Action 인증 가드 - 두 겹 방어의 안쪽 겹.
  *
- * 바깥 겹은 proxy.ts 다. 그것만으로 부족한 이유: proxy 는 **URL 을 가진 요청**
- * 에만 붙는다. Server Action 은 URL 없이 POST 로 직접 호출될 수 있고, 그
- * 호출은 보호 경로의 경로 패턴을 밟지 않는다 - 즉 proxy 의 경로 가드를
- * 우회한다. 그래서 쓰기 Action 은 자기 입구에서 다시 확인해야 한다.
+ * 바깥 겹은 proxy.ts 다. Server Action 은 별도 라우트가 아니라 자신이 쓰인
+ * 페이지로의 POST 로 처리된다(Next.js 공식 문서, `docs/01-app/03-api-reference/
+ * 03-file-conventions/proxy.mdx`) - 그래서 proxy() 가 그 페이지에 대해 돈다면
+ * Server Action 호출도 같은 경로 가드를 통과한다. 그것만으로 충분하지 않다고
+ * 보는 이유는 반대 방향에 있다: proxy() 는 `config.matcher`(아래)가 잡은
+ * 요청에만 돈다 - 그 목록이 어떤 경로를 빼면 그 경로의 Server Action 호출도
+ * 함께 proxy() 를 타지 않는다(같은 문서: "Proxy matcher 가 어떤 경로를 빼면
+ * 그 경로의 Server Function 호출도 함께 빠진다 - Proxy 하나만 믿지 말고 각
+ * Server Function 안에서 직접 인증·인가를 확인하라"). 그래서 쓰기 Action 은
+ * 자기 입구에서 다시 확인해야 한다.
  *
  * ## 만료를 판정하지 않는다
  *
@@ -39,12 +45,13 @@
  * readSession() 이 cookies() 에서 먼저 던져 redirect 줄에 도달조차 못 한다).
  * 실제로 리다이렉트가 일어나는지는 e2e 계층의 몫이다.
  *
- * **이 저장소에서 이 가드가 유일한 방어선이 되는 경로는 없다.** 어드민에는
- * 공개 표면이 없으므로 `PROTECTED_PATH_PATTERNS` 가 `/login` 을 뺀 모든
- * 경로를 이미 보호한다 - `requireSession()` 을 부르는 어떤 Action 이든, 그
- * Action 이 붙은 페이지 자체를 proxy 가 먼저 막는다. 그래도 이 층을 남기는
- * 것은 방어 종심(defense in depth) 때문이다 - `PROTECTED_PATH_PATTERNS` 에
- * 새 경로 추가를 빠뜨리는 실수가 있어도 이 층이 남는다.
+ * **`PROTECTED_PATH_PATTERNS` 를 놓치는 실수는 이제 구조적으로 불가능하다**
+ * (proxy.ts 참고 - 예외 목록이라 새 경로는 기본이 보호다). 그런데도 이 가드가
+ * 남는 이유는 다른 자리의 실수 때문이다: proxy() 는 `config.matcher`(proxy.ts)
+ * 가 잡은 요청에만 돈다. 그 목록을 넓히다가(예: `public/` 자산 예외 추가) 실수로
+ * 어떤 페이지까지 함께 빠지면, 그 페이지도 그 페이지의 Server Action 호출도
+ * proxy() 자체를 타지 않는다 - `PROTECTED_PATH_PATTERNS` 는 그 요청에
+ * 도달하지도 못한다. 그 경우 `requireSession()` 이 유일한 방어선이 된다.
  */
 
 import { redirect } from 'next/navigation'

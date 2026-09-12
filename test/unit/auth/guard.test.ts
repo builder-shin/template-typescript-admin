@@ -24,8 +24,9 @@ describe('requireSession', () => {
     //
     // ⚠️ **E2E 도 이 자리를 못 덮는다.** requireSession() 의
     // 프로덕션 호출부가 0개라, 앱을 밖에서 구동하는 어떤 테스트도 이
-    // 함수에 도달하지 못한다. 계층의 한계가 아니라 호출 그래프의 사실이고,
-    // 첫 호출부가 생길 때 함께 닫아야 한다 - lib/auth/guard.ts 의 그 절.
+    // 함수에 도달하지 못한다. 계층의 한계가 아니라 호출 그래프의 사실이다 -
+    // 실제 쓰기 Action 이 이 함수를 부르기 시작하는 태스크가 이 공백을
+    // 함께 닫아야 한다.
     return expect(requireSession()).rejects.toThrow()
   })
 })

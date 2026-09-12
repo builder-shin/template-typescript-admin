@@ -243,6 +243,19 @@ export async function proxy(request: NextRequest) {
   return response
 }
 
+/**
+ * proxy() 는 여기 잡힌 경로에만 돈다 - 여기서 빠지면 PROTECTED_PATH_PATTERNS
+ * 는 그 요청을 아예 보지 못한다(그 경로의 Server Action 호출도 마찬가지다 -
+ * lib/auth/guard.ts 상단 주석 참고).
+ *
+ * PROTECTED_PATH_PATTERNS 가 예외 목록(`/login` 만 공개)인 것과 이 매처가
+ * 상호작용한다: 여기서 빠지는 모든 경로는 로그인 여부와 무관하게 항상
+ * 통과한다. 지금은 `public/` 이 비어 있어 무해하지만, 로고·robots.txt·
+ * manifest 같은 정적 자산을 `public/` 에 처음 추가하면 그 요청 경로도
+ * proxy() 를 거친다 - 여기 예외에 추가하지 않으면 그 자산도 익명
+ * 사용자에게는 `/login` 으로 리다이렉트된다(test/unit/proxy.test.ts 의
+ * "public/ 자산 경로도 오늘은 보호된다" 가 오늘의 동작을 고정해 둔다).
+ */
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 }
