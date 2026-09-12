@@ -8,21 +8,20 @@ import {
   resolveSort,
 } from '@/components/data-table-query'
 import { SectionCards } from '@/components/section-cards'
-import { request, withAcceptLanguage, type JsonApiResult } from '@/lib/jsonapi/client'
+import { request, type JsonApiResult } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
-import { countRequest, readTotal } from '@/lib/resources/count'
+import { countRequest, readTotal } from './count'
+import { classifyHealth, healthRequest } from './health'
 import { toSearchParams } from './examples/list'
-
-/** 계약에 있는 표면이다(2.1) - 총합/목록과 달리 자원이 아니라 백엔드 자체의 생사를 묻는다. */
-const HEALTH_PATH = '/health'
 
 /**
  * 네 요청(카운트 셋 · 목록 하나) 공통의 "성공했고 본문이 있다" 를 한 곳에서
  * 확인한다 - `app/(admin)/examples/page.tsx` 의 두 단계 던지기(ok 확인 →
  * document 확인)와 같은 판단을 네 번 반복하지 않는다. 헬스 확인은 이 함수를
  * 거치지 않는다 - 그 확인은 실패 자체가 카드가 보여줄 유효한 상태이지,
- * `error.tsx` 로 이 화면 전체를 끌고 내려갈 예외가 아니다.
+ * `error.tsx` 로 이 화면 전체를 끌고 내려갈 예외가 아니다(`classifyHealth`가
+ * 그 실패를 더 갈라 "다운"과 "우리가 잘못 물었다"를 구별한다 - ./health.ts).
  */
 function unwrap(result: JsonApiResult<CollectionDocument>): CollectionDocument {
   if (!result.ok) {
@@ -59,7 +58,7 @@ export default async function Page({
       request<CollectionDocument>(...countRequest(examples, lang)),
       request<CollectionDocument>(...countRequest(categories, lang)),
       request<CollectionDocument>(...countRequest(tags, lang)),
-      request<Record<string, unknown>>(HEALTH_PATH, withAcceptLanguage({}, lang)),
+      request<Record<string, unknown>>(...healthRequest(lang)),
       request<CollectionDocument>(...recentExamplesRequest(examples, params, lang)),
     ])
 
@@ -80,7 +79,7 @@ export default async function Page({
             exampleCount={exampleCount}
             categoryCount={categoryCount}
             tagCount={tagCount}
-            healthy={healthResult.ok}
+            health={classifyHealth(healthResult)}
           />
           <div className="px-4 lg:px-6">
             <ChartAreaInteractive />

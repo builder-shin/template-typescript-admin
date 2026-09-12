@@ -133,8 +133,8 @@ export interface RecentRow {
  *
  * 속성이 선언과 다른 타입으로 오거나 아예 없어도 던지지 않고 빈 값으로
  * 접는다 - 카드·표 어느 쪽도 렌더링 실패로 화면 전체를 끌고 내려가면 안
- * 된다(단, 총합이 없는 경우는 다르다 - `lib/resources/count.ts` 의
- * `readTotal` 이 그 경우를 던지게 한다).
+ * 된다(단, 총합이 없는 경우는 다르다 - `app/(admin)/count.ts` 의 `readTotal`
+ * 이 그 경우를 던지게 한다).
  */
 export function buildRecentRows(document: CollectionDocument): RecentRow[] {
   return document.data.map((object) => {

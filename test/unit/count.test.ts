@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { countRequest, readTotal } from '@/lib/resources/count'
+import { countRequest, readTotal } from '@/app/(admin)/count'
 import { resourceByType } from '@/lib/resources'
 
 const EXAMPLES = resourceByType('examples')!
