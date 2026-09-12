@@ -2220,7 +2220,7 @@ MSG
 - Create: `docker-compose.e2e.yml`, `Dockerfile`, `.dockerignore`, `playwright.config.ts`
 - Create: `test/e2e/{stack.ts,matrix.ts,fixtures.ts,probe-email.ts}`, `test/e2e/seed/{examples.sql,examples.rails.sql,README.md}`
 - Create: `test/e2e/{auth.spec.ts,examples.spec.ts,bulk.spec.ts}`
-- Modify: `scripts/check.sh`, `package.json`, `.prettierignore`, `eslint.config.mjs`
+- Modify: `scripts/check.sh`, `package.json`, `.prettierignore`, `eslint.config.mjs`, `components/nav-user.tsx`(로그아웃 배선만 - 나머지 사이드바는 Task 15)
 - Test: `test/unit/e2e/matrix.test.ts`, `test/unit/e2e/probe-email.test.ts`
 
 **Interfaces:**
@@ -2630,3 +2630,114 @@ bringing up three stacks on every check would block development."
 
 Task 1 → 2 → 3 → 4 → 5 까지는 **순서를 지킨다**(골격 없이 복사할 수 없고, 코어 없이 로그인할 수 없다). Task 6 · 7 은 서로 독립이고 Task 5 뒤 아무 때나 병행할 수 있다. Task 8 은 6 · 7 · 4 를 모두 요구한다. Task 9 는 6 을, Task 10 은 6 을, Task 11 은 독립, Task 12 는 11 과 8 을 요구한다. Task 13 은 8 · 10 · 12 를, Task 14 는 전부를 요구한다.
 
+### Task 15: 사이드바가 실재하는 것만 말하게 한다
+
+**이 과업은 계획을 쓸 때 빠뜨린 자리다.** dashboard-01 블록이 사이드바 다섯 파일을 함께 들여왔는데 어느 과업도 그것을 소유하지 않았다(Task 13 구현자가 로그아웃 E2E 를 쓰려다 발견했다). Task 14 보다 **뒤에** 두는 이유는 이 과업이 `components/AGENTS.md` 를 함께 고치기 때문이다 — 그 파일이 서술하는 대상을 이 과업이 바꾸므로, 순서를 뒤집으면 Task 14 가 곧 낡을 서술을 쓴다.
+
+**Files:**
+- Modify: `components/app-sidebar.tsx`, `components/nav-main.tsx`, `components/nav-documents.tsx`, `components/nav-secondary.tsx`
+- Modify: `app/(admin)/layout.tsx`(사이드바에 실제 운영자를 넘기는 자리 — 파일명은 열어서 확인한다)
+- Modify: `components/AGENTS.md`(Task 14 가 만든다 — 이 과업이 바꾸는 만큼만 고친다)
+- Test: `test/unit/components/sidebar.test.ts`
+
+**Interfaces:**
+- Consumes: `lib/auth/session.ts` 의 세션 읽기, `lib/jsonapi/client.ts` 의 `request`, `app/(admin)/count.ts`·`health.ts` 가 세운 "화면 옆에 요청 조립" 전례
+- Produces: 없음(화면 계층이다)
+
+- [ ] **Step 1: 무엇이 조작됐는지 세고 적는다**
+
+실측(2026-09-12)으로 확인된 것부터 확인한다. 숫자가 달라졌으면 달라진 숫자를 쓴다.
+
+```bash
+grep -c "url: '#'" components/app-sidebar.tsx        # 20
+grep -n "m@example.com\|shadcn\|Acme Inc" components/app-sidebar.tsx
+find app -name 'page.tsx'                            # 실제 라우트 다섯
+```
+
+| 조작된 것 | 실재하는 것 |
+| --- | --- |
+| `url: '#'` 20개 | 라우트는 `/` · `/examples` · `/examples/[id]` · `/examples/new` · `/login` 다섯뿐이고, 사이드바에 올릴 만한 것은 `/` 와 `/examples` 둘이다 |
+| `name: 'shadcn'` · `email: 'm@example.com'` | 로그인한 운영자. `/api/v1/users/me` 가 실재한다(실측: `users_controller.py` 가 `"/me"` 하나를 등록한다) |
+| `avatar: '/avatars/shadcn.jpg'` | **없다.** `public/` 디렉터리 자체가 이 저장소에 없고, 있더라도 Task 3 의 프록시 매처가 거기서 서빙되는 첫 파일을 `/login` 으로 보낸다 |
+| `Acme Inc.` | 이 템플릿은 남의 제품 이름을 모른다 |
+
+**조작을 지우는 것과 대체하는 것을 구별하라.** 운영자 이름·이메일은 **대체 가능하다**(백엔드가 준다). 아바타와 조직명은 **대체할 것이 없다** — 지운다. 20개의 죽은 링크는 둘이 실재하고 열여덟은 없다.
+
+- [ ] **Step 2: 운영자 조회의 테스트를 쓴다**
+
+`/api/v1/users/me` 응답에서 표시 이름과 이메일을 뽑는 순수 함수를 만든다. 모양은 `app/(admin)/count.ts` 의 `readTotal` 과 `app/(admin)/options.ts` 의 `optionsFromDocument` 를 읽어서 맞춘다 — 요청 조립은 화면 옆, 순수 변환은 테스트 가능하게.
+
+```ts
+import { describe, expect, it } from 'vitest'
+import { operatorFromDocument } from '@/app/(admin)/operator'
+
+describe('operatorFromDocument', () => {
+  it('속성에서 이름과 이메일을 뽑는다', () => {
+    expect(
+      operatorFromDocument({
+        data: { type: 'users', id: 'u1', attributes: { name: '신정우', email: 'ops@example.com' } },
+      }),
+    ).toEqual({ name: '신정우', email: 'ops@example.com' })
+  })
+
+  it('이름이 없으면 이메일을 이름 자리에 쓴다 - 문구를 지어내지 않는다', () => {
+    expect(
+      operatorFromDocument({ data: { type: 'users', id: 'u1', attributes: { email: 'ops@example.com' } } }),
+    ).toEqual({ name: 'ops@example.com', email: 'ops@example.com' })
+  })
+
+  it('이메일조차 없으면 null 이다 - "알 수 없는 사용자" 같은 문구를 만들지 않는다', () => {
+    expect(operatorFromDocument({ data: { type: 'users', id: 'u1' } })).toBeNull()
+  })
+})
+```
+
+**`name` 이 백엔드 계약에 실제로 있는지 먼저 확인하라** — `user_serializer.py` 를 읽어 노출되는 속성 이름을 확인하고, 없으면 위 테스트를 실측에 맞게 고친 뒤 그렇게 했다고 보고하라. 이 계획이 추론으로 계약을 적어 여섯 번 틀렸다(원장의 F24-F55).
+
+- [ ] **Step 3: 테스트를 돌려 실패를 확인하고 구현한다**
+
+Run: `pnpm vitest run test/unit/components/sidebar.test.ts` → FAIL → 구현 → PASS (3 tests)
+
+- [ ] **Step 4: 사이드바를 실재하는 것으로 줄인다**
+
+- `nav-main.tsx` 는 실재하는 두 곳만 받는다(`/` 와 `/examples`). 링크는 `next/link` 로, 현재 경로 강조는 `usePathname` 으로 — `components/grid/resource-grid.tsx` 가 이미 그것을 쓴다.
+- `nav-documents.tsx`·`nav-secondary.tsx` 에 올릴 실재하는 항목이 없으면 **그 컴포넌트 호출을 지운다.** 빈 섹션 제목만 남기지 마라 — 빈 섹션은 "곧 생긴다"고 약속하는 것이고 이 템플릿은 약속하지 않는다. 파일 자체는 블록의 일부로 남겨도 되지만, 남긴다면 `components/AGENTS.md` 에 "호출되지 않는다"고 적어라.
+- `Acme Inc.` 와 아바타를 지운다. 로고가 필요하면 **인라인 SVG** 로 그린다 — `public/` 에 파일을 두지 마라(Task 3 의 매처가 그것을 `/login` 으로 보낸다. 계획 Task 9 의 같은 경고 참고).
+- 운영자 이름·이메일은 서버에서 받아 prop 으로 내린다. 조회에 실패하면 **그 영역을 비워라** — 대체 문구를 만들지 마라.
+
+- [ ] **Step 5: 로그아웃이 이미 배선돼 있는지 확인한다**
+
+Task 13 이 `nav-user.tsx` 의 로그아웃을 `logoutAction` 에 연결했다. **다시 하지 마라.** 확인만 하고, 이 과업이 사용자 데이터를 prop 으로 바꾸는 과정에서 그 배선을 깨지 않았는지 본다.
+
+- [ ] **Step 6: `components/AGENTS.md` 를 이 과업이 바꾼 만큼 고친다**
+
+Task 14 가 쓴 서술 중 사이드바에 관한 것을 사실에 맞게 고친다. 적을 것 둘: 블록이 들여온 부품 중 **호출되지 않는 것이 무엇인지**, 그리고 **왜 운영자 정보가 prop 으로 내려오는지**(화면이 `fetch` 하지 않는다는 `app/AGENTS.md` 의 규칙과 같은 이유다).
+
+- [ ] **Step 7: 게이트를 돌리고 커밋**
+
+Run: `rm -rf .next && ./scripts/check.sh`
+
+```bash
+git add -A
+git commit -F - <<'MSG'
+feat: make the sidebar name only things that exist
+
+The dashboard block arrived with a sidebar nobody owned: twenty url: '#'
+entries against four real routes, a hardcoded operator called shadcn at
+m@example.com, an avatar path that cannot resolve because public/ does not
+exist here, and Acme Inc. as an organisation name. None of it was labelled
+as sample data, so all of it reads as fact.
+
+Removing and replacing are different jobs and this splits them. The operator's
+name and email are replaceable, because the backend serves them at
+/api/v1/users/me, so they are fetched on the server and passed down. The avatar
+and the organisation name have nothing to replace them with, so they are gone.
+Of the twenty links, two pointed at screens that exist.
+
+An empty section heading is a promise that something is coming, and this
+template makes no such promise, so sections with nothing real in them are not
+rendered at all.
+MSG
+```
+
+---
