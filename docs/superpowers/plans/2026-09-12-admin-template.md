@@ -22,6 +22,7 @@
 - **오류 문구의 정본은 백엔드다.** 프론트엔드가 실패 이유 문장을 만들지 않는다. 요청 스코프의 모든 백엔드 호출이 그 요청의 `Accept-Language` 를 전달한다. (스펙 6.3)
 - **사라질 자리를 인용하지 않는다.** 계획 문서·세션 스크래치패드를 코드·문서 주석에서 인용하면 게이트 `[5/9]` 가 죽인다. 근거는 사실 문장으로 적는다.
 - **넣지 않는 것** (스펙 10장): 역할·권한 UI · 감사로그 · 사용자 관리 화면 · `/register` 화면 · 계약 실험실 `(lab)` · 제네릭 화면 생성기 · 일괄 작업 보상 트랜잭션 · 백엔드 어댑터 계층.
+- **앞 인용은 목표가 도착할 때 다시 확인한다.** 복사해 온 주석 중 "뒤 과업이 만들 파일"을 가리키는 것은 남겨 두기로 했다. 그러면 **그 파일을 만드는 과업이 그 인용들이 참이 됐는지 확인할 책임을 진다.** 실측 사례: `lib/jsonapi/query.ts` 가 `lib/resources/define.ts` 의 `resourcePath` 를 가리켰고, Task 6 이 그 파일을 만들면서 그 함수는 넣지 않아 앞 인용이 거짓으로 귀결됐다. 새 디렉터리나 모듈을 만들었으면 `grep -rn '<그 경로>' lib/ app/ test/ proxy.ts` 로 자기를 가리키는 인용을 찾아 하나씩 확인한다.
 - **커밋 메시지에 AI 관련 태그를 넣지 않는다.**
 
 ## File Structure
@@ -1145,16 +1146,32 @@ Expected: FAIL — 모듈이 없다.
 
 백엔드의 기본 정렬은 `createdAt` 내림차순이고 `id` 타이브레이커가 붙는다. 화면이 정렬을 지정하지 않으면 그 순서가 온다.
 
-`category.ts` · `tag.ts` — `path: '/api/v1/categories'` · `'/api/v1/tags'`, `writable: false`, 열은 `name` 하나.
+`category.ts` · `tag.ts` — `writable: false`, 열은 `name` 하나. **질의 정책은 둘이 동일하다**(실측 `app/schemas/example_category.py` · `example_tag.py`):
 
-- [ ] **Step 5: 선언을 실제 응답과 맞춘다**
+| | 값 |
+| --- | --- |
+| 필터 | `name` — `exact` · `contains` (화면 기본 `contains`) |
+| 정렬 | `name` · `createdAt` |
+| include | 없음 — `includes: []` 가 맞다 |
+| 기본 정렬 | **`name` 오름차순** |
 
-```bash
-curl -s -H 'accept: application/vnd.api+json' \
-  'http://localhost:4100/api/v1/examples?page[size]=1&include=category,tags' | python -m json.tool
-```
+기본 정렬이 `examples` 의 `createdAt DESC` 와 다른 것은 의도된 것이다 — 백엔드 주석의 근거를 사실 문장으로 옮기면: **선택기는 알파벳순이 맞다. 참조 데이터를 최신순으로 고르지 않는다.** `createdAt` 은 곧 쓸 일이 없어도 백엔드 허용 목록에 있으므로 우리 선언에도 넣는다.
 
-`data[0].attributes` 의 키와 선언의 열 `key` 가 일치하는지, `relationships` 의 이름과 `includes` 가 일치하는지 확인하고 다른 것을 고친다. **기억으로 적지 마라** — 관계 이름이 틀리면 배지가 UUID 로 그려지거나 조용히 "분류 없음"이 된다.
+**같은 자원을 세 가지 이름으로 부른다 — 오타가 아니다**(실측: 형제의 `lib/resources/category.ts`·`tag.ts` 가 이 모양이다).
+
+| | examples | 분류 | 라벨 |
+| --- | --- | --- | --- |
+| JSON:API `type` | `examples` | `exampleCategories` | `exampleTags` |
+| HTTP 경로 | `/api/v1/examples` | `/api/v1/categories` | `/api/v1/tags` |
+| SQL 테이블 (E2E 씨앗만 쓴다) | `examples` | `categories` | `tags` |
+
+**맞추지 마라.** `type` 은 `included` 항목이 들고 오는 값이라, 틀리면 관계 해석이 조용히 빈손으로 끝난다 — 배지가 UUID 로 그려지거나 "분류 없음"이 되고, **둘 중 어느 증상이 나오는지는 백엔드마다 다르다.** 그래서 이름 오류가 아니라 일관성 없는 버그처럼 보인다.
+
+- [ ] **Step 5: 살아있는 백엔드는 필요 없다**
+
+Step 4 의 표는 백엔드 소스(`app/models/example.py` · `app/schemas/*.py`)에서 옮긴 것이라 **대조할 대상이 이미 계약 그 자체다.** 도커가 떠 있지 않아도 이 과업은 완결된다.
+
+세 백엔드가 같은지는 Task 13 의 매트릭스가 재확인한다. 그때 다르면 계약 차이로 기록된다.
 
 - [ ] **Step 6: 테스트를 돌려 통과를 확인한다**
 
@@ -1310,6 +1327,8 @@ Expected: FAIL — 모듈이 없다.
 - [ ] **Step 4: 구현한다**
 
 `state.ts` 와 `query.ts` 를 쓴다. **`lib/grid/` 에 자원 이름 문자열 리터럴을 두지 않는다**(계층 위반) — 전부 `ResourceDef` 에서 읽는다. **JSX 도 `fetch` 도 두지 않는다.**
+
+**선언에 없는 키를 버리는 것은 스타일이 아니라 정확성이다.** 백엔드는 허용 목록 밖 쿼리 파라미터를 `400 INVALID_QUERY_PARAMETER` 로 거절한다(실측 `app/jsonapi/query.py:152,167`). 즉 URL 에 낯선 파라미터가 하나 섞이면 목록이 **비는 게 아니라 실패한다.** 인식되는 접두사는 `filter` · `sort` · `include` · `page` 넷이고, 우리가 내보내는 것은 그 안에 있다.
 
 커서 값은 백엔드가 발급한 불투명한 값으로 다룬다. 페이지 이동은 응답 링크의 query 를 읽어 `pageQuery` 에 담아 그대로 전달하고, 프런트엔드가 커서 내용을 해석하지 않는다.
 
