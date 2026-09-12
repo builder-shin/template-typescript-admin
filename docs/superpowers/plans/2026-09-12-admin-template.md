@@ -2533,7 +2533,7 @@ having run."
 
 스펙 4장의 소유권 표와 **위반의 정의**를 적는다. 표는 **소유 관계이지 파일 목록이 아니다** — 어떤 위치가 비어 있어도 그 행의 계약은 이미 유효하다. 어느 파일이 실재하는지는 저장소를 보면 되므로 적지 않는다(적어 두면 그 목록이 드리프트하고, 읽는 사람은 표가 아니라 그 목록을 믿는다).
 
-반드시 함께 적을 것 다섯:
+반드시 함께 적을 것 여섯:
 
 1. **사라질 자리를 인용하지 마라** — 게이트 `[5/9]` 가 강제한다. 근거는 사실 문장으로 적고, 문서가 필요하면 `docs/superpowers/` 를 가리킨다.
 2. **`(admin)` 안에서 `min-h-svh` 를 쓰지 마라** — 높이는 셸이 갖는다.
@@ -2652,7 +2652,7 @@ Task 1 → 2 → 3 → 4 → 5 까지는 **순서를 지킨다**(골격 없이 �
 - Modify: `components/app-sidebar.tsx`, `components/nav-main.tsx`, `components/nav-documents.tsx`, `components/nav-secondary.tsx`
 - Modify: `app/(admin)/layout.tsx`(사이드바에 실제 운영자를 넘기는 자리 — 파일명은 열어서 확인한다)
 - Modify: `components/AGENTS.md`(Task 14 가 만든다 — 이 과업이 바꾸는 만큼만 고친다)
-- Test: `test/unit/components/sidebar.test.ts`
+- Test: `test/unit/components/sidebar.test.ts`, `test/unit/components/boundary-policy.test.ts`
 
 **Interfaces:**
 - Consumes: `lib/auth/session.ts` 의 세션 읽기, `lib/jsonapi/client.ts` 의 `request`, `app/(admin)/count.ts`·`health.ts` 가 세운 "화면 옆에 요청 조립" 전례
@@ -2726,6 +2726,20 @@ Task 13 이 `nav-user.tsx` 의 로그아웃을 `logoutAction` 에 연결했다. 
 - [ ] **Step 6: `components/AGENTS.md` 를 이 과업이 바꾼 만큼 고친다**
 
 Task 14 가 쓴 서술 중 사이드바에 관한 것을 사실에 맞게 고친다. 적을 것 둘: 블록이 들여온 부품 중 **호출되지 않는 것이 무엇인지**, 그리고 **왜 운영자 정보가 prop 으로 내려오는지**(화면이 `fetch` 하지 않는다는 `app/AGENTS.md` 의 규칙과 같은 이유다).
+
+- [ ] **Step 6b: 지시어 경계를 기계적으로 고정한다**
+
+루트 `AGENTS.md` 의 규칙 **6번**(지시어 오염)은 산문뿐이다. 5번에는 이미 기계적 테스트가 있다 - `test/unit/components/registry-policy.test.ts` 가 `table.tsx`·`label.tsx` 를 파일로 읽어 `'use client'` 가 없음을 고정한다. 같은 모양으로 6번을 고정한다.
+
+`test/unit/components/boundary-policy.test.ts` 를 만든다. 하는 일 하나: **비-클라이언트 모듈이 `'use client'` 모듈에서 값으로 가져온 이름은 JSX 로만 쓰여야 하고 호출되면 안 된다.**
+
+- 저장소를 훑어 첫 줄이 `'use client'` 인 파일 집합을 만든다.
+- 그 집합에 속하지 않는 `app/`·`components/`·`lib/` 의 파일에서, 그 집합의 모듈을 값으로 가져오는 `import { … } from` 을 찾는다(`import type` 은 제외).
+- 가져온 이름마다, 그 파일 안에서 `<이름` 으로 쓰이는지 `이름(` 으로 호출되는지 본다. **호출되면 실패다.**
+
+**왜 빌드가 이것을 못 잡는지 테스트 주석에 적어라**: 이 위반이 실제로 일어났을 때(`components/grid/format.ts` 가 생긴 이유) 깨진 것은 `/examples/[id]` 였고, **그 라우트는 동적(ƒ)이라 빌드 시 렌더되지 않는다.** `pnpm build` 는 정적 페이지만 미리 렌더하므로 초록이었고, 실제 백엔드 E2E 가 그 페이지를 처음 열었을 때 드러났다.
+
+실측 기준선(2026-09-12): 경계를 넘는 값 import **12건, 전부 JSX 컴포넌트, 호출 0건**. 숫자가 달라졌으면 달라진 숫자로 적되, **단정은 "호출이 0건"이지 "import 가 12건"이 아니다** - 컴포넌트를 경계 너머로 가져오는 것은 정상이고 그것이 경계의 작동 방식이므로, import 개수를 고정하면 정상적인 추가마다 테스트가 깨진다.
 
 - [ ] **Step 7: 게이트를 돌리고 커밋**
 
