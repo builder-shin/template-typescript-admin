@@ -684,6 +684,14 @@ quietly ship it open. The divergence is recorded in the provenance note."
 npx shadcn@latest add dashboard-01
 ```
 
+- [ ] **Step 2b: 블록이 주지 않는 부품을 따로 받는다**
+
+```bash
+npx shadcn@latest add skeleton
+```
+
+**`skeleton` 은 `dashboard-01` 의 레지스트리 의존 19개에 없다**(실측 2026-09-12). 그런데 Step 8b 의 `app/loading.tsx` 와 뒤 과업들의 라우트별 `loading.tsx` 가 전부 그것을 쓴다 — 로딩 상태에 텍스트를 쓰지 않는다는 규칙(스펙 5.3)을 지키는 수단이 스켈레톤이기 때문이다.
+
 - [ ] **Step 3: 받은 것을 확인한다**
 
 ```bash
@@ -778,7 +786,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
 형제의 `app/error.tsx` 는 `@/components/ui/button` 을 쓴다 — 이 과업이 `shadcn add` 로 이미 들여온 뒤라 그대로 온다. `min-h-svh` 도 쓰는데, **이 셋은 그룹 밖이라 셸이 없으므로 여기서는 옳다**(금지되는 것은 `(admin)` 안이다).
 
-가져온 뒤 `스펙 9.2` 같은 형제 스펙 포인터를 Task 2·3 과 같은 규칙으로 걷어낸다.
+가져온 뒤 `스펙 9.2` 같은 형제 스펙 포인터와 과업 라벨(`D3 Task 2` · `D2 Task 7`)을 Task 2·3 과 같은 규칙으로 걷어낸다. **다만 `not-found.tsx` 의 긴 주석은 조심해서 읽어라** — 그 안의 `nativeButton={false}` 실측(기본값은 `<a type="button">` + 콘솔 error, 이 prop 을 주면 `<a role="button">` + 경고 없음)은 **지어낸 것이 아니라 마크업을 직접 읽어 잰 기술적 근거다.** 라벨만 떼고 그 측정은 남긴다. `test/e2e/fixtures.ts` 를 가리키는 부분은 Task 13 이 만들 파일이므로 앞을 가리키는 올바른 인용이다.
+
+`loading.tsx` 의 주석은 라우트 세그먼트별 `loading.tsx` 가 자원별 모양을 갖는다고 적는다 — 그건 Task 8·10 이 실제로 하는 일이라 그대로 참이다.
 
 `app/` 루트의 셋은 **라우트 그룹 밖이라 셸을 두르지 않는다.** 즉 `(admin)` 안의 화면이 `notFound()` 를 불러도 사이드바는 사라진다. 그게 의도다.
 
@@ -915,11 +925,19 @@ cp /tmp/ttn/test/unit/auth/logout.test.ts test/unit/auth/logout.test.ts
 
 `docs/provenance/copied-core.json` 의 `paths` 에 이 파일을 더한다.
 
+**`lib/auth/logout.ts` 의 주석 셋도 확인한다.** Task 3 이 이 테스트를 지운 동안 `logout.ts:62,91,207` 은 여전히 "`logout.test.ts` 가 고정한다"고 적어 두었다 — 그 두 과업 사이에서는 거짓이었고, 이제 파일이 돌아오면 **다시 참이 된다.** 세 자리를 읽어 실제로 참인지 확인하고, 테스트가 고정하는 내용이 달라졌으면 문장을 맞춘다. 스스로 닫히는 문제라 Task 3 에서는 보류했다.
+
+**`test/unit/auth/AGENTS.md` 의 파일 표도 함께 고친다.** Task 3 이 이 파일을 지울 때 그 표의 행을 "뒤 과업이 가져온다"로 바꿔 뒀다 — 이제 실재하므로 그 행을 다시 현재 상태로 고친다. 인용 게이트는 이것을 잡지 못한다(금지 패턴이 없다). **디렉터리 문서가 없는 파일을 있다고 적거나 있는 파일을 없다고 적으면, 읽는 사람은 디렉터리가 아니라 그 표를 믿는다.**
+
 - [ ] **Step 7: `(auth)` 그룹과 로그인 화면을 만든다**
 
 `app/(auth)/layout.tsx` 는 **헤더 없는 뷰포트 전체**다. `login/page.tsx` 는 이메일·비밀번호와 `SubmitButton`, 실패 배너(`form-banner.tsx`)를 그린다. 실패 문구는 백엔드가 준 것을 쓴다.
 
 화면에 **가입 링크를 두지 않는다.** 대신 "첫 운영자 계정은 시드 스크립트로 만든다"는 안내와 `README` 를 가리키는 한 줄을 둔다 — 클론한 사람이 읽을 자리다.
+
+**로고나 아이콘이 필요하면 인라인 SVG 로 그린다. `public/` 에 파일을 두지 마라.** Task 3 이 보호 경로를 전부 매치로 바꿨고, `proxy.ts` 의 `config.matcher` 는 `_next/static` · `_next/image` · `favicon.ico` 만 제외한다. 즉 **`public/` 에서 서빙되는 첫 파일은 `/login` 으로 리다이렉트된다** — 하필 로그인 화면이 그 파일을 참조하면 그 이미지가 깨진다. Task 3 이 그 사실을 `config.matcher` 주석과 `isProtectedPath('/logo.png')` 가 참임을 고정하는 테스트로 크게 만들어 뒀다.
+
+자산이 정말 필요하면 세 가지를 함께 한다: `config.matcher` 의 예외를 넓히고, 그 고정 테스트를 새 동작에 맞게 고치고, **왜 넓혔는지를 주석에 적는다.** 조용히 넓히면 다음 사람이 보호 구멍으로 읽는다.
 
 - [ ] **Step 8: 실제 백엔드로 손으로 확인한다**
 
