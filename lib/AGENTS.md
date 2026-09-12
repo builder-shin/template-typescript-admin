@@ -47,3 +47,69 @@
 최종 검증은 `./scripts/check.sh`다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
+
+## 복사해 온 코어 안에서, 이 저장소가 실제로 쓰지 않는 자리
+
+`lib/jsonapi`·`lib/auth` 는 `docs/provenance/copied-core.json` 이 기록한
+복사본이다 - 그 기록(`note`/`divergences`)은 "원본과 갈라진 곳"만 남기고
+"원본 그대로인데 이 저장소가 안 쓰는 곳"은 남기지 않는다. 그 자리는 여기
+적는다 - 복사본 자신의 주석은 (원본 저장소 기준으로는 참이라) 고치지
+않지만, 그 주석이 "이 함수가 유일한 규칙"이라고 말하는 것을 이 저장소에서
+그대로 믿으면 안 되는 자리들이다.
+
+- **`lib/jsonapi/query.ts` 전체(19개 export, `buildQuery`·`filterParameter`
+  등)가 이 저장소에서 쓰이는 곳은 자기 자신의 테스트
+  (`test/unit/jsonapi/query.test.ts`) 뿐이다** - 실측: 저장소 전체에서
+  `jsonapi/query`(이 파일 자신의 경로)를 값으로 import 하는 곳이 그 테스트
+  말고 없다. 그 파일 자신의 주석(`filterParameter` 앞, 예: "그래서 규칙을
+  이 함수 하나에 둔다")은 원본 저장소에서는 참이지만 여기서는 아니다 -
+  **실제로 살아 있는 질의 조립기는 `lib/grid/query.ts` 의 `gridQuery`**
+  (`app/(admin)/examples/list.ts`·`app/(admin)/recent.ts` 가 부른다)다. 이
+  둘의 필터 연산자 어휘(`FilterOperator`)가 겹치는 것도 우연이 아니라
+  의도된 중복이다 - `lib/resources/define.ts` 가 내부 모듈을 하나도 import
+  하지 않는다는 그 디렉터리 자신의 계약 때문에, `lib/resources` 가 아는
+  연산자 집합을 `lib/jsonapi/query.ts` 에서 다시 가져올 수 없다. 하나로
+  합칠 자리가 아니라는 뜻이다 - 손대지 마라.
+- **`lib/auth`의 가입(registration) 표면이 이 저장소에서 도달 불가능하다.**
+  `decideAfterRegistration`·`authLinkHref`·`signUpThenSignIn`·`signUp`·
+  `interpretSignUpResult`·`registerDocument`·`REGISTER_TYPE` 전부 프로덕션
+  소비자가 0개다(실측 - 전부 `test/unit/auth/`에서만 불린다). 이유는 이미
+  `app/(auth)/actions.ts` 머리말이 적어 두었다 - 가입 화면 자체가 없다(첫
+  운영자는 `scripts/seed-operator.ts`), 그리고 이 코어는 다른 프론트엔드
+  템플릿과 공유되므로 안 쓰는 절반을 지우면 다음 동기화 때 "의도된 축소"와
+  "드리프트"를 구별할 수 없게 된다 - 그래서 지우지 않는다.
+  - 따름정리: **`AuthFormState.accountCreated` 는 이 저장소의 실제 실행
+    경로에서 `true` 가 될 수 없다.** 그 값을 정하는 갈래가 둘인데
+    (`lib/auth/flow.ts`), 로그인이 실제로 쓰는 `decideAfterLogin` 은 항상
+    `accountCreated: false` 를 하드코딩하고, `true` 를 주는 쪽
+    (`decideAfterRegistration`)은 위 항목대로 도달 불가능하다. 이 필드를
+    읽는 화면도 없다(실측 - `lib/auth/` 밖 어디서도 `accountCreated` 를
+    읽지 않는다). 타입은 `boolean` 이지만 사실상 상수 `false` 다.
+
+### 메모이즈되는 설정 오류 - `lib/config/settings.ts` 의 "시작에 실패한다"
+
+그 파일 머리말은 "필수 변수가 없으면 시작에 실패한다"고 적는다 -
+`getSettings()` 자신은 그 실패를 프로세스당 한 번으로 메모이즈할 뿐, **첫
+호출이 언제 일어나는지는 정하지 않는다.** 아무도 기동 시점에 부르지 않으면
+첫 호출은 곧 첫 실제 요청이 되어 "시작 실패"가 아니라 "운영자가 첫 화면을
+열 때 만나는 500"이 된다 - 실측: `test/unit/auth/logout.test.ts` 가
+`BACKEND_URL=''` 로 모듈을 새로 불러와도 `endSession()` 을 실제로 부를
+때만 던지는 것을 이미 확인해 둔다(모듈을 불러오는 시점이 아니다).
+
+루트 `instrumentation.ts` 가 `register()` 훅에서 `getSettings()` 를 미리
+불러 이 첫 호출을 요청보다 앞으로 옮긴다 - 그런데 **그래도 "시작 실패"는
+아니다, 실측했다.** `next build` 뒤 `node .next/standalone/server.js` 를
+깨진 `BACKEND_URL` 로 띄우면 서버는 "✓ Ready" 를 찍고 포트를 계속 듣는다 -
+`register()` 가 던진 예외는 "Failed to prepare server" 로그와
+`unhandledRejection` 으로 남지만 **프로세스는 종료되지 않는다.** 그 뒤
+모든 요청이(첫 요청만이 아니라, 그리고 어떤 요청이 우연히 `getSettings()`
+를 먼저 건드리는지와 무관하게) 즉시 500 을 받는다 - `instrumentation.ts`
+가 얻는 것은 "프로세스가 죽는다"가 아니라 "실패가 균일하고 즉각적이다"
+이다. "배포 자체가 거부된다"는 의미의 시작 실패를 원하면 오케스트레이션
+계층(헬스체크가 최초 몇 초의 500 을 보고 배포를 되돌리는 것 등)이 별도로
+있어야 한다.
+
+즉 `settings.ts` 머리말의 문구는 `instrumentation.ts` 가 있어도 글자
+그대로는 여전히 참이 아니다 - 더 정확한 서술은 "필수 변수가 없으면 서버가
+뜬 직후부터 모든 요청이 균일하게 500 을 받는다"이다. 그 파일 자신은
+복사해 온 코어라 문구를 고치지 않았다.

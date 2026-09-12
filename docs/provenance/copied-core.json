@@ -29,12 +29,22 @@
     {
       "path": "proxy.ts",
       "what": "REQUEST_PATH_HEADER('x-admin-request-path') 상수를 추가하고, 통과하는 모든 요청의 request.headers 에 `${pathname}${search}` 를 실어 downstream 에 넘긴다. test/unit/proxy.test.ts 에 이 배선을 확인하는 테스트 2개를 추가했다.",
-      "why": "Next.js 는 서버 컴포넌트(레이아웃 포함)가 현재 요청의 pathname 을 읽는 공식적인 방법을 제공하지 않는다(usePathname() 문서: \"Reading the current URL from a Server Component is not supported\"). app/(admin)/layout.tsx 가 세션이 죽은 것을 감지해 /login?next=<현재 경로> 로 보내야 하는데(T1.2), 그 '현재 경로'를 구할 다른 방법이 없었다. 회전된 쿠키를 downstream 에 전달하는 이 파일의 기존 기법(request.cookies.set + NextResponse.next({request:{headers}}))을 쿠키가 아닌 일반 헤더에 그대로 적용했을 뿐 새 메커니즘은 아니다 - pnpm dev + curl 로 실측(REQUEST_PATH_HEADER 선언부 주석에 기록)."
+      "why": "Next.js 는 서버 컴포넌트(레이아웃 포함)가 현재 요청의 pathname 을 읽는 공식적인 방법을 제공하지 않는다(usePathname() 문서: \"Reading the current URL from a Server Component is not supported\"). app/(admin)/layout.tsx 가 세션이 죽은 것(destroySession)을 감지해 /login?next=<현재 경로> 로 보내야 하는데, 그 '현재 경로'를 구할 다른 방법이 없었다. 회전된 쿠키를 downstream 에 전달하는 이 파일의 기존 기법(request.cookies.set + NextResponse.next({request:{headers}}))을 쿠키가 아닌 일반 헤더에 그대로 적용했을 뿐 새 메커니즘은 아니다 - pnpm dev + curl 로 실측(REQUEST_PATH_HEADER 선언부 주석에 기록)."
     },
     {
       "path": "lib/jsonapi/client.ts",
       "what": "RequestOptions.method 를 string 에서 'GET' | 'POST' | 'PATCH' | 'DELETE' 리터럴 합집합으로 좁혔다(PUT 제외). test/unit/jsonapi/client.test.ts 의 PROBE_OPTIONS 픽스처가 쓰던 임의 문자열 'PROBE-METHOD' 를 실제 리터럴 'PATCH' 로 바꾸고(그 테스트들이 재는 것은 메서드 값의 진위와 무관하다), RequestOptions.method 의 타입 좁힘 자체를 pin 하는 @ts-expect-error 테스트 2개(오타·PUT)를 추가했다.",
       "why": "method?: string 아래서는 읽기 전용 전건이 공개인 이 계약에서 DELETE 요청의 method 를 빠뜨려도(선택 인자라 컴파일이 막지 않는다) GET 으로 조용히 성공해 '삭제됨' 화면을 보여주면서 실제로는 행이 남는다 - RequestOptions.accessToken(첫 사례)·signal(두 번째 사례)과 같은 부류의 세 번째 사례다. PUT 을 합집합에서 뺀 이유는 세 백엔드 전부 PUT /examples/{id} 를 enable_upsert 업서트로 등록해 두어(실측, route_registrar.py) 존재하지 않는 id 에도 201 로 새 자원을 만들기 때문이다 - 편집 폼이 절대 불러서는 안 되는 메서드라 타입에서부터 제거했다."
+    },
+    {
+      "path": "proxy.ts",
+      "what": "PROTECTED_PATH_PATTERNS 머리말의 /register 문단을 다시 썼다 - '이미 안전하게 막고 있다'는 서술에서 '가입 화면을 붙이려면 반드시 예외를 추가해야 한다'는 경고로 바꿨다. 코드(PROTECTED_PATH_PATTERNS 자체·/register 의 보호 여부)는 바꾸지 않았다. test/unit/proxy.test.ts 의 '가입 경로는 존재하지 않는다' 테스트 이름·주변 주석도 같은 방향으로 다시 썼다(단언 자체는 그대로 - isProtectedPath('/register') === true).",
+      "why": "가입 화면은 세션 없는 방문자가 와야 하는 유일한 화면이라, 이 패턴이 보호하는 것이 다른 모든 화면에서는 안전장치이지만 가입 화면에서는 함정이다(보호된 채로 두면 화면을 붙여도 아무도 가입할 수 없다 - 화면을 붙인 사람이 로그인한 채로 확인하면 멀쩡해 보여서 더 늦게 드러난다). 원문이 이 반전을 언급하지 않아 나중에 가입 화면을 붙이는 사람이 예외 추가를 잊게 만들 수 있었다."
+    },
+    {
+      "path": "lib/config/settings.ts",
+      "what": "settings.ts 파일 자체는 바꾸지 않았다. 대신 새 루트 파일 instrumentation.ts 가 Next.js register() 훅에서 이미 내보내진 getSettings() 를 기동 시 즉시 호출한다(test/unit/instrumentation.test.ts 로 확인). 원본 저장소에는 이 파일이 없다.",
+      "why": "settings.ts 머리말은 '필수 변수가 없으면 시작에 실패한다'고 적지만 getSettings() 는 프로세스 스코프로 메모이즈만 할 뿐 첫 호출 시점을 정하지 않아, 아무도 기동 시 부르지 않으면 첫 호출은 첫 실제 요청이 되어 '시작 실패'가 아니라 '운영자가 첫 화면을 열 때의 500'이 된다(실측: test/unit/auth/logout.test.ts 가 이미 이 지연 특성을 확인해 둔다). instrumentation.ts 로 그 첫 호출을 요청보다 앞으로 옮겼다 - 단, 이것도 완전한 '시작 실패'는 아니라는 것까지 실측했다: node .next/standalone/server.js 를 깨진 BACKEND_URL 로 띄우면 서버는 여전히 뜨고 포트를 계속 듣는다(프로세스가 죽지 않는다) - 다만 그 이후 모든 요청이 즉시 균일하게 500 을 받는다. lib/AGENTS.md 의 '메모이즈되는 설정 오류' 절에 이 실측 전체를 남겼다."
     }
   ],
   "exports": [
