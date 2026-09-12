@@ -1,0 +1,219 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+/*
+ * (D2 Task 4 재수정) 원래 `@custom-variant dark (&:is(.dark *));` 한 줄이었다 -
+ * `.dark` 클래스가 있어야만 `dark:` 유틸리티(button.tsx·input.tsx 의
+ * `dark:bg-input/30` 등)가 켜졌다. 이 저장소엔 그 클래스를 붙이는 토글이
+ * 없으므로, 시스템이 다크여도 `dark:` 유틸리티는 죽어 있었다(토큰 클래스
+ * `bg-background` 등은 아래 `@media (prefers-color-scheme: dark)` 블록
+ * 덕에 이미 시스템을 따랐다 - 그 둘의 불일치를 이 커스텀 변형이 없앤다).
+ *
+ * 아래 `.dark`와 아래쪽 `:root:not(.light)` 두 branch 는 158번째 줄 부근의
+ * 토큰 정의가 이미 쓰는 것과 같은 3단 우선순위를 그대로 흉내 낸다 -
+ * `.dark`(명시적 다크, 조건 없이 이긴다) > 시스템 선호 + `.light` 없음
+ * (`:root:not(.light)`) > 그 외 기본(라이트). `.light`가 시스템 다크를
+ * 이겨야 한다는 요구가 바로 이 `:not(.light)`다 - 뺀 채로 두면 시스템이
+ * 다크인 이상 나중에 `.light` 토글을 얹어도 `dark:` 유틸리티만 계속 켜져
+ * 있는 상태가 된다(토큰은 꺼지는데 유틸리티만 안 꺼짐 - 지금 고치는
+ * 불일치와 똑같은 모양으로 재발한다).
+ *
+ * 값이 아니라 매칭 여부만 갈라 실제 색은 손대지 않으므로, 아래 토큰
+ * 블록과 값을 맞출 필요는 없다 - 그래도 세 갈래 우선순위(`.dark` >
+ * 시스템+`.light`없음 > 기본)는 토큰 블록과 반드시 같아야 한다.
+ */
+@custom-variant dark {
+  &:is(.dark *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:is(:root:not(.light) *) {
+      @slot;
+    }
+  }
+}
+
+/* shadcn/ui 가 쓰는 디자인 토큰. Tailwind 4 는 CSS 우선 설정이라
+   tailwind.config.js 가 없고 이 파일이 설정의 자리다. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-heading: var(--font-sans);
+  --font-sans: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  color-scheme: light dark;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* 이 저장소엔 아직 다크 모드 토글이 없다(next-themes 등을 들이는 건
+   토글 UI 자체가 없는 지금 YAGNI 위반이다) - `.dark`를 붙이는 주체가
+   아무 데도 없으므로, 아래 .dark{} 블록만으로는 실측상 죽은 코드였다
+   (OS 를 다크로 바꿔도 아무 것도 안 바뀐다). 토글이 생기기 전까지는
+   시스템 선호를 그대로 따르는 순수 CSS 폴백으로 같은 값을 미러링한다.
+
+   :not(.light) 가드는 나중에 명시적 토글을 얹을 자리다. 토글이 강제
+   다크를 원하면 `.dark`를 붙이면 된다 - 아래 .dark{} 가 소스 순서상
+   이 블록 뒤에 오고 값도 같아서 항상 다크로 귀결된다. 토글이 시스템은
+   다크인데 라이트를 강제하고 싶으면 `.light`를 붙이면 이 블록이 통째로
+   꺼지고 위 :root 의 라이트 값이 그대로 남는다(그 시점에 실제로 `.light`
+   클래스를 쓰는 토글을 골랐는지는 그때 맞춘다).
+
+   값은 아래 .dark{}와 반드시 같아야 한다 - 팔레트를 바꾸면 두 곳 다
+   고친다.
+
+   (D2 Task 4 재수정) 이 3단 우선순위(.dark > 시스템+.light 없음 > 기본)를
+   파일 맨 위 @custom-variant dark 도 그대로 따른다 - dark: 유틸리티
+   (button.tsx 등)는 여기 토큰과 다른 근거로 켜지면 안 된다. 둘 중 하나만
+   고치면 "토큰은 다크인데 유틸리티는 아니다" 류 불일치가 재발한다. */
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+  }
+}
+
+.dark {
+  color-scheme: dark;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
