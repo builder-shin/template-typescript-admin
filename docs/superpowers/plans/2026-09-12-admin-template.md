@@ -2577,6 +2577,15 @@ having run."
 
 `pnpm exec playwright install chromium` 을 넣는다 — **의존성 설치에 딸려 오지 않는다.**
 
+**툴체인 버전을 워크플로에 두 번째로 적지 마라.** 정본은 `package.json` 이다(실측: `engines.node` 는 `>=24.11.0`, `packageManager` 는 `pnpm@11.22.0`). 워크플로에 숫자를 박으면 사본이 둘이 되고 하나만 올릴 때 조용히 어긋난다.
+
+- **Node**: `24.11.0` 은 새 버전이라 러너의 기본 Node 가 그보다 낮을 수 있고, 그러면 `pnpm install` 이 `engines` 검사에서 죽는다. `actions/setup-node` 의 `node-version-file` 로 `package.json` 을 가리켜 `engines.node` 를 읽게 하는 것이 의도다 — **그 입력이 `engines` 범위를 실제로 해석하는지 작성 시점에 액션 문서로 확인하고**, 안 되면 명시적으로 고정한 뒤 **왜 사본이 둘인지 주석에 적어라.** 확인하지 않고 둘 중 하나를 고르지 마라.
+- **pnpm**: `packageManager` 가 이미 정확한 버전을 고정하므로 corepack 또는 `pnpm/action-setup` 이 그것을 읽게 둔다. 워크플로에 `version:` 을 적지 않는다.
+
+**실패한 실행의 Playwright 리포트를 산출물로 올린다** — `if: failure()` 로 `playwright-report/` 와 `test-results/` 를 업로드한다. 매트릭스이므로 산출물 이름에 갈래를 넣어 셋이 서로 덮어쓰지 않게 한다. **이것이 없으면 CI 가 빨간불일 때 손에 남는 것이 로그 한 덩어리뿐이고**, 로컬에서는 재현되지 않는 갈래가 하필 잘 깨지는 갈래다(Rails 는 Host 검사·별도 DB 이름·`development` 스테이지 셋을 혼자 갖는다).
+
+**각 잡에 `timeout-minutes` 를 준다.** 백엔드를 git URL 에서 빌드하고 스택이 뜨기를 기다리는 구조라, 준비 대기가 걸리면 기본 한도(6시간)까지 러너를 붙잡는다. 넉넉하되 유한하게 잡는다.
+
 - [ ] **Step 6: 성공 기준을 하나씩 확인한다**
 
 스펙 8.4 를 순서대로 짚는다.
