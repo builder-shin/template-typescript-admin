@@ -1706,7 +1706,7 @@ labelling is the condition for keeping it. The recent-changes table has no
 
 **Interfaces:**
 - Consumes: Task 2 의 `groupErrors`·`actionForErrors`·`FieldErrors`(`lib/jsonapi/errors.ts`), Task 6 의 `ResourceDef`, Task 8 의 `listRequest`(`app/(admin)/examples/list.ts`)
-- Produces: `detailRequest(resource, id, acceptLanguage): [path: string, options: RequestOptions]` · `examplesFormState(errors, context): ExamplesFormState`
+- Produces: `detailRequest(resource, id, acceptLanguage): [path: string, options: RequestOptions]` · `examplesFormState(errors: readonly ErrorObject[]): ExamplesFormState` — `{ attributeErrors, relationshipErrors, documentErrors, unusable }`. **auth 와 달리 `context` 인자가 없다** — auth 는 제산된 이메일과 `accountCreated` 를 되돌려줄 필요가 있었지만, 이 폼은 제출된 값을 `FormData` 로 다시 얻어 화면이 지닌다. Step 3 의 테스트가 인자 하나로 부르는 것이 정본이다.
 
 - [ ] **Step 1: 이미 있는 것을 읽는다 — 필드 오류 매핑을 새로 쓰지 마라**
 
@@ -2270,22 +2270,44 @@ Postgres · Redis · 마이그레이션 · 씨앗 데이터 · 백엔드 하나 
 
 **미리 빌드된 이미지는 없다**(실측 2026-09-12: 세 백엔드의 ghcr 패키지가 존재하지 않는다). Docker 가 **git URL 을 build context 로** 받아 백엔드를 직접 빌드한다.
 
+**네 build context 를 여기 적어 둔다. 추측하지 마라 — 그럴듯하고 틀린 이름이 실제로 존재한다.** `builder-shin/template-nestjs-api` 는 있는 저장소인데 Dockerfile 이 없다. NestJS 백엔드는 **`template-typescript-nestjs`** 다.
+
+| 무엇 | build context | `target` | 근거(Dockerfile 스테이지, 실측) |
+| --- | --- | --- | --- |
+| fastapi | `https://github.com/builder-shin/template-python-fastapi.git#main` | **없다** | `uv` · `builder` · `runtime` — 마지막이 이미 `runtime` |
+| nestjs | `https://github.com/builder-shin/template-typescript-nestjs.git#main` | **없다** | `builder` · `runtime` — 마지막이 이미 `runtime` |
+| rails | `https://github.com/builder-shin/template-ruby-rails.git#main` | **`development`** | `base` · `bundle` · `development` · `production-bundle` · `production` — 마지막이 `production` 이라 지정하지 않으면 그쪽이 잡힌다 |
+| 이 앱 | `.` | `runtime` | 이 Task 가 만드는 `Dockerfile` 의 마지막 스테이지 이름을 `runtime` 으로 둔다(형제의 `base`·`deps`·`build`·`runtime` 를 미러링) |
+
+**`target:` 은 rails 에만 있다.** 정본에서 fastapi·nestjs 는 `build: <git URL>` 스칼라 단축형이라 `target` 키가 아예 없고, rails 만 YAML 앵커로 `context` + `target: development` 를 함께 묶어 세 서비스(`migrate-rails`·`api-rails`·`seed-rails`)가 그것을 참조한다. 아래 스니펫을 세 갈래에 그대로 복제하면 **fastapi 와 nestjs 의 빌드가 없는 스테이지를 찾다가 실패한다.**
+
 ```yaml
 # 백엔드마다 migrate-* · api-* · seed-* 세 서비스를 두고 profiles 로 가른다.
 # db(postgres:18-alpine) 와 redis(redis:8-alpine) 는 셋이 공유한다.
+#
+# rails 만 target 이 필요하므로 앵커로 묶어 세 서비스가 공유한다.
+x-rails-build: &rails-build
+  context: https://github.com/builder-shin/template-ruby-rails.git#main
+  # 필수다. 빼면 Dockerfile 의 마지막 스테이지(production)가 잡힌다.
+  target: development
 
   api-rails:
     profiles: [rails]
-    build:
-      context: https://github.com/builder-shin/template-ruby-rails.git#main
-      # target 을 지정하지 않으면 Dockerfile 의 마지막 스테이지가 잡힌다.
-      target: development
+    build: *rails-build
     networks:
       default:
         aliases: [api] # ← 세 api-* 가 모두 이 별칭을 갖는다
     ports:
       - target: 4000
         published: ${E2E_API_PORT:-4100}
+
+  api-fastapi:
+    profiles: [fastapi]
+    # target 없음 - 마지막 스테이지가 runtime 이다.
+    build: https://github.com/builder-shin/template-python-fastapi.git#main
+    networks:
+      default:
+        aliases: [api]
 
   web:
     build:
