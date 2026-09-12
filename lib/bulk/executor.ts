@@ -1,3 +1,5 @@
+import type { ErrorObject } from '@/lib/jsonapi/document'
+
 /**
  * 벌크(일괄) 작업의 순차 실행기.
  *
@@ -9,22 +11,22 @@
  * 그래서 이 파일은 순수 함수다: `fetch` 도, 자원 이름도, HTTP 상태 코드 분기도
  * 없다.
  *
- * ## `import` 로 시작하는 줄이 하나도 없다
+ * ## 값 import 를 두지 않는다
  *
  * `BulkOutcome.errors` 는 `lib/jsonapi/document.ts` 의 `ErrorObject` 를 그대로
  * 들고 간다. 이 파일을 가져다 쓰는 자리(다음 태스크의 Server Action)는
- * 클라이언트 컴포넌트에서도 닿는 경로라, "이 실행기가 서버 설정을 끌어들이지
- * 않는다"는 성질이 빌드하고 번들을 그렙해야만 확인되는 게 아니라 **이 파일을
- * 읽는 것만으로** 확인돼야 한다. 그래서 타입을 일반 `import type { ErrorObject }
- * from '...'` 문이 아니라 아래처럼 인라인 `import(...)` 타입으로 참조한다 -
- * `import type` 문도 런타임에는 지워지지만 그 줄 자체는 `import` 로 시작해서,
- * `grep -c '^import' lib/bulk/executor.ts` 로 세면 0 이 아니라 1 이 나온다.
- * 인라인 참조는 그 줄조차 만들지 않아 이 셈이 항상 0 이다.
+ * 클라이언트 컴포넌트에서도 닿는 경로라, 이 실행기가 `lib/jsonapi/client.ts`
+ * 나 그 너머 `process.env` 를 읽는 설정을 끌어들이면 안 된다. 지켜야 할
+ * 성질은 "값 import 가 없다"이지 "import 문이 없다"가 아니다 - 위
+ * `import type` 문은 컴파일에서 완전히 지워져 런타임에 어떤 모듈도 끌어들일
+ * 수 없으므로 이 성질을 그대로 만족한다.
  *
- * **이 파일에 import 선언을 추가하지 마라.** 값이든 타입이든 하나라도 추가하는
- * 순간 위 성질이 깨지고, 그 사실은 타입 검사도 빌드도 잡아내지 못한다.
+ * 읽는 사람이 확인할 것: **이 파일의 import 줄은 전부 `import type` 으로
+ * 시작한다.** 빌드도 번들도 없이, 파일을 읽는 것만으로 확인된다.
+ *
+ * **이 파일에 값 import 를 추가하지 마라.** 추가하는 순간 위 성질이 깨지고,
+ * 그 사실은 타입 검사도 빌드도 잡아내지 못한다.
  */
-type ErrorObject = import('@/lib/jsonapi/document').ErrorObject
 
 /** 한 번의 실행에 담을 수 있는 최대 건수. 화면은 실행 전에 이 값을 읽어 미리 알린다. */
 export const MAX_BULK_ITEMS = 50
@@ -65,7 +67,8 @@ export interface BulkReport {
  * 요청은 되돌리지 않는다.
  *
  * `ids.length` 가 `MAX_BULK_ITEMS` 를 넘으면 `run` 을 한 번도 부르지 않고
- * 던진다 - 상한 확인은 루프 밖, 첫 요청보다 먼저다.
+ * 던진다 - 상한 확인은 루프 밖, 첫 요청보다 먼저다. 정확히 `MAX_BULK_ITEMS`
+ * 개는 넘은 것이 아니라 전부 실행된다.
  */
 export async function runBulk(
   ids: readonly string[],

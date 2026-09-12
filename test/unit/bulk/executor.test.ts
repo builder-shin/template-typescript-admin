@@ -41,6 +41,15 @@ describe('runBulk', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('상한과 정확히 같으면 전부 실행한다', async () => {
+    const run = vi.fn((id: string) => Promise.resolve(ok(id)))
+    const exactlyMax = Array.from({ length: MAX_BULK_ITEMS }, (_, i) => String(i))
+    const report = await runBulk(exactlyMax, run)
+    expect(run).toHaveBeenCalledTimes(MAX_BULK_ITEMS)
+    expect(report.outcomes).toHaveLength(MAX_BULK_ITEMS)
+    expect(report.cancelled).toBe(false)
+  })
+
   it('일부가 실패해도 남은 것을 계속 보내고 행별로 모은다', async () => {
     const report = await runBulk(['a', 'b', 'c'], (id) =>
       Promise.resolve(id === 'b' ? gone(id) : ok(id)),

@@ -60,25 +60,27 @@
 - `BulkOutcome`을 만들 때 오류 배열의 일부 필드만(`status`·`detail`) 뽑아 새
   객체로 옮겨 담으면 위반이다 - `code`가 빠진다.
 
-## `import`로 시작하는 줄을 하나도 두지 않는다
+## 값 import 를 두지 않는다 - `import type`은 허용한다
 
 `lib/auth/form-state.ts`·`app/(admin)/examples/form-state.ts`는 다른 모듈의
-타입을 쓸 일이 없어서 애초에 import 문이 없다(둘 다 `grep -c '^import'` ==
-0). `executor.ts`는 사정이 다르다 - `BulkOutcome.errors`가
-`lib/jsonapi/document.ts`의 `ErrorObject`를 그대로 들고 가야 해서 다른 파일의
-타입이 실제로 필요하다. 일반 `import type { ErrorObject } from '...'` 문을
-쓰면 그 필요는 채워지지만, 그 줄 자체가 `import`로 시작해 `grep -c
-'^import'`가 1이 된다 - 런타임 import는 없어도(`import type`은 컴파일 후
-지워진다) 소스를 읽는 사람 눈에는 "이 파일에 import 문이 있다"로 보인다.
+타입을 쓸 일이 없어서 애초에 import 문이 없다. `executor.ts`는 사정이
+다르다 - `BulkOutcome.errors`가 `lib/jsonapi/document.ts`의 `ErrorObject`를
+그대로 들고 가야 해서 다른 파일의 타입이 실제로 필요하다. 이 타입은
+`import type { ErrorObject } from '@/lib/jsonapi/document'`로 가져온다 -
+`lib/jsonapi/errors.ts`·`lib/auth/flow.ts`·`lib/auth/credentials.ts`·
+`app/(admin)/examples/flow.ts`가 이미 같은 타입을 같은 방식으로 가져오는
+그대로다.
 
-그래서 `type ErrorObject = import('@/lib/jsonapi/document').ErrorObject`로
-인라인 참조한다. 이 줄은 `type`으로 시작하지 `import`로 시작하지 않는다 -
-결과는 `grep -c '^import' lib/bulk/executor.ts` == 0. 이 파일이 클라이언트
-번들에 값을 끌어들이지 않는다는 성질을, 빌드하거나 번들을 그렙하지 않고
-소스 파일 하나를 읽는 것만으로 확인할 수 있다.
+지켜야 할 성질은 **값 import가 없다**이지 "import 문이 없다"가 아니다 -
+`import type` 문은 컴파일에서 완전히 지워져 런타임에 어떤 모듈도 끌어들이지
+않으므로, `lib/jsonapi/client.ts`(그리고 그 너머 `process.env`를 읽는
+`lib/config/settings.ts`)를 클라이언트 번들에 끌어들일 수 없다. 읽는 사람이
+확인할 것은 **이 파일의 import 줄이 전부 `import type`으로 시작하는가**
+하나다 - 빌드도 번들도 없이 파일을 읽는 것만으로 확인된다.
 
-위반의 정의: `executor.ts`에 `import`로 시작하는 줄이 하나라도 생기면(값
-import든 `import type`이든) 위반이다.
+위반의 정의: `executor.ts`에 값 import(예: `import { request } from
+'@/lib/jsonapi/client'`)가 하나라도 생기면 위반이다. `import type` 문을
+추가하는 것은 위반이 아니다.
 
 ## 주요 파일
 
@@ -92,8 +94,8 @@ import든 `import type`이든) 위반이다.
 다.
 
 내부 의존성은 `lib/jsonapi/document.ts`의 `ErrorObject` 타입 하나뿐이고,
-위에서 설명한 이유로 일반 import 문이 아니라 인라인 타입 참조로 가져온다.
-그 밖의 `lib/`·`app/`은 import하지 않는다. 소비자는 JSON:API 결과를
+위에서 설명한 이유로 `import type`으로 가져온다(값 import는 아니다). 그 밖의
+`lib/`·`app/`은 import하지 않는다. 소비자는 JSON:API 결과를
 `BulkOutcome`으로 바꾸는 `run` 콜백을 채워 `runBulk`을 부르는 Server
 Action(`app/(admin)/examples/actions.ts`)과 그 결과를 그리는 화면이다.
 
