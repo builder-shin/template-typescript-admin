@@ -31,46 +31,28 @@ import {
   rowSortingFeature,
   tableFeatures,
   useTable,
-  type ColumnFiltersState,
   type ColumnVisibilityState,
-  type PaginationState,
   type Row,
-  type SortingState,
 } from '@tanstack/react-table'
-import { Area, AreaChart, CartesianGrid, XAxis } from 'recharts'
-import { toast } from 'sonner'
-import { z } from 'zod'
 
-import { useIsMobile } from '@/hooks/use-mobile'
+import {
+  DEFAULT_PAGE_SIZE,
+  columnFiltersFromParams,
+  paginationFromParams,
+  sortingFromParams,
+  sortingToToken,
+  type RecentRow,
+} from '@/components/data-table-query'
 import { serverDrivenTableOptions } from '@/lib/grid/table'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-  type ChartConfig,
-} from '@/components/ui/chart'
 import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Drawer,
-  DrawerClose,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from '@/components/ui/drawer'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -80,7 +62,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Separator } from '@/components/ui/separator'
 import {
   Table,
   TableBody,
@@ -92,9 +73,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   GripVerticalIcon,
-  CircleCheckIcon,
-  LoaderIcon,
-  EllipsisVerticalIcon,
   Columns3Icon,
   ChevronDownIcon,
   PlusIcon,
@@ -102,7 +80,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   ChevronsRightIcon,
-  TrendingUpIcon,
 } from 'lucide-react'
 
 // New in v9: declare the features this table uses — anything you don't
@@ -122,20 +99,10 @@ const features = tableFeatures({
   rowSortingFeature,
 })
 
-const columnHelper = createColumnHelper<typeof features, z.infer<typeof schema>>()
-
-export const schema = z.object({
-  id: z.number(),
-  header: z.string(),
-  type: z.string(),
-  status: z.string(),
-  target: z.string(),
-  limit: z.string(),
-  reviewer: z.string(),
-})
+const columnHelper = createColumnHelper<typeof features, RecentRow>()
 
 // Create a separate component for the drag handle
-function DragHandle({ id }: { id: number }) {
+function DragHandle({ id }: { id: string }) {
   const { attributes, listeners } = useSortable({
     id,
   })
@@ -148,10 +115,21 @@ function DragHandle({ id }: { id: number }) {
       className="size-7 text-muted-foreground hover:bg-transparent"
     >
       <GripVerticalIcon className="size-3 text-muted-foreground" />
-      <span className="sr-only">Drag to reorder</span>
+      <span className="sr-only">끌어서 순서 바꾸기</span>
     </Button>
   )
 }
+
+/** ISO 문자열을 타임존 변환 없이 "YYYY-MM-DD HH:mm" 로 다듬는다 - 이 표는
+ * `ResourceDef` 를 모르는 독립 컴포넌트라(파일 머리말) `components/grid/
+ * resource-grid.tsx` 의 같은 이름 함수를 가져다 쓰지 않고 자신만의 사본을
+ * 둔다. 이유는 같다 - 서버·클라이언트 로케일이 다르면 Intl 포맷은
+ * 하이드레이션 불일치를 낼 수 있다. */
+function formatDateTime(value: string): string {
+  const [date, time] = value.split('T')
+  return date !== undefined && time !== undefined ? `${date} ${time.slice(0, 5)}` : value
+}
+
 const columns = columnHelper.columns([
   columnHelper.display({
     id: 'drag',
@@ -166,7 +144,7 @@ const columns = columnHelper.columns([
           checked={table.getIsAllPageRowsSelected()}
           indeterminate={table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()}
           onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="Select all"
+          aria-label="전체 선택"
         />
       </div>
     ),
@@ -175,155 +153,35 @@ const columns = columnHelper.columns([
         <Checkbox
           checked={row.getIsSelected()}
           onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="Select row"
+          aria-label="행 선택"
         />
       </div>
     ),
     enableSorting: false,
     enableHiding: false,
   }),
-  columnHelper.accessor('header', {
-    header: 'Header',
-    cell: ({ row }) => {
-      return <TableCellViewer item={row.original} />
-    },
+  columnHelper.accessor('title', {
+    header: '제목',
     enableHiding: false,
   }),
-  columnHelper.accessor('type', {
-    header: 'Section Type',
-    cell: ({ row }) => (
-      <div className="w-32">
-        <Badge variant="outline" className="px-1.5 text-muted-foreground">
-          {row.original.type}
-        </Badge>
-      </div>
-    ),
-  }),
   columnHelper.accessor('status', {
-    header: 'Status',
+    header: '상태',
     cell: ({ row }) => (
       <Badge variant="outline" className="px-1.5 text-muted-foreground">
-        {row.original.status === 'Done' ? (
-          <CircleCheckIcon className="fill-green-500 dark:fill-green-400" />
-        ) : (
-          <LoaderIcon />
-        )}
         {row.original.status}
       </Badge>
     ),
   }),
-  columnHelper.accessor('target', {
-    header: () => <div className="w-full text-right">Target</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: 'Done',
-            error: 'Error',
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-target`} className="sr-only">
-          Target
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.target}
-          id={`${row.original.id}-target`}
-        />
-      </form>
-    ),
+  columnHelper.accessor('score', {
+    header: () => <div className="w-full text-right">점수</div>,
+    cell: ({ row }) => <div className="text-right tabular-nums">{row.original.score}</div>,
   }),
-  columnHelper.accessor('limit', {
-    header: () => <div className="w-full text-right">Limit</div>,
-    cell: ({ row }) => (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          toast.promise(new Promise((resolve) => setTimeout(resolve, 1000)), {
-            loading: `Saving ${row.original.header}`,
-            success: 'Done',
-            error: 'Error',
-          })
-        }}
-      >
-        <Label htmlFor={`${row.original.id}-limit`} className="sr-only">
-          Limit
-        </Label>
-        <Input
-          className="h-8 w-16 border-transparent bg-transparent text-right shadow-none hover:bg-input/30 focus-visible:border focus-visible:bg-background dark:bg-transparent dark:hover:bg-input/30 dark:focus-visible:bg-input/30"
-          defaultValue={row.original.limit}
-          id={`${row.original.id}-limit`}
-        />
-      </form>
-    ),
-  }),
-  columnHelper.accessor('reviewer', {
-    header: 'Reviewer',
-    cell: ({ row }) => {
-      const isAssigned = row.original.reviewer !== 'Assign reviewer'
-      if (isAssigned) {
-        return row.original.reviewer
-      }
-      return (
-        <>
-          <Label htmlFor={`${row.original.id}-reviewer`} className="sr-only">
-            Reviewer
-          </Label>
-          <Select
-            items={[
-              { label: 'Eddie Lake', value: 'Eddie Lake' },
-              { label: 'Jamik Tashpulatov', value: 'Jamik Tashpulatov' },
-            ]}
-          >
-            <SelectTrigger
-              className="w-38 **:data-[slot=select-value]:block **:data-[slot=select-value]:truncate"
-              size="sm"
-              id={`${row.original.id}-reviewer`}
-            >
-              <SelectValue placeholder="Assign reviewer" />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectGroup>
-                <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                <SelectItem value="Jamik Tashpulatov">Jamik Tashpulatov</SelectItem>
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </>
-      )
-    },
-  }),
-  columnHelper.display({
-    id: 'actions',
-    cell: () => (
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              className="flex size-8 text-muted-foreground data-open:bg-muted"
-              size="icon"
-            />
-          }
-        >
-          <EllipsisVerticalIcon />
-          <span className="sr-only">Open menu</span>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-32">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Make a copy</DropdownMenuItem>
-          <DropdownMenuItem>Favorite</DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem variant="destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    ),
+  columnHelper.accessor('updatedAt', {
+    header: '수정일',
+    cell: ({ row }) => formatDateTime(row.original.updatedAt),
   }),
 ])
-function DraggableRow({ row }: { row: Row<typeof features, z.infer<typeof schema>> }) {
+function DraggableRow({ row }: { row: Row<typeof features, RecentRow> }) {
   const { transform, transition, setNodeRef, isDragging } = useSortable({
     id: row.original.id,
   })
@@ -347,49 +205,6 @@ function DraggableRow({ row }: { row: Row<typeof features, z.infer<typeof schema
   )
 }
 
-// 이 표는 특정 자원(ResourceDef)을 모르는 블록 자체의 데모 컴포넌트라
-// lib/grid 의 URL 어휘를 그대로 쓰지 않는다 - 이 파일만의 작은 왕복 규칙을
-// 둔다. sort 토큰 표기(`-field`)만 lib/grid 와 맞춘다(서로 다른 관례를 만들
-// 이유가 없다).
-const SORT_PARAM = 'sort'
-const FILTER_PARAM_PREFIX = 'filter_'
-const PAGE_PARAM = 'page'
-const PAGE_SIZE_PARAM = 'pageSize'
-const DEFAULT_PAGE_SIZE = 10
-
-function sortingFromParams(params: URLSearchParams): SortingState {
-  const raw = params.get(SORT_PARAM)
-  if (raw === null || raw === '') return []
-  return raw.split(',').map((token) => ({
-    id: token.startsWith('-') ? token.slice(1) : token,
-    desc: token.startsWith('-'),
-  }))
-}
-
-function sortingToToken(sorting: SortingState): string | null {
-  if (sorting.length === 0) return null
-  return sorting.map((entry) => (entry.desc ? `-${entry.id}` : entry.id)).join(',')
-}
-
-function columnFiltersFromParams(params: URLSearchParams): ColumnFiltersState {
-  const filters: ColumnFiltersState = []
-  for (const [key, value] of params.entries()) {
-    if (key.startsWith(FILTER_PARAM_PREFIX))
-      filters.push({ id: key.slice(FILTER_PARAM_PREFIX.length), value })
-  }
-  return filters
-}
-
-/** 없거나 정수가 아니거나 1 미만인 `page`/`pageSize` 는 첫 쪽·기본 쪽 크기로 접는다. */
-function paginationFromParams(params: URLSearchParams): PaginationState {
-  const rawPageSize = Number(params.get(PAGE_SIZE_PARAM))
-  const pageSize =
-    Number.isInteger(rawPageSize) && rawPageSize > 0 ? rawPageSize : DEFAULT_PAGE_SIZE
-  const rawPage = Number(params.get(PAGE_PARAM))
-  const pageIndex = Number.isInteger(rawPage) && rawPage > 0 ? rawPage - 1 : 0
-  return { pageIndex, pageSize }
-}
-
 /**
  * `useSearchParams()` 를 쓰는 컴포넌트는 Suspense 경계 안에 있어야 빌드가
  * 정적 셸을 만들 수 있다(Next 규약) - 호출부가 그 경계를 잊지 않도록 여기서
@@ -400,7 +215,7 @@ function paginationFromParams(params: URLSearchParams): PaginationState {
  * 표가 전체 쪽 수를 아는 데는 `rowCount` 하나면 충분하지만, 실제로 보여줄
  * 행을 그 쪽만큼 고르는 것은 호출자(서버)의 몫이다.
  */
-export function DataTable(props: { data: z.infer<typeof schema>[]; rowCount: number }) {
+export function DataTable(props: { data: RecentRow[]; rowCount: number }) {
   return (
     <React.Suspense fallback={null}>
       <DataTableInner {...props} />
@@ -408,14 +223,7 @@ export function DataTable(props: { data: z.infer<typeof schema>[]; rowCount: num
   )
 }
 
-function DataTableInner({
-  data: initialData,
-  rowCount,
-}: {
-  data: z.infer<typeof schema>[]
-  rowCount: number
-}) {
-  const [data, setData] = React.useState(() => initialData)
+function DataTableInner({ data, rowCount }: { data: RecentRow[]; rowCount: number }) {
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] = React.useState<ColumnVisibilityState>({})
   const router = useRouter()
@@ -423,7 +231,9 @@ function DataTableInner({
   const searchParams = useSearchParams()
   // sorting · columnFilters · pagination 은 이제 URL 이 정본이다 - 로컬
   // useState 로 거울 상태를 만들지 않는다(두 원본이 어긋날 자리가 생긴다).
-  // 매 렌더마다 현재 URL 에서 다시 읽는다.
+  // 매 렌더마다 현재 URL 에서 다시 읽는다. 읽는 함수는 `data-table-query.ts` -
+  // `app/(admin)/page.tsx` 가 같은 URL 을 같은 함수로 읽어야 여기 보이는
+  // 상태와 실제로 백엔드에 보낸 질의가 어긋나지 않는다.
   const sorting = sortingFromParams(searchParams)
   const columnFilters = columnFiltersFromParams(searchParams)
   const pagination = paginationFromParams(searchParams)
@@ -433,7 +243,14 @@ function DataTableInner({
     useSensor(TouchSensor, {}),
     useSensor(KeyboardSensor, {}),
   )
-  const dataIds = React.useMemo<UniqueIdentifier[]>(() => data?.map(({ id }) => id) || [], [data])
+  // dnd-kit 드래그 순서는 서버에 남지 않는다 - 백엔드에 순서 필드도 재정렬
+  // 엔드포인트도 없다. 그래도 블록의 부품은 손대지 않는다(README/AGENTS 가
+  // 이 사실을 적는 것은 Task 14 의 몫). 그 대가로 이 로컬 state 는 새로고침하면
+  // `data` 원래 순서로 되돌아간다.
+  const [localData, setLocalData] = React.useState(data)
+  React.useEffect(() => {
+    setLocalData(data)
+  }, [data])
 
   /** 현재 URL 파라미터를 복제해 고치고 그 결과로 옮겨간다(스크롤 위치는 유지). */
   function navigate(mutate: (params: URLSearchParams) => void) {
@@ -443,9 +260,14 @@ function DataTableInner({
     router.replace(query === '' ? pathname : `${pathname}?${query}`, { scroll: false })
   }
 
+  const dataIds = React.useMemo<UniqueIdentifier[]>(
+    () => localData.map(({ id }) => id),
+    [localData],
+  )
+
   const table = useTable({
     features,
-    data,
+    data: localData,
     columns,
     state: {
       sorting,
@@ -455,7 +277,7 @@ function DataTableInner({
       pagination,
     },
     ...serverDrivenTableOptions(rowCount),
-    getRowId: (row) => row.id.toString(),
+    getRowId: (row) => row.id,
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
@@ -463,19 +285,19 @@ function DataTableInner({
       const next = typeof updater === 'function' ? updater(sorting) : updater
       navigate((params) => {
         const token = sortingToToken(next)
-        if (token === null) params.delete(SORT_PARAM)
-        else params.set(SORT_PARAM, token)
+        if (token === null) params.delete('sort')
+        else params.set('sort', token)
       })
     },
     onColumnFiltersChange: (updater) => {
       const next = typeof updater === 'function' ? updater(columnFilters) : updater
       navigate((params) => {
         for (const key of new Set(params.keys())) {
-          if (key.startsWith(FILTER_PARAM_PREFIX)) params.delete(key)
+          if (key.startsWith('filter_')) params.delete(key)
         }
         for (const filter of next) {
           if (typeof filter.value === 'string' && filter.value !== '') {
-            params.set(`${FILTER_PARAM_PREFIX}${filter.id}`, filter.value)
+            params.set(`filter_${filter.id}`, filter.value)
           }
         }
       })
@@ -483,20 +305,20 @@ function DataTableInner({
     onPaginationChange: (updater) => {
       const next = typeof updater === 'function' ? updater(pagination) : updater
       navigate((params) => {
-        if (next.pageIndex === 0) params.delete(PAGE_PARAM)
-        else params.set(PAGE_PARAM, String(next.pageIndex + 1))
-        if (next.pageSize === DEFAULT_PAGE_SIZE) params.delete(PAGE_SIZE_PARAM)
-        else params.set(PAGE_SIZE_PARAM, String(next.pageSize))
+        if (next.pageIndex === 0) params.delete('page')
+        else params.set('page', String(next.pageIndex + 1))
+        if (next.pageSize === DEFAULT_PAGE_SIZE) params.delete('pageSize')
+        else params.set('pageSize', String(next.pageSize))
       })
     },
   })
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (active && over && active.id !== over.id) {
-      setData((data) => {
+      setLocalData((current) => {
         const oldIndex = dataIds.indexOf(active.id)
         const newIndex = dataIds.indexOf(over.id)
-        return arrayMove(data, oldIndex, newIndex)
+        return arrayMove(current, oldIndex, newIndex)
       })
     }
   }
@@ -604,7 +426,7 @@ function DataTableInner({
                 ) : (
                   <TableRow>
                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                      No results.
+                      결과가 없습니다.
                     </TableCell>
                   </TableRow>
                 )}
@@ -617,17 +439,17 @@ function DataTableInner({
             {/*
               filteredRowModel 을 등록하지 않으므로 getFilteredRowModel() 은
               필터 이전, 즉 이 쪽에 불러온 행 전부를 돌려준다(서버 필터에서는
-              정직한 값이다). 그 값을 "row(s) selected" 라고만 적으면 전체
-              결과처럼 읽히므로 "on this page" 로 분모의 정체를 밝히고, 총
-              건수(rowCount)를 별도로 덧붙인다.
+              정직한 값이다). 그 값을 "선택됨" 이라고만 적으면 전체 결과처럼
+              읽히므로 "이 페이지" 로 분모의 정체를 밝히고, 총 건수(rowCount)를
+              별도로 덧붙인다.
             */}
-            {table.getFilteredSelectedRowModel().rows.length} of {table.getRowModel().rows.length}{' '}
-            row(s) on this page selected ({rowCount} total).
+            선택 {table.getFilteredSelectedRowModel().rows.length}개 · 이 페이지{' '}
+            {table.getRowModel().rows.length}개 (전체 {rowCount}건)
           </div>
           <div className="flex w-full items-center gap-8 lg:w-fit">
             <div className="hidden items-center gap-2 lg:flex">
               <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
+                페이지당 행 수
               </Label>
               <Select
                 value={`${table.state.pagination.pageSize}`}
@@ -654,7 +476,7 @@ function DataTableInner({
               </Select>
             </div>
             <div className="flex w-fit items-center justify-center text-sm font-medium">
-              Page {table.state.pagination.pageIndex + 1} of {table.getPageCount()}
+              {table.state.pagination.pageIndex + 1} / {table.getPageCount()} 쪽
             </div>
             <div className="ml-auto flex items-center gap-2 lg:ml-0">
               <Button
@@ -663,7 +485,7 @@ function DataTableInner({
                 onClick={() => table.setPageIndex(0)}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to first page</span>
+                <span className="sr-only">첫 쪽으로</span>
                 <ChevronsLeftIcon />
               </Button>
               <Button
@@ -673,7 +495,7 @@ function DataTableInner({
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
               >
-                <span className="sr-only">Go to previous page</span>
+                <span className="sr-only">이전 쪽으로</span>
                 <ChevronLeftIcon />
               </Button>
               <Button
@@ -683,7 +505,7 @@ function DataTableInner({
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to next page</span>
+                <span className="sr-only">다음 쪽으로</span>
                 <ChevronRightIcon />
               </Button>
               <Button
@@ -693,7 +515,7 @@ function DataTableInner({
                 onClick={() => table.setPageIndex(table.getPageCount() - 1)}
                 disabled={!table.getCanNextPage()}
               >
-                <span className="sr-only">Go to last page</span>
+                <span className="sr-only">마지막 쪽으로</span>
                 <ChevronsRightIcon />
               </Button>
             </div>
@@ -710,220 +532,5 @@ function DataTableInner({
         <div className="aspect-video w-full flex-1 rounded-lg border border-dashed"></div>
       </TabsContent>
     </Tabs>
-  )
-}
-const chartData = [
-  {
-    month: 'January',
-    desktop: 186,
-    mobile: 80,
-  },
-  {
-    month: 'February',
-    desktop: 305,
-    mobile: 200,
-  },
-  {
-    month: 'March',
-    desktop: 237,
-    mobile: 120,
-  },
-  {
-    month: 'April',
-    desktop: 73,
-    mobile: 190,
-  },
-  {
-    month: 'May',
-    desktop: 209,
-    mobile: 130,
-  },
-  {
-    month: 'June',
-    desktop: 214,
-    mobile: 140,
-  },
-]
-const chartConfig = {
-  desktop: {
-    label: 'Desktop',
-    color: 'var(--primary)',
-  },
-  mobile: {
-    label: 'Mobile',
-    color: 'var(--primary)',
-  },
-} satisfies ChartConfig
-function TableCellViewer({ item }: { item: z.infer<typeof schema> }) {
-  const isMobile = useIsMobile()
-  return (
-    <Drawer swipeDirection={isMobile ? 'down' : 'right'}>
-      <DrawerTrigger
-        render={<Button variant="link" className="w-fit px-0 text-left text-foreground" />}
-      >
-        {item.header}
-      </DrawerTrigger>
-      <DrawerContent>
-        <DrawerHeader className="gap-1">
-          <DrawerTitle>{item.header}</DrawerTitle>
-          <DrawerDescription>Showing total visitors for the last 6 months</DrawerDescription>
-        </DrawerHeader>
-        <div className="flex flex-col gap-4 overflow-y-auto px-4 text-sm">
-          {!isMobile && (
-            <>
-              <ChartContainer config={chartConfig}>
-                <AreaChart
-                  accessibilityLayer
-                  data={chartData}
-                  margin={{
-                    left: 0,
-                    right: 10,
-                  }}
-                >
-                  <CartesianGrid vertical={false} />
-                  <XAxis
-                    dataKey="month"
-                    tickLine={false}
-                    axisLine={false}
-                    tickMargin={8}
-                    tickFormatter={(value: string) => value.slice(0, 3)}
-                    hide
-                  />
-                  <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="dot" />} />
-                  <Area
-                    dataKey="mobile"
-                    type="natural"
-                    fill="var(--color-mobile)"
-                    fillOpacity={0.6}
-                    stroke="var(--color-mobile)"
-                    stackId="a"
-                  />
-                  <Area
-                    dataKey="desktop"
-                    type="natural"
-                    fill="var(--color-desktop)"
-                    fillOpacity={0.4}
-                    stroke="var(--color-desktop)"
-                    stackId="a"
-                  />
-                </AreaChart>
-              </ChartContainer>
-              <Separator />
-              <div className="grid gap-2">
-                <div className="flex gap-2 leading-none font-medium">
-                  Trending up by 5.2% this month <TrendingUpIcon className="size-4" />
-                </div>
-                <div className="text-muted-foreground">
-                  Showing total visitors for the last 6 months. This is just some random text to
-                  test the layout. It spans multiple lines and should wrap around.
-                </div>
-              </div>
-              <Separator />
-            </>
-          )}
-          <form className="flex flex-col gap-4">
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="header">Header</Label>
-              <Input id="header" defaultValue={item.header} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="type">Type</Label>
-                <Select
-                  defaultValue={item.type}
-                  items={[
-                    { label: 'Table of Contents', value: 'Table of Contents' },
-                    { label: 'Executive Summary', value: 'Executive Summary' },
-                    {
-                      label: 'Technical Approach',
-                      value: 'Technical Approach',
-                    },
-                    { label: 'Design', value: 'Design' },
-                    { label: 'Capabilities', value: 'Capabilities' },
-                    { label: 'Focus Documents', value: 'Focus Documents' },
-                    { label: 'Narrative', value: 'Narrative' },
-                    { label: 'Cover Page', value: 'Cover Page' },
-                  ]}
-                >
-                  <SelectTrigger id="type" className="w-full">
-                    <SelectValue placeholder="Select a type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="Table of Contents">Table of Contents</SelectItem>
-                      <SelectItem value="Executive Summary">Executive Summary</SelectItem>
-                      <SelectItem value="Technical Approach">Technical Approach</SelectItem>
-                      <SelectItem value="Design">Design</SelectItem>
-                      <SelectItem value="Capabilities">Capabilities</SelectItem>
-                      <SelectItem value="Focus Documents">Focus Documents</SelectItem>
-                      <SelectItem value="Narrative">Narrative</SelectItem>
-                      <SelectItem value="Cover Page">Cover Page</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  defaultValue={item.status}
-                  items={[
-                    { label: 'Done', value: 'Done' },
-                    { label: 'In Progress', value: 'In Progress' },
-                    { label: 'Not Started', value: 'Not Started' },
-                  ]}
-                >
-                  <SelectTrigger id="status" className="w-full">
-                    <SelectValue placeholder="Select a status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="Done">Done</SelectItem>
-                      <SelectItem value="In Progress">In Progress</SelectItem>
-                      <SelectItem value="Not Started">Not Started</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="target">Target</Label>
-                <Input id="target" defaultValue={item.target} />
-              </div>
-              <div className="flex flex-col gap-3">
-                <Label htmlFor="limit">Limit</Label>
-                <Input id="limit" defaultValue={item.limit} />
-              </div>
-            </div>
-            <div className="flex flex-col gap-3">
-              <Label htmlFor="reviewer">Reviewer</Label>
-              <Select
-                defaultValue={item.reviewer}
-                items={[
-                  { label: 'Eddie Lake', value: 'Eddie Lake' },
-                  { label: 'Jamik Tashpulatov', value: 'Jamik Tashpulatov' },
-                  { label: 'Emily Whalen', value: 'Emily Whalen' },
-                ]}
-              >
-                <SelectTrigger id="reviewer" className="w-full">
-                  <SelectValue placeholder="Select a reviewer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectItem value="Eddie Lake">Eddie Lake</SelectItem>
-                    <SelectItem value="Jamik Tashpulatov">Jamik Tashpulatov</SelectItem>
-                    <SelectItem value="Emily Whalen">Emily Whalen</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-          </form>
-        </div>
-        <DrawerFooter>
-          <Button>Submit</Button>
-          <DrawerClose render={<Button variant="outline" />}>Done</DrawerClose>
-        </DrawerFooter>
-      </DrawerContent>
-    </Drawer>
   )
 }

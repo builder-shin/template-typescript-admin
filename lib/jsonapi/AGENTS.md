@@ -74,7 +74,10 @@
 최종 검증은 `./scripts/check.sh`다. 내부 설정 의존성은
 `lib/config/settings.ts`이고 HTTP·URL 처리는 표준 `fetch`·`Headers`·
 `URLSearchParams`를 사용한다. 이 계층을 실제로 import하는 곳은
-`lib/auth/`(요청 조립과 오류 분류), `app/(admin)/examples/`(목록 화면이
-`request`를 직접 부른다)와 `components/grid/`(응답 문서 정규화)다.
+`lib/auth/`(요청 조립과 오류 분류), `app/(admin)/`(대시보드·목록 화면 모두
+`request`를 직접 부른다), `lib/resources/count.ts`(총합 전용 요청 튜플 조립 -
+`RequestOptions`·`withAcceptLanguage`·`CollectionDocument`), `components/
+data-table-query.ts`(대시보드 표의 같은 조립)와 `components/grid/`(응답 문서
+정규화)다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

@@ -90,6 +90,11 @@ null 이다(실측 `app/controllers/concerns/crud_actions.py:162,179-213`) - 표
 
 내부 의존성은 `lib/resources/`가 내보내는 `ResourceDef` 타입 하나뿐이다 -
 `lib/jsonapi/`를 비롯한 다른 내부 모듈은 import하지 않는다. 소비자는
-`components/grid/`와 `app/`이다.
+`components/grid/`와 `app/`이다. `components/data-table-query.ts`(대시보드
+표 - `ResourceDef` 는 알지만 URL 어휘는 `lib/grid`와 다르게 쓰는 독립
+컴포넌트, `components/data-table.tsx` 머리말 참고)도 `gridQuery`·`GridState`
+만 가져다 쓴다 - 자신의 `page`/`pageSize`/`filter_*` 어휘를 `GridState` 로
+옮긴 뒤에는 필터 연산자·`page[totals]`·`include` 조립을 다시 만들지 않고
+그대로 위임한다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

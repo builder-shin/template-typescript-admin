@@ -165,9 +165,21 @@ export function ChartAreaInteractive() {
     <Card className="@container/card">
       <CardHeader>
         <CardTitle>Total Visitors</CardTitle>
-        <CardDescription>
-          <span className="hidden @[540px]/card:block">Total for the last 3 months</span>
-          <span className="@[540px]/card:hidden">Last 3 months</span>
+        {/*
+          백엔드에 시계열도 집계 엔드포인트도 없다 - 아래 차트는 블록이 들고 온
+          표본 배열(chartData)을 그대로 그린다. 운영자가 이 숫자를 실제 지표로
+          읽으면 안 되므로, 이미 부제가 있는 이 자리(CardDescription)에 표본
+          이라는 사실을 항상 보이는 줄로 적는다 - 아래 기간 문구만 반응형으로
+          남긴다.
+        */}
+        <CardDescription className="flex flex-col gap-1">
+          <span className="font-medium text-foreground">
+            표본 데이터입니다 - 백엔드에 연결되어 있지 않습니다.
+          </span>
+          <span>
+            <span className="hidden @[540px]/card:inline">Total for the last 3 months</span>
+            <span className="@[540px]/card:hidden">Last 3 months</span>
+          </span>
         </CardDescription>
         <CardAction>
           <ToggleGroup
