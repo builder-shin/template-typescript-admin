@@ -73,6 +73,8 @@
 단위 검증은 `test/unit/jsonapi/`, 실제 계약은 `test/e2e/`에서 확인한다.
 최종 검증은 `./scripts/check.sh`다. 내부 설정 의존성은
 `lib/config/settings.ts`이고 HTTP·URL 처리는 표준 `fetch`·`Headers`·
-`URLSearchParams`를 사용한다. `lib/resources/`는 이 계층의 소비자다.
+`URLSearchParams`를 사용한다. 오늘 이 계층을 실제로 import하는 곳은
+`lib/auth/`(요청 조립과 오류 분류) 뿐이다 - 목록 화면이 `request`를 직접
+부르기 시작하면 `app/`이 소비자로 더해진다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
