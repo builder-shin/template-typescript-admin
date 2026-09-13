@@ -4,8 +4,8 @@ import { useActionState, useId } from 'react'
 import { FieldError } from '@/components/form/field-error'
 import { FormBanner } from '@/components/form/form-banner'
 import { SubmitButton } from '@/components/form/submit-button'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   EMAIL_FIELD,
   IDLE_AUTH_FORM_STATE,
@@ -91,8 +91,11 @@ function CredentialField({
   const invalid = messages.length > 0
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{label}</Label>
+    // `Field` 의 `data-invalid` 가 라벨까지 오류 색으로 물들인다(레지스트리:
+    // `data-[invalid=true]:text-destructive`) - 예제 폼과 같은 규칙이다
+    // (`app/(admin)/examples/[id]/edit-form.tsx` 의 `TextField`).
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
       <Input
         id={inputId}
         name={name}
@@ -103,6 +106,6 @@ function CredentialField({
         aria-describedby={invalid ? errorId : undefined}
       />
       <FieldError id={errorId} messages={messages} />
-    </div>
+    </Field>
   )
 }

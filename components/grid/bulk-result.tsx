@@ -1,9 +1,9 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 import {
   Table,
   TableBody,
@@ -130,7 +130,7 @@ export function BulkProgress({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border px-3 py-2 text-sm">
-      <Loader2 className="size-4 animate-spin text-muted-foreground" aria-label="실행 중" />
+      <Spinner className="text-muted-foreground" aria-label="실행 중" />
       <span className="tabular-nums">
         {done} / {total}
       </span>

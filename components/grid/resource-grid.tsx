@@ -41,6 +41,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -652,11 +653,20 @@ function ResourceGridInner({
               })
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center text-muted-foreground"
-                >
-                  결과가 없습니다.
+                {/* 빈 상태는 레지스트리 부품(`components/ui/empty.tsx`)이다 -
+                    예전에는 `h-24 text-center text-muted-foreground` 셀에
+                    문장 하나였다. 부품의 점선 테두리(`rounded-xl
+                    border-dashed`)는 표 안에서 이중 테두리가 되므로
+                    `border-none` 으로 끈다 - 바깥 표가 이미 테두리를 갖는다. */}
+                <TableCell colSpan={columns.length} className="p-0">
+                  <Empty className="border-none">
+                    <EmptyHeader>
+                      <EmptyTitle>결과가 없습니다.</EmptyTitle>
+                      <EmptyDescription>
+                        필터를 지우거나 다른 조건으로 다시 찾아보세요.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 </TableCell>
               </TableRow>
             )}

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # components/ 작업 지침
 
@@ -43,9 +43,10 @@
 않는다"**다(근거는 루트 `AGENTS.md`). `components/ui/`의 현재 상태(실측
 2026-09-12):
 
-- **지시어 없음(순수 마크업, `react` 타입과 `cn`만 import)**: `badge` ·
-  `breadcrumb` · `button` · `card` · `input` · `label` · `skeleton` ·
-  `table`. 여기에 `pagination`(추가 2026-09-13)도 든다 - 판별 기준이
+- **지시어 없음(순수 마크업, `react` 타입과 `cn`만 import)**: `alert` ·
+  `badge` · `breadcrumb` · `button` · `card` · `empty` · `input` · `label` ·
+  `skeleton` · `spinner` · `table` · `textarea`(`alert`·`empty`·`spinner`·
+  `textarea` 추가 2026-09-14). 여기에 `pagination`(추가 2026-09-13)도 든다 - 판별 기준이
   "상호작용 프리미티브에 **직접** 의존하지 않는다"이므로, 이 부품이 `cn`
   외에 `Button`(그 자체가 지시어 없는 부품)과 lucide 아이콘을 더 import
   하는 것은 이 묶음의 성질을 깨지 않는다. 레지스트리도 이 파일에 지시어를
@@ -59,9 +60,12 @@ add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아�
   `'use client'`가 없다는 것을 기계적으로 확인한다 - 되살아나면 게이트
   `[6/9]`가 먼저 잡는다).
 - **`'use client'` 유지(`@base-ui/react/*` 프리미티브에 의존)**: `avatar` ·
-  `chart` · `checkbox` · `drawer` · `dropdown-menu` · `select` · `separator` ·
-  `sheet` · `sidebar` · `sonner` · `tabs` · `toggle` · `toggle-group` ·
-  `tooltip`. 프리미티브 자신이 이미 클라이언트 컴포넌트라, 지시어를 떼도
+  `chart` · `checkbox` · `drawer` · `dropdown-menu` · `field` · `select` ·
+  `separator` · `sheet` · `sidebar` · `sonner` · `tabs` · `toggle` ·
+  `toggle-group` · `tooltip`. `field`(추가 2026-09-14)는 프리미티브를 직접
+  쓰지는 않지만 `separator`(클라이언트 부품)를 값으로 가져오고 `useMemo` 를
+  부르므로 같은 묶음이다 - **그 결과가 `components/form/` 에 번진다**(바로
+  아래 절). 프리미티브 자신이 이미 클라이언트 컴포넌트라, 지시어를 떼도
   번들 경계는 그대로이고 레지스트리와만 갈라진다 - 이득 없이 드리프트만
   늘어난다.
 
@@ -70,10 +74,15 @@ add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아�
 있는지만 보지 않는다.
 
 `components/grid/*`·`components/form/*`는 상호작용(선택·드래그·폼 입력)이
-실제로 필요해서 `'use client'`를 스스로 선언한 것들이다(예외:
-`components/grid/format.ts`·`components/form/field-error.tsx`·
-`components/form/form-banner.tsx` - 서버 컴포넌트도 불러야 해서 지시어가
-없다). 이 부류는 레지스트리 판정표 대상이 아니다.
+실제로 필요해서 `'use client'`를 스스로 선언한 것들이다. 이 부류는 레지스트리
+판정표 대상이 아니다. 지시어가 **없는** 예외 셋과 그 이유는 서로 다르다 -
+같은 줄에 묶어 두면 하나가 바뀔 때 나머지도 같이 바뀐 것처럼 읽힌다:
+
+| 파일                              | 왜 지시어가 없나                                                                                                                                                                                                                                                                                                                                              |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/grid/format.ts`       | 서버 컴포넌트인 상세 화면이 이 함수들을 **값으로 호출**한다(루트 `AGENTS.md` 규칙 6번의 첫째 사례가 여기서 나왔다)                                                                                                                                                                                                                                            |
+| `components/form/form-banner.tsx` | 서버 컴포넌트 **넷**이 읽기 실패를 이 배너로 그린다(`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/new/page.tsx`·`examples/[id]/page.tsx`). 그래서 껍데기로 `alert`(지시어 없음)를 골랐고 `field` 계열은 들이지 않는다                                                                                                                                  |
+| `components/form/field-error.tsx` | 지시어를 선언하지 않았을 뿐, **서버에서는 쓸 수 없다** - 레지스트리 `field`(`'use client'`)의 `FieldError` 를 값으로 가져오기 때문이다. 읽는 곳이 클라이언트 컴포넌트 둘뿐이라 문제가 되지 않는다(실측 2026-09-14: `app/(admin)/examples/[id]/edit-form.tsx`·`app/(auth)/credentials-form.tsx`). 서버 컴포넌트가 이것을 그리려 하면 그 순간 규칙 6번 위반이다 |
 
 ## 검증
 

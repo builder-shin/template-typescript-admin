@@ -1,9 +1,10 @@
 'use client'
 
 import * as React from 'react'
-import { Loader2 } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 
 /**
  * 실행 전 확인 문구. N=1(단건)과 N>1(일괄)이 다른 문장을 낸다 - 일괄용 문구를
@@ -44,8 +45,13 @@ export function BulkConfirmPanel(
   const pending = props.mode === 'submit' ? formStatus.pending : (props.pending ?? false)
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
-      <p className="text-destructive">{bulkConfirmMessage(props.count)}</p>
+    // 껍데기는 레지스트리 부품(`components/ui/alert.tsx`)이다 - 예전에는
+    // `rounded-lg border border-destructive/30 bg-destructive/5 …` 를 손으로
+    // 들고 있었다. `AlertDialog` 가 아닌 이유는 아래 `ConfirmedDeleteForm`
+    // 머리말에 있다 - 확인 버튼이 같은 `<form>` 안의 진짜 제출 버튼이어야
+    // 실패가 `error.tsx` 까지 전달된다.
+    <Alert variant="destructive" className="gap-3">
+      <AlertDescription>{bulkConfirmMessage(props.count)}</AlertDescription>
       <div className="flex gap-2">
         <Button
           type="button"
@@ -64,10 +70,10 @@ export function BulkConfirmPanel(
           disabled={pending}
           aria-label="삭제 확인"
         >
-          {pending ? <Loader2 className="animate-spin" /> : '삭제 확인'}
+          {pending ? <Spinner aria-label="처리 중" /> : '삭제 확인'}
         </Button>
       </div>
-    </div>
+    </Alert>
   )
 }
 

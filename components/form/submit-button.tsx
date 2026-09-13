@@ -1,14 +1,16 @@
 'use client'
 
-import { Loader2 } from 'lucide-react'
 import { useFormStatus } from 'react-dom'
 import { Button } from '@/components/ui/button'
+import { Spinner } from '@/components/ui/spinner'
 
 /**
  * 폼 제출 버튼.
  *
  * **제출 중에 텍스트를 쓰지 않는다.** "로그인 중..." 류는 전부 금지다(사용자
- * 전역 규칙). pending 동안 버튼 안에는 `Loader2` 스피너 하나만 남는다.
+ * 전역 규칙). pending 동안 버튼 안에는 레지스트리 스피너
+ * (`components/ui/spinner.tsx`) 하나만 남는다 - 예전에는 `Loader2` 에
+ * `animate-spin` 을 직접 붙였다.
  *
  * 라벨을 children 이 아니라 `label: string` 으로 받는 이유가 여기 있다 -
  * pending 일 때 라벨을 화면에서 치우면서도 버튼의 접근 가능한 이름은
@@ -42,7 +44,9 @@ export function SubmitButton({
       disabled={pending}
       aria-label={label}
     >
-      {pending ? <Loader2 className="animate-spin" /> : label}
+      {/* 스피너의 `aria-label` 기본값은 영어("Loading")다 - 한국어로 덮는다.
+          버튼 자신의 이름은 위 `aria-label={label}` 이 지킨다. */}
+      {pending ? <Spinner aria-label="처리 중" /> : label}
     </Button>
   )
 }

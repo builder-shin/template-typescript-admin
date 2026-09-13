@@ -6,8 +6,8 @@ import { FormBanner } from '@/components/form/form-banner'
 import { SubmitButton } from '@/components/form/submit-button'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Field, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Select,
   SelectContent,
@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import { resourceByType } from '@/lib/resources'
 import type { OptionItem } from '../options'
 import {
@@ -79,89 +80,120 @@ export function ExampleForm({
   const isEdit = initialValues !== undefined
 
   return (
-    <form action={formAction} noValidate className="max-w-lg space-y-5">
-      <FormBanner messages={state.unusable ? [UNUSABLE_EXAMPLES_MESSAGE] : state.documentErrors} />
+    // `FieldGroup` 이 필드 사이 간격을 갖는다(레지스트리: `flex-col gap-5`) -
+    // 예전의 `space-y-5` 와 같은 값이라 화면은 그대로다.
+    <form action={formAction} noValidate className="max-w-lg">
+      <FieldGroup>
+        <FormBanner
+          messages={state.unusable ? [UNUSABLE_EXAMPLES_MESSAGE] : state.documentErrors}
+        />
 
-      <TextField
-        label={columnLabel(TITLE_FIELD)}
-        name={TITLE_FIELD}
-        defaultValue={initialValues?.title ?? ''}
-        messages={state.attributeErrors[TITLE_FIELD] ?? []}
-      />
-      <TextField
-        label={columnLabel(DESCRIPTION_FIELD)}
-        name={DESCRIPTION_FIELD}
-        defaultValue={initialValues?.description ?? ''}
-        messages={state.attributeErrors[DESCRIPTION_FIELD] ?? []}
-      />
-      <StatusField
-        defaultValue={initialValues?.status ?? STATUS_OPTIONS[0] ?? ''}
-        messages={state.attributeErrors[STATUS_FIELD] ?? []}
-      />
-      <TextField
-        label={columnLabel(SCORE_FIELD)}
-        name={SCORE_FIELD}
-        type="number"
-        defaultValue={isEdit ? String(initialValues.score) : ''}
-        messages={state.attributeErrors[SCORE_FIELD] ?? []}
-      />
-      <CategoryField
-        categories={categories}
-        defaultValue={initialValues?.categoryId ?? ''}
-        messages={state.relationshipErrors[CATEGORY_FIELD] ?? []}
-      />
-      <TagsField
-        tags={tags}
-        defaultValues={initialValues?.tagIds ?? []}
-        messages={state.relationshipErrors[TAGS_FIELD] ?? []}
-      />
+        <TextField
+          label={columnLabel(TITLE_FIELD)}
+          name={TITLE_FIELD}
+          defaultValue={initialValues?.title ?? ''}
+          messages={state.attributeErrors[TITLE_FIELD] ?? []}
+        />
+        {/* 설명만 여러 줄이다 - 씨앗 데이터에 실제로 줄바꿈이 들어 있다
+            (`test/e2e/seed/examples.sql`: `E'프로브 설명 첫 줄\n프로브 설명
+            둘째 줄'`). 한 줄 `<Input>` 으로는 그 값을 읽을 수도 고칠 수도
+            없었다 - 줄바꿈이 보이지 않고, 편집하면 통째로 한 줄이 된다. */}
+        <TextField
+          label={columnLabel(DESCRIPTION_FIELD)}
+          name={DESCRIPTION_FIELD}
+          multiline
+          defaultValue={initialValues?.description ?? ''}
+          messages={state.attributeErrors[DESCRIPTION_FIELD] ?? []}
+        />
+        <StatusField
+          defaultValue={initialValues?.status ?? STATUS_OPTIONS[0] ?? ''}
+          messages={state.attributeErrors[STATUS_FIELD] ?? []}
+        />
+        <TextField
+          label={columnLabel(SCORE_FIELD)}
+          name={SCORE_FIELD}
+          type="number"
+          defaultValue={isEdit ? String(initialValues.score) : ''}
+          messages={state.attributeErrors[SCORE_FIELD] ?? []}
+        />
+        <CategoryField
+          categories={categories}
+          defaultValue={initialValues?.categoryId ?? ''}
+          messages={state.relationshipErrors[CATEGORY_FIELD] ?? []}
+        />
+        <TagsField
+          tags={tags}
+          defaultValues={initialValues?.tagIds ?? []}
+          messages={state.relationshipErrors[TAGS_FIELD] ?? []}
+        />
 
-      {/* flex 가 아니라 grid 다. `buttonVariants` 의 기본 클래스에 `shrink-0`
-          이 있어(components/ui/button.tsx) flex 행에서는 `w-full` 두 개가
-          줄어들지 않고 각각 행 전체 폭을 차지한다 - 합이 폭의 두 배가 되어
-          취소 버튼이 폼 밖으로 밀린다(실측: 상세 화면에서 카드의
-          `overflow-hidden` 에 잘려 사라졌다). grid 트랙은 `shrink-0` 과
-          무관하게 절반씩 나누고, `w-full` 은 그 트랙을 채운다. */}
-      <div className="grid grid-cols-2 gap-2 pt-2">
-        <SubmitButton label={isEdit ? '저장' : '만들기'} />
-        <Button type="reset" variant="outline" className="w-full">
-          취소
-        </Button>
-      </div>
+        {/* flex 가 아니라 grid 다. `buttonVariants` 의 기본 클래스에 `shrink-0`
+            이 있어(components/ui/button.tsx) flex 행에서는 `w-full` 두 개가
+            줄어들지 않고 각각 행 전체 폭을 차지한다 - 합이 폭의 두 배가 되어
+            취소 버튼이 폼 밖으로 밀린다(실측: 상세 화면에서 카드의
+            `overflow-hidden` 에 잘려 사라졌다). grid 트랙은 `shrink-0` 과
+            무관하게 절반씩 나누고, `w-full` 은 그 트랙을 채운다. */}
+        <div className="grid grid-cols-2 gap-2">
+          <SubmitButton label={isEdit ? '저장' : '만들기'} />
+          <Button type="reset" variant="outline" className="w-full">
+            취소
+          </Button>
+        </div>
+      </FieldGroup>
     </form>
   )
 }
 
+/**
+ * `Field` 의 `data-invalid` 는 라벨까지 오류 색으로 물들인다(레지스트리:
+ * `data-[invalid=true]:text-destructive`) - 입력만 빨개지는 것보다 어느
+ * 필드가 거절됐는지 눈에 먼저 들어온다. `aria-invalid`·`aria-describedby`
+ * 는 그것과 별개로 입력 자신에 계속 붙인다 - 색은 보는 사람의 것이고 그
+ * 둘은 읽어 주는 쪽의 것이다.
+ */
 function TextField({
   label,
   name,
   type = 'text',
+  multiline = false,
   defaultValue,
   messages,
 }: {
   label: string
   name: string
   type?: string
+  multiline?: boolean
   defaultValue: string
   messages: readonly string[]
 }) {
   const inputId = useId()
   const errorId = useId()
   const invalid = messages.length > 0
+  const describedBy = invalid ? errorId : undefined
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{label}</Label>
-      <Input
-        id={inputId}
-        name={name}
-        type={type}
-        defaultValue={defaultValue}
-        aria-invalid={invalid}
-        aria-describedby={invalid ? errorId : undefined}
-      />
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
+      {multiline ? (
+        <Textarea
+          id={inputId}
+          name={name}
+          defaultValue={defaultValue}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
+        />
+      ) : (
+        <Input
+          id={inputId}
+          name={name}
+          type={type}
+          defaultValue={defaultValue}
+          aria-invalid={invalid}
+          aria-describedby={describedBy}
+        />
+      )}
       <FieldError id={errorId} messages={messages} />
-    </div>
+    </Field>
   )
 }
 
@@ -177,8 +209,8 @@ function StatusField({
   const invalid = messages.length > 0
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{columnLabel(STATUS_FIELD)}</Label>
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor={inputId}>{columnLabel(STATUS_FIELD)}</FieldLabel>
       <Select name={STATUS_FIELD} defaultValue={defaultValue}>
         <SelectTrigger
           id={inputId}
@@ -197,7 +229,7 @@ function StatusField({
         </SelectContent>
       </Select>
       <FieldError id={errorId} messages={messages} />
-    </div>
+    </Field>
   )
 }
 
@@ -234,8 +266,8 @@ function CategoryField({
   for (const category of categories) categoryItems[category.id] = category.name
 
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={inputId}>{columnLabel(CATEGORY_FIELD)}</Label>
+    <Field data-invalid={invalid}>
+      <FieldLabel htmlFor={inputId}>{columnLabel(CATEGORY_FIELD)}</FieldLabel>
       <Select name={CATEGORY_FIELD} defaultValue={defaultValue} items={categoryItems}>
         <SelectTrigger
           id={inputId}
@@ -255,7 +287,7 @@ function CategoryField({
         </SelectContent>
       </Select>
       <FieldError id={errorId} messages={messages} />
-    </div>
+    </Field>
   )
 }
 
@@ -273,8 +305,13 @@ function TagsField({
   const selected = new Set(defaultValues)
 
   return (
-    <div className="space-y-1.5">
-      <span className="text-sm leading-none font-medium">{columnLabel(TAGS_FIELD)}</span>
+    // 라벨 묶음은 `<fieldset>` + `<legend>` 다(`FieldSet`·`FieldLegend`) -
+    // 체크박스 여럿을 하나의 질문으로 묶는 네이티브 방법이고, 그래서 그
+    // 제목은 `<label>` 이 아니다(`<label>` 은 컨트롤 **하나**를 가리킨다).
+    // 예전에는 그 자리를 `<span className="text-sm leading-none font-medium">`
+    // 로 흉내 냈다 - 보기에는 같고 구조로는 아무것도 묶지 않았다.
+    <FieldSet data-invalid={invalid}>
+      <FieldLegend variant="label">{columnLabel(TAGS_FIELD)}</FieldLegend>
       <div
         className="flex flex-wrap gap-x-4 gap-y-2"
         aria-invalid={invalid}
@@ -289,7 +326,7 @@ function TagsField({
         )}
       </div>
       <FieldError id={errorId} messages={messages} />
-    </div>
+    </FieldSet>
   )
 }
 
@@ -297,11 +334,13 @@ function TagCheckbox({ tag, defaultChecked }: { tag: OptionItem; defaultChecked:
   const inputId = useId()
 
   return (
-    <div className="flex items-center gap-1.5">
+    // `orientation="horizontal"` 이 체크박스와 라벨을 한 줄에 세운다 -
+    // 레지스트리가 이 조합을 위해 둔 변형이다(`flex-row items-center`).
+    <Field orientation="horizontal" className="w-auto gap-1.5">
       <Checkbox id={inputId} name={TAGS_FIELD} value={tag.id} defaultChecked={defaultChecked} />
-      <Label htmlFor={inputId} className="font-normal">
+      <FieldLabel htmlFor={inputId} className="w-auto flex-none font-normal">
         {tag.name}
-      </Label>
-    </div>
+      </FieldLabel>
+    </Field>
   )
 }
