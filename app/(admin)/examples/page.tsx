@@ -8,6 +8,7 @@ import { LOGIN_REDIRECT_PARAM } from '@/proxy'
 import { messageForReadFailure } from '../read-result'
 import { bulkDeleteExampleAction } from './actions'
 import { listRequest, toSearchParams } from './list'
+import { optionsFromDocument, optionsRequest } from './options'
 
 /**
  * `examples` 목록 화면 - 이 파일에는 fetch 와 JSX 만 둔다.
@@ -40,10 +41,16 @@ export default async function ExamplesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const resource = resourceByType('examples')!
+  const categoriesResource = resourceByType('exampleCategories')!
   const currentParams = toSearchParams(await searchParams)
-  const result = await request<CollectionDocument>(
-    ...listRequest(resource, currentParams, (await headers()).get('accept-language')),
-  )
+  const lang = (await headers()).get('accept-language')
+
+  // 둘은 서로 의존하지 않는다 - 목록과 분류 보기 목록을 함께 보낸다
+  // (app/(admin)/page.tsx 가 다섯을 묶는 것과 같은 이유).
+  const [result, categoriesResult] = await Promise.all([
+    request<CollectionDocument>(...listRequest(resource, currentParams, lang)),
+    request<CollectionDocument>(...optionsRequest(categoriesResource, lang)),
+  ])
 
   // transport(실제로 백엔드에 못 닿음)만 던져서 error.tsx 를 띄운다(그
   // 파일의 "연결할 수 없다"는 고정 문구가 참이 되는 경우가 그것뿐이라서다) -
@@ -64,6 +71,23 @@ export default async function ExamplesPage({
     throw new Error('목록 응답에 본문이 없습니다.')
   }
 
+  /**
+   * 분류 필터의 보기 목록. **실패하면 화면을 배너로 바꾸지 않고 접는다** -
+   * 이 화면의 일은 행을 보여 주는 것이고, 필터 드롭다운을 못 채운 것 때문에
+   * 목록을 가리면 더 나쁘다. 접히면 그 필터는 텍스트 입력으로 떨어져
+   * (`components/grid/filter-control.ts`) 운영자가 id 를 직접 넣을 수 있다 -
+   * 사라지지 않으므로 조용한 실패가 아니다. `operatorFromResult`
+   * (./operator.ts)가 운영자 배지에 쓰는 것과 같은 판단이다.
+   *
+   * `unwrapOptionsResult` 를 쓰지 않는 이유: 그 함수는 204·본문 없음을
+   * **던진다**(./options.ts) - 폼에서는 옳다(보기 없이 만들면 관계가
+   * 조용히 빠진다). 여기서는 필터가 반쪽이 될 뿐이라 던질 일이 아니다.
+   */
+  const categoryOptions =
+    categoriesResult.ok && categoriesResult.document !== null
+      ? optionsFromDocument(categoriesResult.document)
+      : []
+
   const currentQuery = currentParams.toString()
   const currentUrl = currentQuery === '' ? '/examples' : `/examples?${currentQuery}`
   const reauthHref = `/login?${LOGIN_REDIRECT_PARAM}=${encodeURIComponent(currentUrl)}`
@@ -75,6 +99,12 @@ export default async function ExamplesPage({
       bulkDeleteAction={bulkDeleteExampleAction}
       reauthHref={reauthHref}
       rowHrefBase="/examples"
+      // 비었으면 키를 아예 넘기지 않는다 - 빈 배열을 넘기면 보기가 하나도
+      // 없는 select 가 그려져(`전체`뿐) 필터를 쓸 수 없다. 안 넘기면
+      // 텍스트 입력으로 떨어져 id 로라도 걸 수 있다.
+      {...(categoryOptions.length === 0
+        ? {}
+        : { filterOptions: { 'category.id': categoryOptions } })}
     />
   )
 }

@@ -155,6 +155,46 @@ test.describe('목록 - 서버 정렬', () => {
   })
 })
 
+test.describe('목록 - 필터', () => {
+  /**
+   * 필터 바가 **서버에서** 걸리는지 잰다. 클라이언트가 이미 받은 행만
+   * 걸러내는 회귀라면 이 단언은 죽지 않는다 - 여섯 건이 모두 한 쪽에 있기
+   * 때문이다. 그래서 URL 파라미터(`status`)와 남은 행을 **함께** 본다:
+   * 파라미터가 실려야 `gridQuery` 가 `filter[status][exact]` 로 바꿔 보내고
+   * (lib/grid/query.ts), 그 왕복이 없으면 남는 행이 달라진다.
+   *
+   * 씨앗 여섯 건의 상태는 `seed/examples.sql` 이 정한다 - archived 는
+   * charlie·foxtrot 둘이고, 기본 정렬(`-createdAt`)에서 그 순서로 온다.
+   */
+  test('상태 필터를 걸면 그 상태의 행만 남고, 지우면 되돌아온다', async ({ page }) => {
+    await provisionAndSignIn(page, uniqueEmail('filter'), PASSWORD)
+
+    await page.goto(listUrl())
+    await expectTitles(page, [ALPHA, CHARLIE, ECHO, FOXTROT, BRAVO, DELTA])
+
+    // 선언의 보기 목록(`options: ['draft','active','archived']`)이 그대로
+    // Select 가 된다(components/grid/filter-control.ts).
+    await page.getByLabel('상태').click()
+    await page.getByRole('option', { name: 'archived', exact: true }).click()
+    // Select 를 고르는 것만으로는 이동하지 않는다 - 적용이 한 번에 일어난다
+    // (`filter-bar.tsx` 머리말: 경로를 하나로 둔다).
+    await expectTitles(page, [ALPHA, CHARLIE, ECHO, FOXTROT, BRAVO, DELTA])
+
+    await page.getByRole('button', { name: '적용' }).click()
+    await expect(page).toHaveURL((url) => url.searchParams.get('status') === 'archived')
+    await expectTitles(page, [CHARLIE, FOXTROT])
+    // 제목 필터(URL 에 이미 있던 것)가 함께 실려 나간다 - 적용이 폼 전체를
+    // 읽으므로, 한 필터를 걸 때 다른 필터가 조용히 지워지면 이 단언이 죽는다.
+    await expect(page).toHaveURL((url) => url.searchParams.get('title') === SEED_PREFIX)
+
+    await page.getByRole('button', { name: '지우기' }).click()
+    await expect(page).toHaveURL((url) => url.searchParams.get('status') === null)
+    await expect(page).toHaveURL((url) => url.searchParams.get('title') === null)
+    // 필터가 비면 archived 아닌 씨앗 행이 다시 보인다.
+    await expect(titleCells(page).filter({ hasText: ALPHA })).toHaveCount(1)
+  })
+})
+
 test.describe('생성 폼', () => {
   test('Select 로 고른 분류와 Checkbox 로 켠 라벨이 상세에 보인다', async ({ page }) => {
     await provisionAndSignIn(page, uniqueEmail('create'), PASSWORD)

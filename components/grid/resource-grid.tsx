@@ -65,6 +65,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { FilterBar, type FilterOption } from './filter-bar'
 import { pageNumberFromLink, pageWindow } from './pagination-model'
 import { ROW_CLICK_IGNORED_SELECTOR, shouldNavigateFromRowClick } from './row-click'
 import { BulkConfirmPanel } from './bulk-confirm'
@@ -328,6 +329,15 @@ export function ResourceGrid(props: {
    * `reauthHref` 는 애초에 문자열이다. 평범한 클로저는 둘 중 어느 쪽도 아니다.
    */
   rowHrefBase?: string
+  /**
+   * 필터 보기 목록 - 필터 키로 찾는다(예: `'category.id'`).
+   *
+   * 관계 필터의 보기는 선언만으로 알 수 없다(분류 **이름**은 백엔드에 있다).
+   * 이 계층은 `fetch` 하지 않으므로(components/AGENTS.md) 조회는 화면의
+   * 몫이고, 이 컴포넌트는 키로 찾아 쓸 뿐 어떤 자원의 무엇인지 모른다 -
+   * 넘기지 않으면 그 필터는 텍스트 입력으로 떨어진다(`filter-control.ts`).
+   */
+  filterOptions?: Readonly<Record<string, readonly FilterOption[]>>
 }) {
   return (
     <React.Suspense fallback={null}>
@@ -342,12 +352,14 @@ function ResourceGridInner({
   bulkDeleteAction,
   reauthHref,
   rowHrefBase,
+  filterOptions,
 }: {
   resource: ResourceDef
   document: CollectionDocument
   bulkDeleteAction?: (id: string) => Promise<BulkOutcome>
   reauthHref: string
   rowHrefBase?: string
+  filterOptions?: Readonly<Record<string, readonly FilterOption[]>>
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -534,6 +546,20 @@ function ResourceGridInner({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* 필터는 URL 이 정본이라 이 바는 상태를 들지 않는다 - 지금 적용된 값을
+          `gridState.filters` 에서 받아 그리고, 적용은 URL 을 갈아 끼운다.
+          `pageQuery: {}` 로 쪽을 되돌리는 것은 정렬 변경과 같은 이유다 -
+          다섯째 쪽을 보던 중에 필터를 걸면 그 쪽이 없어질 수 있다.
+          `table.setColumnFilters` 를 거치지 않는다: 필터 키는 백엔드의 키라
+          열 id 와 다르고(`category.id` 는 열이 아예 없다), 이 표는 서버
+          구동이라 TanStack 의 필터 상태가 아무것도 걸러내지 않는다. */}
+      <FilterBar
+        resource={resource}
+        filters={gridState.filters}
+        {...(filterOptions === undefined ? {} : { options: filterOptions })}
+        onApply={(filters) => navigate({ ...gridState, filters, pageQuery: {} })}
+      />
 
       {bulkDeleteAction !== undefined && selectedIds.length > 0 && bulkPhase.kind === 'idle' && (
         <SelectionBar
