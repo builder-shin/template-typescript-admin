@@ -45,7 +45,14 @@
 
 - **지시어 없음(순수 마크업, `react` 타입과 `cn`만 import)**: `badge` ·
   `breadcrumb` · `button` · `card` · `input` · `label` · `skeleton` ·
-  `table`. 이 중 `table`·`label`은 **레지스트리가 붙여 준 지시어를 이
+  `table`. 여기에 `pagination`(추가 2026-09-13)도 든다 - 판별 기준이
+  "상호작용 프리미티브에 **직접** 의존하지 않는다"이므로, 이 부품이 `cn`
+  외에 `Button`(그 자체가 지시어 없는 부품)과 lucide 아이콘을 더 import
+  하는 것은 이 묶음의 성질을 깨지 않는다. 레지스트리도 이 파일에 지시어를
+  붙이지 않는다(그래서 `registry-policy.test.ts`의 목록에는 넣지 않았다 -
+  그 테스트가 지키는 것은 "레지스트리가 붙인 지시어를 우리가 뺀" 두
+  파일이고, 되살아날 지시어가 없는 파일을 넣으면 그 목록의 뜻이 흐려진다).
+  이 중 `table`·`label`은 **레지스트리가 붙여 준 지시어를 이
   저장소가 의도적으로 뺀 것**이다(각 파일 머리말 주석 참고) - `npx shadcn@latest
 add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아난 것을 보면
   다시 뺀다(`test/unit/components/registry-policy.test.ts`가 이 둘에
