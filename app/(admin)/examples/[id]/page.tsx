@@ -160,7 +160,13 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
   }
 
   return (
-    <div className="flex flex-col gap-6 px-4 py-4 lg:px-6 lg:py-6">
+    // `max-w-[55.5rem]` 은 아래 두 트랙의 합이다 - 34rem + 1.5rem(gap) +
+    // 17rem = 52.5rem 에 `lg` 좌우 여백 1.5rem 둘을 더한 값이라, 이 폭에
+    // 닿으면 두 열이 각자 제 폭을 정확히 갖고 그 이상에서는 남는 공간이
+    // 양쪽으로 똑같이 나뉜다. 머리글까지 **같은** 래퍼 안에 두는 것이
+    // 핵심이다 - 그리드만 가운데로 보내면 제목·구분선은 왼쪽에 남아
+    // 카드와 어긋난다.
+    <div className="mx-auto flex w-full max-w-[55.5rem] flex-col gap-6 px-4 py-4 lg:px-6 lg:py-6">
       <header className="flex flex-col gap-4 border-b pb-5">
         <Button
           render={<Link href="/examples" />}
