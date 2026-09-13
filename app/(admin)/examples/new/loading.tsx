@@ -5,12 +5,15 @@ import { Skeleton } from '@/components/ui/skeleton'
  * 와 같은 원칙). 상세 화면과 달리 오른쪽 열("지금 저장된 값"·위험 구역)이
  * 없다 - 아직 만들지 않은 자원이라 보여줄 현재 값도, 지울 것도 없다. 그래서
  * 이 화면은 한 열로 남고 폼 자신의 `max-w-lg` 가 그대로 폭이 된다.
+ *
+ * 가운데로 모으는 래퍼 폭(`max-w-[35rem]`)은 `new/page.tsx` 와 같은 값이어야
+ * 한다 - 한쪽만 가운데면 로딩에서 본문으로 넘어갈 때 화면이 좌우로 튄다.
  */
 export default function Loading() {
   const fieldCount = 6
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
+    <div className="mx-auto flex w-full max-w-[35rem] flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
       <Skeleton className="h-8 w-24" />
       <Skeleton className="h-7 w-32" />
 

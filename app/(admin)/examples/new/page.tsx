@@ -47,7 +47,12 @@ export default async function NewExamplePage() {
   const tags = unwrapOptionsResult(tagsResult)
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
+    // `max-w-[35rem]` - 폼 자신이 `max-w-lg`(32rem)로 폭을 정하므로
+    // (`[id]/edit-form.tsx`) 거기에 `lg` 좌우 여백 1.5rem 둘을 더한 값이다.
+    // 셸이 이미 96rem 에서 가운데로 모으지만(`(admin)/layout.tsx`) 그 폭
+    // 안에서는 이 화면의 내용이 여전히 왼쪽에 붙으므로, 폼 폭에 맞춰 한 번
+    // 더 좁힌다. 상세 화면은 오른쪽 열이 있어 55.5rem 이다.
+    <div className="mx-auto flex w-full max-w-[35rem] flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
       <Button
         render={<Link href="/examples" />}
         nativeButton={false}

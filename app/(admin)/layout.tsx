@@ -90,7 +90,29 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <AppSidebar variant="inset" operator={operator} />
       <SidebarInset>
         <SiteHeader />
-        {children}
+        {/*
+         * 내용을 가운데로 모으는 자리. 화면마다 `mx-auto` 를 반복하지 않고
+         * 셸이 갖는다 - 이 파일이 이미 소유하는 것이 그것이다(루트
+         * `AGENTS.md` 규칙 3: 화면 껍데기는 그룹 레이아웃이 갖는다).
+         *
+         * **`96rem`(1536px)에서 멈추는 이유.** 실측: 2977px 뷰포트에서
+         * 사이드바를 빼도 내용 영역이 2633px 이라, 목록 표의 한 행이 그만큼
+         * 늘어나 첫 칸에서 마지막 칸까지 눈으로 따라갈 수 없다. 이 폭 위로는
+         * 남는 공간을 양쪽으로 똑같이 나눈다.
+         *
+         * **`flex-1` 을 그대로 넘긴다.** 대시보드(`app/(admin)/page.tsx`)가
+         * `flex flex-1 flex-col` 로 높이를 채우므로 이 래퍼가 그 사슬을
+         * 끊으면 안 된다(규칙 2: 높이는 셸이 갖는다 - 화면은 `min-h-svh` 를
+         * 쓰지 않는다).
+         *
+         * 폼 화면은 여기서 더 좁힌다 - 자기 래퍼에 `mx-auto max-w-*` 를 한 번
+         * 더 둔다(상세 `55.5rem` · 생성 `35rem`). 안쪽 값이 이기고, 바깥이
+         * 이미 가운데라 안쪽도 가운데로 남는다.
+         *
+         * `SiteHeader` 는 이 래퍼 **밖**이다 - 그 아래 구분선은 셸의
+         * 가장자리라, 같이 좁히면 화면이 잘린 것처럼 보인다.
+         */}
+        <div className="mx-auto flex w-full max-w-[96rem] flex-1 flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   )
