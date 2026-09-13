@@ -116,7 +116,13 @@ export function ExampleForm({
         messages={state.relationshipErrors[TAGS_FIELD] ?? []}
       />
 
-      <div className="flex gap-2 pt-2">
+      {/* flex 가 아니라 grid 다. `buttonVariants` 의 기본 클래스에 `shrink-0`
+          이 있어(components/ui/button.tsx) flex 행에서는 `w-full` 두 개가
+          줄어들지 않고 각각 행 전체 폭을 차지한다 - 합이 폭의 두 배가 되어
+          취소 버튼이 폼 밖으로 밀린다(실측: 상세 화면에서 카드의
+          `overflow-hidden` 에 잘려 사라졌다). grid 트랙은 `shrink-0` 과
+          무관하게 절반씩 나누고, `w-full` 은 그 트랙을 채운다. */}
+      <div className="grid grid-cols-2 gap-2 pt-2">
         <SubmitButton label={isEdit ? '저장' : '만들기'} />
         <Button type="reset" variant="outline" className="w-full">
           취소
@@ -211,10 +217,26 @@ function CategoryField({
   const errorId = useId()
   const invalid = messages.length > 0
 
+  /**
+   * **`items` 를 반드시 넘긴다.** 넘기지 않으면 `SelectValue` 가 선택된
+   * **값**을 그대로 그린다 - 분류의 값은 UUID 라, 수정 화면이
+   * `defaultValue` 로 복원될 때 트리거에 `11110000-0000-4000-8000-...` 이
+   * 그려졌다(실측, 상세 화면). base UI 가 값에서 라벨을 되찾는 유일한
+   * 통로가 이 prop 이다(`items` 선언부: "When specified, `<Select.Value>`
+   * renders the label of the selected item instead of the raw value").
+   *
+   * 생성 화면에서는 이 결함이 드러나지 않았다 - 목록을 클릭해 고른 직후에는
+   * 그 항목의 children 이 트리거에 남기 때문이다. 값에서 라벨을 되찾아야
+   * 하는 것은 **이미 저장된 값을 들고 화면이 새로 서는** 수정 화면뿐이다.
+   * 상태(status)는 값과 라벨이 같은 문자열이라 이 prop 이 필요 없다.
+   */
+  const categoryItems: Record<string, string> = { [NO_CATEGORY]: '분류 없음' }
+  for (const category of categories) categoryItems[category.id] = category.name
+
   return (
     <div className="space-y-1.5">
       <Label htmlFor={inputId}>{columnLabel(CATEGORY_FIELD)}</Label>
-      <Select name={CATEGORY_FIELD} defaultValue={defaultValue}>
+      <Select name={CATEGORY_FIELD} defaultValue={defaultValue} items={categoryItems}>
         <SelectTrigger
           id={inputId}
           className="w-full"

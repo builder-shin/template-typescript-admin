@@ -2,8 +2,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 /**
  * 생성 화면의 로딩 스켈레톤 - 텍스트를 쓰지 않는다(전역 규칙, ../loading.tsx
- * 와 같은 원칙). 상세 화면과 달리 현재 관계·메타 카드가 없다 - 아직 만들지
- * 않은 자원이라 보여줄 현재 값이 없다.
+ * 와 같은 원칙). 상세 화면과 달리 오른쪽 열("지금 저장된 값"·위험 구역)이
+ * 없다 - 아직 만들지 않은 자원이라 보여줄 현재 값도, 지울 것도 없다. 그래서
+ * 이 화면은 한 열로 남고 폼 자신의 `max-w-lg` 가 그대로 폭이 된다.
  */
 export default function Loading() {
   const fieldCount = 6

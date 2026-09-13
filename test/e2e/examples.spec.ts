@@ -157,13 +157,36 @@ test.describe('생성 폼', () => {
 
     // 이 태스크가 갚는 빚 - "제출이 성공했다"가 아니라 "그 분류 이름과 그
     // 라벨이 보인다"를 잰다. 숨은 input 에 값이 실리지 않았다면
-    // FormData.get(CATEGORY_FIELD) 가 null 이라 관계가 조용히 빠지고, 이
-    // 문단은 "분류 없음 · 라벨 없음"으로 그려져 아래 단언이 죽는다.
-    const summary = page.locator('[data-slot="card-description"]')
+    // FormData.get(CATEGORY_FIELD) 가 null 이라 관계가 조용히 빠지고, 그
+    // 자리가 "없음"으로 그려져 아래 단언이 죽는다.
+    //
+    // 화면이 그 구획에 붙인 접근성 이름으로 찾는다(상세 화면 머리말이 이
+    // 결합을 밝힌다). 예전에는 `[data-slot="card-description"]` - 카드
+    // primitive 의 스타일 슬롯 - 으로 찾았는데, 설명을 가진 카드가 그 화면에
+    // 하나 더 생기는 순간 Playwright strict mode 위반으로 깨졌다. 테스트가
+    // 레이아웃을 못 건드리게 잠그는 결합이라 이름으로 바꿨다.
+    const summary = page.getByRole('group', { name: '분류와 라벨' })
     await expect(summary).toContainText('프로브 분류 하나')
     await expect(summary).toContainText('프로브 라벨 하나')
-    await expect(summary, '숨은 input 이 비면 이 문구가 대신 그려진다').not.toContainText(
-      '분류 없음',
+    // "분류 없음"이 아니라 "없음" 자체를 본다 - 분류·라벨 어느 쪽이 빠져도
+    // 잡힌다(앞 문구로는 라벨만 빠진 경우가 통과했다).
+    await expect(summary, '숨은 input 이 비면 이 자리가 "없음"으로 그려진다').not.toContainText(
+      '없음',
+    )
+
+    // 폼의 분류 트리거도 **이름**을 보여야 한다. 이 화면은 저장된 값을 들고
+    // 새로 서므로 base UI 가 값(UUID)에서 라벨을 되찾아야 하고, 그 통로는
+    // `items` prop 뿐이다(edit-form.tsx 의 `categoryItems`). 그것이 없던
+    // 동안 이 자리에 UUID 가 그려졌고, 위 요약 카드만 보는 단언으로는
+    // 잡히지 않았다 - 요약은 `included` 를 직접 읽기 때문이다.
+    // `getByLabel('분류')` 이 아니라 role 로 좁힌다 - `getByLabel` 은 접근성
+    // 이름을 **부분 문자열**로 맞추므로 위 group(`분류와 라벨`)까지 함께
+    // 걸려 strict mode 위반이 난다(실측). 생성 화면의 같은 호출(위 Select
+    // 열기)은 그 화면에 그 group 이 없어 여전히 하나만 맞는다.
+    const categoryTrigger = page.getByRole('combobox', { name: '분류' })
+    await expect(categoryTrigger).toContainText('프로브 분류 하나')
+    await expect(categoryTrigger, 'items 를 넘기지 않으면 여기 UUID 가 그려진다').not.toContainText(
+      /[0-9a-f]{8}-[0-9a-f]{4}/,
     )
   })
 })
