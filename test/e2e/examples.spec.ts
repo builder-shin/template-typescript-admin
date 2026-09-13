@@ -68,8 +68,13 @@ const HANGUL = /[가-힣]/
 /**
  * 목록 표의 제목 칸(`select` 다음의 첫 데이터 열) - 열 선언 순서는
  * `lib/resources/example.ts` 의 `columns` 다: 제목·설명·상태·점수·분류·라벨·
- * 생성일·수정일. 행에는 상세로 가는 링크가 없다(이 그리드는 셀 텍스트만
- * 그린다) - 그래서 칸 위치로 잡는다.
+ * 생성일·수정일.
+ *
+ * 칸 **위치**로 잡는다. 제목 칸 안에는 상세로 가는 링크가 있지만(그 셀
+ * 하나만 링크다 - `resource-grid.tsx`) 그 역할로 좁히지 않는다: 이 헬퍼가
+ * 재려는 것은 "어느 행이 어떤 순서로 왔는가"이고, 링크가 아니라 칸이 그
+ * 질문의 단위다. `toHaveText` 는 자손 텍스트를 읽으므로 링크가 있어도 그대로
+ * 동작한다.
  */
 function titleCells(page: Page) {
   return page.locator('tbody tr td:nth-child(2)')
@@ -115,9 +120,38 @@ test.describe('목록 - 서버 정렬', () => {
     // 될 수 없다 - 즉 이 단언이 서버 왕복을 실제로 잰다.
     await expectTitles(page, firstPage)
 
-    await page.getByRole('button', { name: '다음' }).click()
+    await page.getByRole('button', { name: '다음 쪽으로' }).click()
     await expect(page).toHaveURL((url) => url.searchParams.get('sort') === sortToken)
     await expectTitles(page, secondPage)
+
+    /**
+     * 번호 페이지네이션. 씨앗 여섯 건에 쪽당 셋이라 **정확히 두 쪽**이고, 그
+     * 쪽 수는 백엔드가 준 `links.last` 에서 온다 - 화면이 총 건수를 나눠
+     * 계산하지 않는다(`components/grid/pagination-model.ts`). 그래서 이
+     * 단언은 그 링크가 세 백엔드에서 실제로 오는지까지 함께 잰다: 오지
+     * 않으면 번호가 한 칸도 그려지지 않아 아래 `toHaveText` 가 죽는다.
+     *
+     * 역할이 `link` 가 아니라 `button` 인 것은 레지스트리 부품이
+     * `nativeButton={false}` 로 base UI Button 을 쓰기 때문이다(실측) -
+     * `<a href>` 이지만 base UI 가 `role="button"` 을 얹는다.
+     */
+    const pageNumbers = page.getByRole('button', { name: /^\d+쪽으로$/ })
+    await expect(pageNumbers).toHaveText(['1', '2'])
+    await expect(page.getByRole('button', { name: '2쪽으로' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    // 지금 쪽에만 붙는다 - 둘 다 붙으면 "지금 어디"가 사라진다.
+    await expect(page.getByRole('button', { name: '1쪽으로' })).not.toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+
+    // 번호를 눌러 첫 쪽으로 돌아온다 - 정렬은 그대로 유지된다(쪽 이동이
+    // 필터·정렬을 지우면 이 단언이 죽는다).
+    await page.getByRole('button', { name: '1쪽으로' }).click()
+    await expect(page).toHaveURL((url) => url.searchParams.get('sort') === sortToken)
+    await expectTitles(page, firstPage)
   })
 })
 

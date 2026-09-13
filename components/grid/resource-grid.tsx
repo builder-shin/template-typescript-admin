@@ -19,17 +19,11 @@ import {
   type RowSelectionState,
   type SortingState,
 } from '@tanstack/react-table'
-import {
-  ChevronDownIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsUpDownIcon,
-  ChevronUpIcon,
-  Columns3Icon,
-} from 'lucide-react'
+import { ChevronDownIcon, ChevronsUpDownIcon, ChevronUpIcon, Columns3Icon } from 'lucide-react'
 
 import { serverDrivenTableOptions } from '@/lib/grid/table'
 import {
+  PAGE_NUMBER_KEY,
   PAGE_POSITION_PATTERN,
   readGridState,
   writeGridState,
@@ -54,6 +48,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination'
+import {
   Table,
   TableBody,
   TableCell,
@@ -61,6 +64,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { pageNumberFromLink, pageWindow } from './pagination-model'
 import { ROW_CLICK_IGNORED_SELECTOR, shouldNavigateFromRowClick } from './row-click'
 import { BulkConfirmPanel } from './bulk-confirm'
 import { BulkProgress, BulkResultTable, mergeRetryReport } from './bulk-result'
@@ -418,6 +422,63 @@ function ResourceGridInner({
 
   const prevHref = pageHref(pathname, searchParams, document.links?.prev)
   const nextHref = pageHref(pathname, searchParams, document.links?.next)
+
+  /**
+   * 쪽 번호는 **백엔드가 말한 것만** 쓴다 - 지금 쪽은 `links.self`, 마지막
+   * 쪽은 `links.last` 다(실측 2026-09-13, 세 백엔드 전부 이 둘을 주고 page
+   * 위치 키는 `page[number]` 다). `meta.totalCount / pageSize` 로 계산하지
+   * 않는 이유: 백엔드가 `page[size]` 를 상한으로 자르면(query.ts 머리말)
+   * 그 나눗셈이 백엔드가 실제로 나눈 쪽 수와 달라진다.
+   *
+   * `links.last` 가 없으면 `lastPage` 가 0 이 되어 번호가 한 칸도 그려지지
+   * 않고 이전·다음만 남는다 - 몇 쪽인지 모르는 채로 번호를 지어내지 않는다.
+   */
+  const currentPage = pageNumberFromLink(document.links?.self) ?? 1
+  const lastPage = pageNumberFromLink(document.links?.last) ?? 0
+  const pageSlots = pageWindow(currentPage, lastPage)
+
+  /** 임의의 쪽으로 가는 URL - 필터·정렬·숨긴 열·쪽당 건수는 지금 그대로 둔다. */
+  function hrefForPage(page: number): string {
+    const query = writeGridState({
+      ...gridState,
+      pageQuery: { [PAGE_NUMBER_KEY]: String(page) },
+    }).toString()
+    return query === '' ? pathname : `${pathname}?${query}`
+  }
+
+  /**
+   * 페이지네이션 한 칸에 실을 props.
+   *
+   * **`href` 와 `onClick` 을 함께 준다.** `href` 가 있으면 브라우저가 주는
+   * 것들이 살아난다 - 가운데 클릭으로 새 탭, 링크 주소 복사, 상태 표시줄
+   * 미리보기. 예전 이 자리는 `<button onClick>` 이라 셋 다 불가능했다.
+   * 그러면서도 클릭은 기본 동작을 막고 `router.push(..., { scroll: false })`
+   * 로 보낸다 - 전체 문서를 다시 받지 않고, 표를 읽던 스크롤 위치도 그대로
+   * 둔다.
+   *
+   * **보조기술에는 링크가 아니라 버튼으로 들린다.** 레지스트리 부품이
+   * `nativeButton={false}` 로 base UI Button 을 쓰는데, base UI 가 그
+   * `<a>` 에 `role="button"` 을 얹기 때문이다(실측 2026-09-13: 렌더된
+   * 다섯 칸 전부 `role="button"`). 그래서 스크린리더의 "링크 목록"에는
+   * 잡히지 않는다 - 레지스트리 부품의 선택이라 여기서 역할을 덮어쓰지
+   * 않았고, `aria-current="page"`(지금 쪽)과 `aria-label`(N쪽으로)로 무엇을
+   * 누르는지는 읽히게 해 뒀다.
+   *
+   * 갈 곳이 없으면(첫 쪽의 "이전") `href` 를 아예 싣지 않고 `aria-disabled`
+   * 로 밝힌다 - `<a>` 에는 `disabled` 가 없다.
+   */
+  function pageLinkProps(href: string | null): React.ComponentProps<'a'> {
+    if (href === null) {
+      return { 'aria-disabled': true, tabIndex: -1, className: 'pointer-events-none opacity-50' }
+    }
+    return {
+      href,
+      onClick: (event) => {
+        event.preventDefault()
+        router.push(href, { scroll: false })
+      },
+    }
+  }
   const selectedIds = table.getFilteredSelectedRowModel().rows.map((row) => row.id)
 
   /**
@@ -602,35 +663,52 @@ function ResourceGridInner({
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-between">
+      {/* 번호가 늘면 한 줄에 안 들어갈 수 있다 - 좁은 화면에서 겹치는 대신
+          줄을 나눈다(번호 칸 수는 일곱으로 묶여 있지만 글자 폭은 로케일·
+          쪽 번호 자릿수에 따라 달라진다). */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
           선택 {table.getFilteredSelectedRowModel().rows.length}개 · 이 페이지{' '}
           {table.getRowModel().rows.length}개 (전체 {rowCount}건)
         </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={prevHref === null}
-            onClick={() => {
-              if (prevHref !== null) router.push(prevHref, { scroll: false })
-            }}
-          >
-            <ChevronLeftIcon />
-            이전
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={nextHref === null}
-            onClick={() => {
-              if (nextHref !== null) router.push(nextHref, { scroll: false })
-            }}
-          >
-            다음
-            <ChevronRightIcon />
-          </Button>
-        </div>
+        <Pagination className="mx-0 w-fit justify-end">
+          <PaginationContent>
+            <PaginationItem>
+              {/* `aria-label` 을 덮는다 - 레지스트리 부품의 기본값은 영어
+                  ("Go to previous page")다. 부품 파일은 레지스트리가 준
+                  그대로 두고(그 디렉터리의 관례) 문구는 호출부에서 준다. */}
+              <PaginationPrevious
+                text="이전"
+                aria-label="이전 쪽으로"
+                {...pageLinkProps(prevHref)}
+              />
+            </PaginationItem>
+            {pageSlots.map((slot, index) =>
+              slot === 'gap' ? (
+                // 생략 표시는 눌 수 없다(`aria-hidden`) - 번호가 아니라
+                // "여기 더 있다"는 표시다. 건너뛴 쪽으로 가려면 앞뒤 번호를
+                // 누르면 된다. key 에 index 를 쓰는 이유: 한 줄에 'gap' 이
+                // 둘 나올 수 있어 값만으로는 구별되지 않는다.
+                <PaginationItem key={`gap-${index}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={slot}>
+                  <PaginationLink
+                    isActive={slot === currentPage}
+                    aria-label={`${slot}쪽으로`}
+                    {...pageLinkProps(hrefForPage(slot))}
+                  >
+                    {slot}
+                  </PaginationLink>
+                </PaginationItem>
+              ),
+            )}
+            <PaginationItem>
+              <PaginationNext text="다음" aria-label="다음 쪽으로" {...pageLinkProps(nextHref)} />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
       </div>
     </div>
   )

@@ -51,6 +51,21 @@ const HIDE_KEY = 'hide'
 export const PAGE_POSITION_PATTERN = /^page\[(number|after|before)\]$/
 
 /**
+ * 번호로 쪽을 지정하는 키. 세 백엔드 전부 목록 응답의 `links`
+ * (`self`·`first`·`prev`·`next`·`last`)에 이 키만 실어 준다(실측
+ * 2026-09-13: fastapi · nestjs · rails 셋 다 `page[number]` 였고
+ * `page[after]`·`page[before]` 를 쓰는 백엔드는 없었다). 그래서
+ * 번호 페이지네이션(`components/grid/pagination-model.ts`)이 이 키를
+ * 직접 써서 임의의 쪽으로 가는 URL 을 만들 수 있다.
+ *
+ * 위 패턴과 **반드시 같은 어휘여야 한다** - 이 상수만 바꾸면 번호를
+ * 눌러도 `readGridState` 가 URL 에서 그 키를 골라내지 못해 쪽 이동이
+ * 조용히 사라진다. `test/unit/grid/pagination-model.test.ts` 가 그
+ * 관계를 기계적으로 고정한다.
+ */
+export const PAGE_NUMBER_KEY = 'page[number]'
+
+/**
  * 상한(`MAX_PAGE_SIZE`)은 `query.ts` 가 정의한다 - 그 파일 머리말이 이유를
  * 적고 있다: 값을 실제로 와이어에 싣는 `gridQuery` 도 같은 상수로 다시
  * 자르므로 이 클램프가 없어도 와이어는 안전하지만, `resource-grid.tsx` 는

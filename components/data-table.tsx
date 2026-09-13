@@ -55,6 +55,15 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from '@/components/ui/pagination'
+import {
   Select,
   SelectContent,
   SelectGroup,
@@ -70,15 +79,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  GripVerticalIcon,
-  Columns3Icon,
-  ChevronDownIcon,
-  ChevronsLeftIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  ChevronsRightIcon,
-} from 'lucide-react'
+import { GripVerticalIcon, Columns3Icon, ChevronDownIcon } from 'lucide-react'
+import { pageWindow } from './grid/pagination-model'
 
 // New in v9: declare the features this table uses — anything you don't
 // register is tree-shaken out of the bundle.
@@ -250,12 +252,30 @@ function DataTableInner({ data, rowCount }: { data: RecentRow[]; rowCount: numbe
     setLocalData(data)
   }, [data])
 
-  /** 현재 URL 파라미터를 복제해 고치고 그 결과로 옮겨간다(스크롤 위치는 유지). */
-  function navigate(mutate: (params: URLSearchParams) => void) {
+  /**
+   * `page` 파라미터를 이 쪽으로 맞춘다. 첫 쪽은 키를 **지운다** - 기본값이라
+   * URL 에 쓰지 않는다(`data-table-query.ts` 가 없는 `page` 를 1 로 읽는다).
+   *
+   * 쪽 이동을 실제로 수행하는 `onPaginationChange` 와 번호 링크의 `href` 가
+   * 둘 다 이 함수를 쓴다 - 규칙이 두 벌이면 링크를 복사해 붙인 주소가 실제로
+   * 눌러서 가는 곳과 달라진다.
+   */
+  function setPageParam(params: URLSearchParams, pageIndex: number): void {
+    if (pageIndex === 0) params.delete('page')
+    else params.set('page', String(pageIndex + 1))
+  }
+
+  /** 현재 URL 파라미터를 복제해 고친 결과 URL. */
+  function urlWith(mutate: (params: URLSearchParams) => void): string {
     const params = new URLSearchParams(searchParams)
     mutate(params)
     const query = params.toString()
-    router.replace(query === '' ? pathname : `${pathname}?${query}`, { scroll: false })
+    return query === '' ? pathname : `${pathname}?${query}`
+  }
+
+  /** 위 URL 로 옮겨간다(스크롤 위치는 유지). */
+  function navigate(mutate: (params: URLSearchParams) => void) {
+    router.replace(urlWith(mutate), { scroll: false })
   }
 
   const dataIds = React.useMemo<UniqueIdentifier[]>(
@@ -303,13 +323,41 @@ function DataTableInner({ data, rowCount }: { data: RecentRow[]; rowCount: numbe
     onPaginationChange: (updater) => {
       const next = typeof updater === 'function' ? updater(pagination) : updater
       navigate((params) => {
-        if (next.pageIndex === 0) params.delete('page')
-        else params.set('page', String(next.pageIndex + 1))
+        setPageParam(params, next.pageIndex)
         if (next.pageSize === DEFAULT_PAGE_SIZE) params.delete('pageSize')
         else params.set('pageSize', String(next.pageSize))
       })
     },
   })
+  const currentPageIndex = table.state.pagination.pageIndex
+
+  /**
+   * 번호 한 칸에 실을 props. `href` 와 `onClick` 을 함께 준다 - `href` 는
+   * 브라우저가 주는 것들(가운데 클릭으로 새 탭·링크 주소 복사)을 위한 것이고,
+   * 클릭은 기본 동작을 막고 `table.setPageIndex` 로 보낸다. 이동을 표에
+   * 맡기는 이유: 그 호출이 `onPaginationChange` 를 태워 URL 을 쓰므로
+   * "쪽을 어떻게 옮기는가"가 한 곳에만 남는다.
+   *
+   * 보조기술에는 버튼으로 들린다 - base UI 가 `nativeButton={false}` 인
+   * `<a>` 에 `role="button"` 을 얹는다(실측). `components/grid/resource-grid.tsx`
+   * 의 같은 함수 머리말에 그 실측을 적어 뒀다.
+   *
+   * 갈 곳이 없으면 `href` 를 싣지 않고 `aria-disabled` 로 밝힌다 - `<a>` 에는
+   * `disabled` 가 없다.
+   */
+  function pageLinkProps(targetIndex: number | null): React.ComponentProps<'a'> {
+    if (targetIndex === null) {
+      return { 'aria-disabled': true, tabIndex: -1, className: 'pointer-events-none opacity-50' }
+    }
+    return {
+      href: urlWith((params) => setPageParam(params, targetIndex)),
+      onClick: (event) => {
+        event.preventDefault()
+        table.setPageIndex(targetIndex)
+      },
+    }
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (active && over && active.id !== over.id) {
@@ -430,50 +478,49 @@ function DataTableInner({ data, rowCount }: { data: RecentRow[]; rowCount: numbe
                 </SelectContent>
               </Select>
             </div>
-            <div className="flex w-fit items-center justify-center text-sm font-medium">
-              {table.state.pagination.pageIndex + 1} / {table.getPageCount()} 쪽
-            </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
-              <Button
-                variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
-                onClick={() => table.setPageIndex(0)}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">첫 쪽으로</span>
-                <ChevronsLeftIcon />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                <span className="sr-only">이전 쪽으로</span>
-                <ChevronLeftIcon />
-              </Button>
-              <Button
-                variant="outline"
-                className="size-8"
-                size="icon"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">다음 쪽으로</span>
-                <ChevronRightIcon />
-              </Button>
-              <Button
-                variant="outline"
-                className="hidden size-8 lg:flex"
-                size="icon"
-                onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-                disabled={!table.getCanNextPage()}
-              >
-                <span className="sr-only">마지막 쪽으로</span>
-                <ChevronsRightIcon />
-              </Button>
-            </div>
+            {/* "N / M 쪽" 글자는 지웠다 - 번호가 그 자리에 그대로 보이고
+                (지금 쪽은 눌린 상태로, 마지막 쪽은 목록 끝에), 같은 정보를
+                두 벌로 두면 한쪽만 틀리는 자리가 생긴다. 첫 쪽·마지막 쪽
+                전용 버튼(«·»)도 지웠다 - 번호 1 과 마지막 번호가 늘 보여
+                같은 이동을 한 번의 클릭으로 한다. */}
+            <Pagination className="mx-0 ml-auto w-fit lg:ml-0">
+              <PaginationContent>
+                <PaginationItem>
+                  {/* `aria-label` 을 덮는다 - 레지스트리 부품의 기본값이
+                      영어다(자세한 이유는 components/grid/resource-grid.tsx
+                      의 같은 자리). 문구는 예전 이 자리의 sr-only 와 같다. */}
+                  <PaginationPrevious
+                    text="이전"
+                    aria-label="이전 쪽으로"
+                    {...pageLinkProps(table.getCanPreviousPage() ? currentPageIndex - 1 : null)}
+                  />
+                </PaginationItem>
+                {pageWindow(currentPageIndex + 1, table.getPageCount()).map((slot, index) =>
+                  slot === 'gap' ? (
+                    <PaginationItem key={`gap-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  ) : (
+                    <PaginationItem key={slot}>
+                      <PaginationLink
+                        isActive={slot === currentPageIndex + 1}
+                        aria-label={`${slot}쪽으로`}
+                        {...pageLinkProps(slot - 1)}
+                      >
+                        {slot}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ),
+                )}
+                <PaginationItem>
+                  <PaginationNext
+                    text="다음"
+                    aria-label="다음 쪽으로"
+                    {...pageLinkProps(table.getCanNextPage() ? currentPageIndex + 1 : null)}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           </div>
         </div>
       </div>
