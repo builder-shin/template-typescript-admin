@@ -231,7 +231,7 @@ test.describe('생성 폼', () => {
 
     // 이 태스크가 갚는 빚 - "제출이 성공했다"가 아니라 "그 분류 이름과 그
     // 라벨이 보인다"를 잰다. 숨은 input 에 값이 실리지 않았다면
-    // FormData.get(CATEGORY_FIELD) 가 null 이라 관계가 조용히 빠지고, 그
+    // FormData.get('category') 가 null 이라 관계가 조용히 빠지고, 그
     // 자리가 "없음"으로 그려져 아래 단언이 죽는다.
     //
     // 화면이 그 구획에 붙인 접근성 이름으로 찾는다(상세 화면 머리말이 이
@@ -250,7 +250,7 @@ test.describe('생성 폼', () => {
 
     // 폼의 분류 트리거도 **이름**을 보여야 한다. 이 화면은 저장된 값을 들고
     // 새로 서므로 base UI 가 값(UUID)에서 라벨을 되찾아야 하고, 그 통로는
-    // `items` prop 뿐이다(edit-form.tsx 의 `categoryItems`). 그것이 없던
+    // `items` prop 뿐이다(components/resource/resource-form.tsx 의 `OneField` 가 만드는 `items`). 그것이 없던
     // 동안 이 자리에 UUID 가 그려졌고, 위 요약 카드만 보는 단언으로는
     // 잡히지 않았다 - 요약은 `included` 를 직접 읽기 때문이다.
     // `getByLabel('분류')` 이 아니라 role 로 좁힌다 - `getByLabel` 은 접근성
