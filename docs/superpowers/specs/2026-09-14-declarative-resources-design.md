@@ -683,9 +683,10 @@ URL 이 오늘과 같으므로(`/examples` · `/examples/new` · `/examples/<id>
    > **정정(2026-09-14, 구현 뒤):** 맞았다 - 세 백엔드 전부. 정본 FastAPI
    > 는 `score` 키를 뺀 `POST /api/v1/examples` 가 422 와 포인터
    > `/data/attributes/score` 하나를 냈다(curl 로 직접 확인). `nestjs`·
-   > `rails` 도 같은 날 "빈 점수" E2E 시나리오로 같은 결과를 확인했다
-   > (README "3-백엔드 검증 결과") - `matrix.ts` 의 `KNOWN_DIVERGENCES` 는
-   > 세 백엔드 다 비어 있다.
+   > `rails` 도 같은 날 "빈 점수" E2E 시나리오로 **포인터**를 확인했다(점수
+   > 입력의 `aria-invalid`) - 상태 코드는 정본 FastAPI 만 직접 쟀다. 그 E2E
+   > 는 서버 쪽 fetch 의 상태를 볼 수 없다. `matrix.ts` 의
+   > `KNOWN_DIVERGENCES` 는 세 백엔드 다 비어 있다.
 
 4. **slug 를 bind 한 Server Action 이 `useActionState` 를 거쳐 직렬화된다.**
 

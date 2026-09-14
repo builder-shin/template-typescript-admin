@@ -1,4 +1,4 @@
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # template-typescript-admin 작업 지침
 

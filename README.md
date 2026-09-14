@@ -97,8 +97,9 @@ docker compose --profile fastapi -f docker-compose.e2e.yml \
 | `/[slug]/[id]` | 필요 | 상세. `writable` 이면 인라인 편집·삭제, 아니면 저장된 값만                              |
 | `/login`       | 공개 | 로그인                                                                                  |
 
-`slug` 는 선언의 것이다 - 오늘은 `examples`·`categories`·`tags` 셋
-(`lib/resources/index.ts`). 선언에 없는 슬러그는 404 다.
+`slug` 는 선언의 것이다 - 오늘은 `examples`·`categories`·`tags`
+셋(`lib/resources/index.ts`). 선언에 없는 슬러그는 "찾을 수 없음"
+화면이다(응답 상태는 스트리밍이라 200 - `app/AGENTS.md`).
 
 **공개 표면은 `/login` 하나뿐이다** - 나머지 전부는 익명 접근에서
 `/login?next=<원래 경로>`로 보내진다(로그인 성공 후 그 경로로 복귀한다).

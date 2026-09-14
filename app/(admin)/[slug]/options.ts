@@ -90,9 +90,12 @@ const PLAN_RESULT_MISMATCH = '내부 오류: 요청 계획과 결과의 수가 �
 
 /**
  * `type` 으로 대상 자원을 찾는다. `RESOURCES` 에 없으면 던진다 - 불변식
- * 테스트(`test/unit/resources/index.test.ts` 8번)가 그 선언을 막지만, 이
- * 자리가 조용히 빈 목록을 그리는 것보다 던지는 것이 낫다(관계 선택기가
- * 비어 있으면 운영자는 그 관계를 걸 수 없다).
+ * 테스트(`test/unit/resources/index.test.ts` 8번)가 그 선언을 막지만, 이 자리가
+ * 조용히 빈 목록을 그리는 것보다 던지는 것이 낫다(관계 선택기가 비어 있으면
+ * 운영자는 그 관계를 걸 수 없다). `relationshipFilterRequests`(목록 화면 경로)도
+ * 이 함수를 부르지만, 이 던지기는 선언 결함이라 불변식 테스트가 먼저 잡는 층이고
+ * - 목록의 접기 규칙(`filterOptionsFromResults`)이 접는 조회 실패와는 다른
+ * 층이다.
  */
 function targetOf(key: string, type: string): ResourceDef {
   const target = resourceByType(type)

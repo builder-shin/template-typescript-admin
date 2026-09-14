@@ -24,7 +24,7 @@ import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/comp
  * 읽기 전용 자원 카드에는 `CardFooter` 에 "읽기 전용"을 적는다 - 그 자원은
  * 목록·상세는 있지만 만들기·수정·삭제가 없다(선언의 `writable`). 쓰기
  * 가능 자원·헬스 카드에는 적을 말이 없어 `CardFooter` 자체를 두지 않는다.
- * 카드 제목은 그 자원의 목록으로 가는 링크다 - 사이드바와 같은 목적지다.
+ * 카드의 자원 이름이 그 자원의 목록으로 가는 링크다 - 사이드바와 같은 목적지다.
  */
 export interface ResourceCount {
   readonly label: string

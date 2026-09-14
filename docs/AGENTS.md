@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # docs/ 작업 지침
 

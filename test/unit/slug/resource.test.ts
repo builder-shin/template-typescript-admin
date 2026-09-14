@@ -16,12 +16,19 @@ describe('resourceFromSlug', () => {
   })
 
   it('선언에 없는 slug 는 notFound() 로 던진다', () => {
-    expect(() => resourceFromSlug('nope')).toThrow()
+    // digest 문자열(`NEXT_HTTP_ERROR_FALLBACK;404`)은 Next 자신의
+    // 것이다(`next/dist/client/components/not-found.js`) - "정말 notFound() 를
+    // 불렀다"와 "다른 이유로 던졌다"를 가르는 기준이 이것뿐이다.
+    expect(() => resourceFromSlug('nope')).toThrow(
+      expect.objectContaining({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' }),
+    )
   })
 
   it('type 으로는 찾지 않는다 - slug 와 type 이 다른 자원이 그 증거다', () => {
     // exampleCategories 의 slug 는 categories 다. type 을 넘기면 404 여야 한다.
-    expect(() => resourceFromSlug('exampleCategories')).toThrow()
+    expect(() => resourceFromSlug('exampleCategories')).toThrow(
+      expect.objectContaining({ digest: 'NEXT_HTTP_ERROR_FALLBACK;404' }),
+    )
   })
 })
 
