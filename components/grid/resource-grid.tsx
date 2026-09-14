@@ -19,7 +19,13 @@ import {
   type RowSelectionState,
   type SortingState,
 } from '@tanstack/react-table'
-import { ChevronDownIcon, ChevronsUpDownIcon, ChevronUpIcon, Columns3Icon } from 'lucide-react'
+import {
+  ChevronDownIcon,
+  ChevronsUpDownIcon,
+  ChevronUpIcon,
+  Columns3Icon,
+  PlusIcon,
+} from 'lucide-react'
 
 import { serverDrivenTableOptions } from '@/lib/grid/table'
 import {
@@ -97,11 +103,16 @@ import { SelectionBar } from './selection-bar'
  * 없지만, 이 함수들은 순수 로직이라 직접 단위 테스트할 수 있고 그래야 한다
  * (lib/grid/의 순수 변환과 같은 이유).
  *
- * `bulkDeleteAction` 을 받으면(있는 자원만) 선택 바·확인 줄·진행률·결과 표가
- * 나타난다 - 어느 것도 자원 이름으로 분기하지 않는다. `runBulk` 을 실제로
- * 돌리는 것도, `id` 마다 `JsonApiResult` 를 `BulkOutcome` 으로 바꾸는 것도 이
- * 컴포넌트가 아니라 호출부가 넘긴 Action 의 일이다 - 이 파일은 그 결과를
- * `bulk-result.tsx` 의 `summarize` 로 읽어 표시만 한다.
+ * `bulkDeleteAction` 을 받으면(쓰기 가능한 자원만) 선택 열·선택 바·확인 줄·
+ * 진행률·결과 표가 나타난다 - 어느 것도 자원 이름으로 분기하지 않는다. 받지
+ * 않으면 선택 열 자체를 그리지 않는다 - 예전에는 `enableRowSelection: true`
+ * 가 무조건이라 읽기 전용 자원에도 아무 일도 못 하는 체크박스가 그려졌다.
+ * `newHref` 를 받으면 툴바에 "새로 만들기" 링크가 생긴다 - 이 두 prop 의
+ * 유무가 곧 그 자원이 쓰기 가능한가이고, 그 판단은 호출부(`app/`)가 선언의
+ * `writable` 을 읽어 한다. `runBulk` 을 실제로 돌리는 것도, `id` 마다
+ * `JsonApiResult` 를 `BulkOutcome` 으로 바꾸는 것도 이 컴포넌트가 아니라
+ * 호출부가 넘긴 Action 의 일이다 - 이 파일은 그 결과를 `bulk-result.tsx` 의
+ * `summarize` 로 읽어 표시만 한다.
  */
 
 export type GridCellValue = string | number | null | readonly string[]
@@ -196,28 +207,35 @@ function renderCell(kind: ColumnKind, value: GridCellValue): React.ReactNode {
   return String(value)
 }
 
-function buildColumns(resource: ResourceDef) {
+/**
+ * `selectable` 이면 선택 열이 맨 앞에 붙는다. export 하는 이유는 이 파일의
+ * 다른 순수 함수들과 같다 - `test/unit/grid/resource-grid.test.ts` 가 "선택
+ * 열은 `bulkDeleteAction` 이 있을 때만"을 DOM 없이 잰다.
+ */
+export function buildColumns(resource: ResourceDef, selectable: boolean) {
+  const selectColumn = columnHelper.display({
+    id: 'select',
+    header: ({ table }) => (
+      <Checkbox
+        checked={table.getIsAllPageRowsSelected()}
+        indeterminate={table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()}
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="전체 선택"
+      />
+    ),
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="행 선택"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
+  })
+
   return [
-    columnHelper.display({
-      id: 'select',
-      header: ({ table }) => (
-        <Checkbox
-          checked={table.getIsAllPageRowsSelected()}
-          indeterminate={table.getIsSomePageRowsSelected() && !table.getIsAllPageRowsSelected()}
-          onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
-          aria-label="전체 선택"
-        />
-      ),
-      cell: ({ row }) => (
-        <Checkbox
-          checked={row.getIsSelected()}
-          onCheckedChange={(value) => row.toggleSelected(!!value)}
-          aria-label="행 선택"
-        />
-      ),
-      enableSorting: false,
-      enableHiding: false,
-    }),
+    ...(selectable ? [selectColumn] : []),
     ...resource.columns.map((column) =>
       // 반환 타입을 unknown 으로 못박는다 - display 열(TValue=unknown)과 같은
       // 배열에 담이므로, 여기서 GridCellValue 로 추론되게 두면 콜백 인자
@@ -332,8 +350,8 @@ export function ResourceGrid(props: {
    * 있으면 행을 눌러 `<이 값>/<자원 id>` 상세로 간다. 없으면 행은 지금처럼
    * 눌리지 않는다 - **이 파일이 자원 이름으로 분기해서 "examples 면 상세가
    * 있다"를 판단하지 않는다.** 상세 라우트가 있는지는 화면이 아는 사실이고
-   * (`app/(admin)/examples/page.tsx` 가 넘긴다), 참조용 자원처럼 상세 화면이
-   * 없는 것은 그냥 넘기지 않는다.
+   * (`app/(admin)/examples/page.tsx` 가 넘긴다), 오늘은 선언된 자원 전부가 상세
+   * 화면을 가지므로 호출부가 항상 넘기지만, 이 파일은 여전히 그 사실을 모른다.
    *
    * **함수가 아니라 문자열인 이유(실측으로 겪었다).** 처음에는
    * `(id) => string` 으로 뒀는데, 이 컴포넌트를 그리는 것은 서버 컴포넌트이고
@@ -353,6 +371,12 @@ export function ResourceGrid(props: {
    * 넘기지 않으면 그 필터는 텍스트 입력으로 떨어진다(`filter-control.ts`).
    */
   filterOptions?: Readonly<Record<string, readonly FilterOption[]>>
+  /**
+   * 있으면 툴바에 "새로 만들기" 링크를 그린다. `rowHrefBase` 와 같은 이유로
+   * 완성된 문자열이다 - 이 파일은 어느 자원인지도, 그 자원에 생성 화면이
+   * 있는지도 모른다. 호출부가 선언의 `writable` 을 읽어 넘기거나 넘기지 않는다.
+   */
+  newHref?: string
 }) {
   return (
     <React.Suspense fallback={null}>
@@ -368,6 +392,7 @@ function ResourceGridInner({
   reauthHref,
   rowHrefBase,
   filterOptions,
+  newHref,
 }: {
   resource: ResourceDef
   document: CollectionDocument
@@ -375,6 +400,7 @@ function ResourceGridInner({
   reauthHref: string
   rowHrefBase?: string
   filterOptions?: Readonly<Record<string, readonly FilterOption[]>>
+  newHref?: string
 }) {
   const router = useRouter()
   const pathname = usePathname()
@@ -386,7 +412,8 @@ function ResourceGridInner({
 
   const rowCount = readRowCount(document)
   const rows = React.useMemo(() => buildRows(resource, document), [resource, document])
-  const columns = React.useMemo(() => buildColumns(resource), [resource])
+  const selectable = bulkDeleteAction !== undefined
+  const columns = React.useMemo(() => buildColumns(resource, selectable), [resource, selectable])
 
   const sorting = sortingStateFromToken(gridState.sort)
   const columnFilters: ColumnFiltersState = Object.entries(gridState.filters).map(
@@ -413,7 +440,7 @@ function ResourceGridInner({
     state: { sorting, columnFilters, columnVisibility, rowSelection, pagination },
     ...serverDrivenTableOptions(rowCount),
     getRowId: (row) => row.id,
-    enableRowSelection: true,
+    enableRowSelection: selectable,
     enableMultiSort: false,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: (updater) => {
@@ -544,22 +571,36 @@ function ResourceGridInner({
     <div className="flex flex-col gap-4 px-4 py-4 lg:px-6 lg:py-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">총 {rowCount}건</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
-            <Columns3Icon data-icon="inline-start" />열
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {resource.columns.map((column) => (
-              <DropdownMenuCheckboxItem
-                key={column.key}
-                checked={table.getColumn(column.key)?.getIsVisible() ?? true}
-                onCheckedChange={(value) => table.getColumn(column.key)?.toggleVisibility(!!value)}
-              >
-                {column.label}
-              </DropdownMenuCheckboxItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <div className="flex items-center gap-2">
+          {newHref !== undefined && (
+            // nativeButton={false}: render 대상이 <button> 이 아니라 Next 의
+            // <Link>(<a>)다 - `app/not-found.tsx` 의 같은 자리 주석이 실측을
+            // 적어 뒀다(base UI 가 <a> 에 role="button" 을 얹는다 - E2E 는
+            // 그래서 이 링크를 button 역할로 찾는다).
+            <Button render={<Link href={newHref} />} nativeButton={false} size="sm">
+              <PlusIcon data-icon="inline-start" />
+              새로 만들기
+            </Button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <Columns3Icon data-icon="inline-start" />열
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {resource.columns.map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.key}
+                  checked={table.getColumn(column.key)?.getIsVisible() ?? true}
+                  onCheckedChange={(value) =>
+                    table.getColumn(column.key)?.toggleVisibility(!!value)
+                  }
+                >
+                  {column.label}
+                </DropdownMenuCheckboxItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
 
       {/* 필터는 URL 이 정본이라 이 바는 상태를 들지 않는다 - 지금 적용된 값을
@@ -719,8 +760,8 @@ function ResourceGridInner({
           쪽 번호 자릿수에 따라 달라진다). */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted-foreground">
-          선택 {table.getFilteredSelectedRowModel().rows.length}개 · 이 페이지{' '}
-          {table.getRowModel().rows.length}개 (전체 {rowCount}건)
+          {selectable ? `선택 ${table.getFilteredSelectedRowModel().rows.length}개 · ` : ''}이
+          페이지 {table.getRowModel().rows.length}개 (전체 {rowCount}건)
         </p>
         <Pagination className="mx-0 w-fit justify-end">
           <PaginationContent>
