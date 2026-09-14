@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildColumns,
   buildRows,
   extractCell,
   pageHref,
@@ -273,5 +274,26 @@ describe('buildRows', () => {
     // 채우면 렌더링 쪽에서 어떤 열이 "없어서 null"인지 "아예 안 채워서
     // undefined"인지 구별할 수 없게 된다.
     expect(first?.cells).toHaveProperty('category')
+  })
+})
+
+describe('buildColumns', () => {
+  it('bulkDeleteAction 이 있을 때만 선택 열이 맨 앞에 붙는다 - 읽기 전용 자원은 선언한 열뿐이다', () => {
+    const selectable = buildColumns(EXAMPLES, true)
+    const readOnly = buildColumns(EXAMPLES, false)
+    expect(selectable[0]?.id).toBe('select')
+    expect(selectable).toHaveLength(EXAMPLES.columns.length + 1)
+    expect(readOnly[0]?.id).toBe(EXAMPLES.columns[0]?.key)
+    expect(readOnly).toHaveLength(EXAMPLES.columns.length)
+  })
+
+  it('선언한 열의 id 는 열 키 그대로다 - 선택 열 유무와 무관하다', () => {
+    const keys = EXAMPLES.columns.map((column) => column.key)
+    expect(buildColumns(EXAMPLES, false).map((column) => column.id)).toEqual(keys)
+    expect(
+      buildColumns(EXAMPLES, true)
+        .slice(1)
+        .map((column) => column.id),
+    ).toEqual(keys)
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   defineResource,
+  filterRelationshipKey,
   formAttributes,
   isRequiredAttribute,
   readOnlyAttributes,
@@ -63,6 +64,20 @@ describe('defineResource - 유도', () => {
     for (const key of ['name', 'owner.id', 'rank']) {
       expect('options' in def.filters.find((filter) => filter.key === key)!).toBe(false)
     }
+  })
+
+  it('선언에 없는 필터 키는 던지지 않고 키 이름을 라벨로, options 없이 떨어진다 - 불변식 테스트가 잡을 자리다', () => {
+    const odd = defineResource({
+      ...SAMPLE_INPUT,
+      filters: [{ key: 'ghost', operators: ['exact'], uiOperator: 'exact' }],
+    })
+    expect(odd.filters[0]).toEqual({
+      key: 'ghost',
+      label: 'ghost',
+      operators: ['exact'],
+      uiOperator: 'exact',
+    })
+    expect(odd.filters[0]).not.toHaveProperty('options')
   })
 
   it('연산자와 기본 연산자는 적은 대로 옮긴다', () => {
@@ -163,5 +178,13 @@ describe('formAttributes · readOnlyAttributes · isRequiredAttribute', () => {
     expect(isRequiredAttribute(def.attributes.name!)).toBe(true)
     expect(isRequiredAttribute(def.attributes.body!)).toBe(false)
     expect(isRequiredAttribute(def.attributes.createdAt!)).toBe(false)
+  })
+})
+
+describe('filterRelationshipKey', () => {
+  it('관계.id 꼴이면 관계 키, 아니면 null 이다', () => {
+    expect(filterRelationshipKey('owner.id')).toBe('owner')
+    expect(filterRelationshipKey('name')).toBeNull()
+    expect(filterRelationshipKey('id')).toBeNull()
   })
 })

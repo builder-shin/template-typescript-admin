@@ -33,6 +33,11 @@ Action 과 화면이다.
 | `values.ts`     | `headingLabel(target, headingKey)`·`initialFormValues(resource, object)` - 응답 → 폼 값.                                                                  |
 | `options.ts`    | `OptionItem`·`optionsFromDocument(resource, document)` - 대상 자원의 `heading` 으로 선택 목록.                                                            |
 
+`headingLabel` 은 `values.ts` 에 둔다 - `lib/jsonapi/normalize.ts` 옆이 더
+자연스러워 보이지만 그 디렉터리는 복사해 온 코어라 손대지 않는다
+(`lib/AGENTS.md` 의 "복사해 온 코어" 절). 그리드(`components/grid/format.ts`)와
+폼 선택 목록(`options.ts`)이 여기 하나를 쓴다.
+
 ## `form-state.ts` 에 import 를 추가하지 마라
 
 `components/resource/resource-form.tsx`(`'use client'`)가 이 파일의 값을

@@ -10,13 +10,13 @@ import { Button } from '@/components/ui/button'
  * notFound 로 갈라 화면이 직접 그린다(client.ts, errors.ts 참고).
  *
  * **이 설계가 실제로 지켜지는 자리와 아직 안 지켜지는 자리.** 네 읽기 화면
- * (`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/options.ts`가 쓰이는
- * `examples/new`·`examples/[id]`)은 이제 `messageForReadFailure`
+ * (`app/(admin)/page.tsx`·`[slug]/page.tsx`·`[slug]/options.ts`가 쓰이는
+ * `[slug]/new`·`[slug]/[id]`)은 이제 `messageForReadFailure`
  * (`app/(admin)/read-result.ts`)로 갈라 transport 만 여기로 던지고, 그 외
  * (백엔드가 실제로 낸 오류)는 화면 안에서 `FormBanner`로 직접 그린다 - 예전엔
  * 넷 다 `!result.ok`를 무조건 던져 백엔드가 준 진짜 설명(`detail`)을 여기서
  * discard 하고 아래 고정 문구로 덮어썼다("연결할 수 없다"는 거짓 진단이
- * 됐었다). **`app/(admin)/examples/actions.ts`의 `deleteExampleAction`은
+ * 됐었다). **`app/(admin)/[slug]/actions.ts`의 `deleteResourceAction`은
  * 아직 예전 방식이다** - `destroySession`(T1.2)만 가로채고, 그 외 실패(예:
  * 409/422/500)는 여전히 `detail`을 실어 던진다 - 삭제 확인 폼을 지나 실행되는
  * 액션이라 폼으로 되돌아가 고칠 입력이 없다는 점에서 읽기 화면과는 성격이

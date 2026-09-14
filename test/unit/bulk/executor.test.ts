@@ -7,7 +7,7 @@ import { MAX_BULK_ITEMS, runBulk, type BulkOutcome } from '@/lib/bulk/executor'
 //
 // `bucket` 을 채운다 - 이 파일은 `runBulk` 의 순서·취소·상한만 잰다.
 // `bucket` 의 값 자체가 무엇을 뜻하는지는 이 실행기가 몰라도 된다(그 판정은
-// `app/(admin)/examples/bulk-outcome.ts` 의 몫 - lib/bulk/executor.ts 의
+// `app/(admin)/[slug]/bulk-outcome.ts` 의 몫 - lib/bulk/executor.ts 의
 // `BulkOutcomeBucket` 주석 참고) - 여기서는 그저 타입을 만족시키는 값을
 // 채울 뿐이라 그 뜻에 맞는 값(`gone` → `alreadyGone`)을 골랐다.
 const ok = (id: string): BulkOutcome => ({ id, ok: true, bucket: 'ok' })

@@ -8,13 +8,14 @@
 
 ## 하위 구성
 
-| 위치                   | 무엇인가                                                                                                                                        |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `components/ui/`       | shadcn 레지스트리가 그대로 넣은 부품(`base-nova` 스타일). 아래 "`'use client'` 정책" 참고                                                       |
-| `components/grid/`     | 자원을 모르는 그리드 UI(그리드·필터 바·선택 바·일괄 확인·결과 표) - 아래 "자원 이름으로 분기하지 않는다" 참고                                   |
-| `components/form/`     | 화면 공용 폼 UI(제출 버튼·필드 오류·폼 배너) - 자원을 모른다                                                                                    |
-| `components/resource/` | 자원을 모르는 폼·상세 부품(`resource-form`·`resource-detail`·`field-control`) - 선언의 속성·관계를 순서대로 돌 뿐 자원 이름으로 분기하지 않는다 |
-| 그 밖의 최상위 `.tsx`  | `dashboard-01` 블록이 들여온 대시보드·사이드바 부품(`section-cards`·`site-header`·`chart-area-interactive`·`app-sidebar`·`nav-*`·`data-table`)  |
+| 위치                                               | 무엇인가                                                                                                                                        |
+| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/ui/`                                   | shadcn 레지스트리가 그대로 넣은 부품(`base-nova` 스타일). 아래 "`'use client'` 정책" 참고                                                       |
+| `components/grid/`                                 | 자원을 모르는 그리드 UI(그리드·필터 바·선택 바·일괄 확인·결과 표) - 아래 "자원 이름으로 분기하지 않는다" 참고                                   |
+| `components/form/`                                 | 화면 공용 폼 UI(제출 버튼·필드 오류·폼 배너) - 자원을 모른다                                                                                    |
+| `components/resource/`                             | 자원을 모르는 폼·상세 부품(`resource-form`·`resource-detail`·`field-control`) - 선언의 속성·관계를 순서대로 돌 뿐 자원 이름으로 분기하지 않는다 |
+| 그 밖의 최상위 `.tsx`                              | `dashboard-01` 블록이 들여온 대시보드·사이드바 부품(`section-cards`·`site-header`·`chart-area-interactive`·`app-sidebar`·`nav-*`·`data-table`)  |
+| `components/nav-items.ts` · `site-header-title.ts` | 사이드바 항목·헤더 제목의 재료. 지시어 없음 - `RESOURCES`·`resourceBySlug` 만 읽는 순수 함수라 단위 테스트가 부른다                             |
 
 **사이드바 부품 다섯 중 셋만 호출된다**(Task 15, 실측 2026-09-12) - `app-sidebar.tsx`
 는 `nav-main.tsx`·`nav-user.tsx`만 부른다. `nav-documents.tsx`·`nav-secondary.tsx`는
@@ -22,6 +23,8 @@
 전부가 `url: '#'`이고 이 저장소에 대응하는 화면이 없어 **더 이상 호출되지
 않는다** - 파일 자체는 블록의 일부로 남겼다. 빈 섹션 제목만 남기지 않는다는
 판단이다 - 빈 섹션은 "곧 생긴다"고 약속하는 것이고 이 템플릿은 약속하지 않는다.
+항목 자체는 `nav-items.ts` 가 `RESOURCES` 에서 만든다 - 새 자원은 선언 하나로
+사이드바에 들어온다.
 
 **운영자 정보는 화면이 직접 `fetch`하지 않고 prop으로 내려온다** - `app/`에서
 `fetch`를 직접 부르면 위반이라는 위 계층 소유권 규칙이 여기도 그대로
@@ -85,7 +88,7 @@ add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아�
 | 파일                                      | 왜 지시어가 없나                                                                                                                                                                                                                                                                                                                                            |
 | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `components/grid/format.ts`               | 서버 컴포넌트인 상세 화면이 이 함수들을 **값으로 호출**한다(루트 `AGENTS.md` 규칙 6번의 첫째 사례가 여기서 나왔다)                                                                                                                                                                                                                                          |
-| `components/form/form-banner.tsx`         | 서버 컴포넌트 **넷**이 읽기 실패를 이 배너로 그린다(`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/new/page.tsx`·`examples/[id]/page.tsx`). 그래서 껍데기로 `alert`(지시어 없음)를 골랐고 `field` 계열은 들이지 않는다                                                                                                                                |
+| `components/form/form-banner.tsx`         | 서버 컴포넌트 **넷**이 읽기 실패를 이 배너로 그린다(`app/(admin)/page.tsx`·`[slug]/page.tsx`·`[slug]/new/page.tsx`·`[slug]/[id]/page.tsx`). 그래서 껍데기로 `alert`(지시어 없음)를 골랐고 `field` 계열은 들이지 않는다                                                                                                                                      |
 | `components/form/field-error.tsx`         | 지시어를 선언하지 않았을 뿐, **서버에서는 쓸 수 없다** - 레지스트리 `field`(`'use client'`)의 `FieldError` 를 값으로 가져오기 때문이다. 읽는 곳이 클라이언트 컴포넌트 둘뿐이라 문제가 되지 않는다(실측 2026-09-14: `components/resource/resource-form.tsx`·`app/(auth)/credentials-form.tsx`). 서버 컴포넌트가 이것을 그리려 하면 그 순간 규칙 6번 위반이다 |
 | `components/resource/field-control.ts`    | 순수 판단(kind → 컨트롤)만 있다. `components/grid/filter-control.ts` 와 같은 꼴로, 단위 테스트가 직접 부르고 서버가 값으로 불러도 안전하다                                                                                                                                                                                                                  |
 | `components/resource/resource-detail.tsx` | 서버 컴포넌트인 상세 화면이 그린다. 훅·핸들러가 없고, 값으로 부르는 것(`relationshipLabel`·`formatDateTime`·`relationshipHeading`)이 전부 지시어 없는 모듈이다. `resource-form.tsx` 만 `useActionState` 때문에 `'use client'` 다                                                                                                                            |
@@ -99,6 +102,8 @@ DOM 테스트 하네스가 없다). 지시어 경계(위 "`'use client'` 정책"
 호출하지 않는다)는 `test/unit/components/boundary-policy.test.ts`가 저장소
 전체(`app`·`components`·`lib`)를 훑어 기계적으로 지킨다. 운영자 조회
 (`app/(admin)/operator.ts`)는 `test/unit/components/sidebar.test.ts`가
-지킨다. 최종 검증은 `./scripts/check.sh`다.
+지킨다. 사이드바 항목(`nav-items.ts`)과 헤더 제목(`site-header-title.ts`)은
+`test/unit/components/sidebar.test.ts`·`site-header-title.test.ts` 가 지킨다.
+최종 검증은 `./scripts/check.sh`다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

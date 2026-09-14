@@ -18,8 +18,13 @@ UX** - 열 구성, 다중 선택과 일괄 작업, 살아있는 필터 뷰, 인�
 - `lib/jsonapi/`·`lib/auth/`·`lib/config/`·`proxy.ts` - `template-typescript-nextjs`에서
   복사한 JSON:API 코어(문서 파싱·세션·설정). 출처 커밋은
   `docs/provenance/copied-core.json`.
-- `lib/resources/`·`lib/grid/`·`lib/bulk/` - 이 저장소가 새로 설계한 계층.
-  자원 선언, URL ↔ 질의 변환(TanStack Table v9를 서버 구동으로), 일괄 실행기.
+- `lib/resources/`·`lib/grid/`·`lib/bulk/`·`lib/form/` - 이 저장소가 새로 설계한 계층.
+  자원 선언, URL ↔ 질의 변환(TanStack Table v9를 서버 구동으로), 일괄 실행기,
+  폼 ↔ JSON:API 쓰기 문서 변환.
+- `components/grid/`·`components/resource/` - 선언을 읽어 그리는 획일 그리드·폼·상세
+  부품. 자원 이름을 모른다.
+- `app/(admin)/[slug]/` - 선언된 자원 전부의 목록·생성·상세 화면 한 벌. 자원마다
+  라우트 파일을 만들지 않는다(아래 "새 자원 더하기").
 - shadcn `dashboard-01` 블록 - 사이드바 셸, 대시보드 카드·차트·표. 데이터
   배선은 실제 계약으로 갈아끼웠다(아래 "화면" 참고). 드래그 정렬(`@dnd-kit/*`)과
   대시보드 차트는 **표본으로 남아 있다** - 이유는 아래와 루트 `AGENTS.md`.
@@ -84,18 +89,80 @@ docker compose --profile fastapi -f docker-compose.e2e.yml \
 경로의 정본은 `app/`의 파일 배치이고, 인증 필요 여부의 정본은 `proxy.ts`의
 `PROTECTED_PATH_PATTERNS`다.
 
-| 경로             | 인증 | 내용                                                                           |
-| ---------------- | ---- | ------------------------------------------------------------------------------ |
-| `/`              | 필요 | 대시보드 - 자원 카운트·헬스 상태·최근 목록(표본 차트 하나 제외 전부 실제 배선) |
-| `/examples`      | 필요 | 운영 그리드 - 열 구성·다중 선택·일괄 작업·필터 뷰                              |
-| `/examples/[id]` | 필요 | 상세 + 인라인 편집                                                             |
-| `/examples/new`  | 필요 | 생성                                                                           |
-| `/login`         | 공개 | 로그인                                                                         |
+| 경로           | 인증 | 내용                                                                                    |
+| -------------- | ---- | --------------------------------------------------------------------------------------- |
+| `/`            | 필요 | 대시보드 - 자원마다 카운트 카드·헬스 상태·최근 목록(표본 차트 하나 제외 전부 실제 배선) |
+| `/[slug]`      | 필요 | 선언된 자원의 목록 - 열 구성·필터 뷰. `writable` 이면 다중 선택·일괄 삭제·새로 만들기   |
+| `/[slug]/new`  | 필요 | 생성. `writable` 이 아니면 404                                                          |
+| `/[slug]/[id]` | 필요 | 상세. `writable` 이면 인라인 편집·삭제, 아니면 저장된 값만                              |
+| `/login`       | 공개 | 로그인                                                                                  |
 
-**공개 표면은 `/login` 하나뿐이다** - 나머지 넷은 익명 접근에서
+`slug` 는 선언의 것이다 - 오늘은 `examples`·`categories`·`tags`
+셋(`lib/resources/index.ts`). 선언에 없는 슬러그는 "찾을 수 없음"
+화면이다(응답 상태는 스트리밍이라 200 - `app/AGENTS.md`).
+
+**공개 표면은 `/login` 하나뿐이다** - 나머지 전부는 익명 접근에서
 `/login?next=<원래 경로>`로 보내진다(로그인 성공 후 그 경로로 복귀한다).
 가입 화면(`/register`)은 없다 - 운영자는 스스로 가입하지 않는다(아래 "첫
 운영자 만들기").
+
+## 새 자원 더하기
+
+두 단계다. `app/` 에는 아무것도 만들지 않는다.
+
+1. `lib/resources/<이름>.ts` 에 선언을 적는다 - `lib/resources/example.ts`
+   가 본이다. 열·필터·정렬·include 는 백엔드 소스에서 실측해 옮겨 적는다.
+2. `lib/resources/index.ts` 의 `RESOURCES` 배열에 한 줄 더한다.
+
+그러면 `/<slug>` 목록, `/<slug>/new` 생성, `/<slug>/<id>` 상세와 사이드바
+항목·대시보드 카드가 생긴다. 읽기 전용 자원(`writable: false`)도 목록·상세를
+갖고 쓰기 UI 만 빠진다. 아래는 **예시**다 - `notes` 라는 자원은 세 백엔드에
+없다:
+
+```ts
+// lib/resources/note.ts
+import { defineResource, type ResourceDef } from './define'
+
+export const notesResource: ResourceDef = defineResource({
+  type: 'notes',
+  slug: 'notes',
+  path: '/api/v1/notes',
+  label: '메모',
+  heading: 'subject',
+  writable: true,
+  attributes: {
+    subject: { kind: 'string', label: '제목', nullable: false, readOnly: false },
+    body: { kind: 'text', label: '본문', nullable: true, readOnly: false },
+    createdAt: { kind: 'datetime', label: '생성일', nullable: false, readOnly: true },
+  },
+  relationships: {},
+  columns: [
+    { key: 'subject', sortable: true },
+    { key: 'createdAt', sortable: true },
+  ],
+  filters: [{ key: 'subject', operators: ['exact', 'contains'], uiOperator: 'contains' }],
+  sorts: ['subject', 'createdAt'],
+  includes: [],
+})
+```
+
+```ts
+// lib/resources/index.ts
+export const RESOURCES: readonly ResourceDef[] = Object.freeze([
+  examplesResource,
+  exampleCategoriesResource,
+  exampleTagsResource,
+  notesResource, // ← 이 한 줄
+])
+```
+
+선언의 자기 정합성(slug 유일, `heading` 이 속성 안에 있음, 열·필터 키가
+선언 안에 있음 등 아홉)은 `test/unit/resources/index.test.ts` 가 모든
+자원에 대해 잰다 - 잘못 적으면 `pnpm test` 에서 드러난다.
+
+특정 자원의 화면을 다르게 그리고 싶으면 `app/(admin)/<slug>/` 정적 폴더를
+만든다 - 정적 세그먼트가 `[slug]` 를 이긴다(`app/AGENTS.md` 의 실측). 그
+폴더는 자기 `loading.tsx` 도 스스로 가져야 한다.
 
 ## 첫 운영자 만들기
 
@@ -141,15 +208,15 @@ pnpm test:e2e        # E2E만(정본 FastAPI가 이미 떠 있지 않아도 된�
 
 ## 3-백엔드 검증 결과
 
-아래는 세 백엔드 각각에 대해 `pnpm test:e2e`를 손으로 돌려 확인한 결과다(세
-백엔드 저장소 모두 `main` 브랜치 기준). CI 매트릭스가 같은 확인을 push·PR마다
-반복한다.
+CI 매트릭스(`.github/workflows/ci.yml`)가 push·PR 마다 세 백엔드 각각에
+`pnpm test:e2e` 를 돈다 - 현재 결과는 그 워크플로의 최근 실행이 정본이다.
+아래는 사람이 손으로 돌려 확인한 마지막 결과다(각 행의 날짜 기준).
 
-| 백엔드          | 커밋(`main`) | 통과  | 알려진 계약 드리프트 |
-| --------------- | ------------ | ----- | -------------------- |
-| `fastapi`(정본) | `3c4eee3`    | 11/11 | 0건                  |
-| `nestjs`        | `4d49f3a`    | 11/11 | 0건                  |
-| `rails`         | `231576e`    | 11/11 | 0건                  |
+| 백엔드          | 확인일     | 커밋(`main`) | 통과  | 알려진 계약 드리프트 |
+| --------------- | ---------- | ------------ | ----- | -------------------- |
+| `fastapi`(정본) | 2026-09-14 | `3c4eee3`    | 15/15 | 0건                  |
+| `nestjs`        | 2026-09-14 | `4d49f3a`    | 15/15 | 0건                  |
+| `rails`         | 2026-09-14 | `231576e`    | 15/15 | 0건                  |
 
 알려진 드리프트 목록의 정본은 `test/e2e/matrix.ts`의 `KNOWN_DIVERGENCES`다 -
 비어 있어도 매 실행이 "0건"을 로그로 남긴다(침묵은 "안 돌았다"와

@@ -40,9 +40,10 @@ export type ColumnKind = 'text' | 'number' | 'badge' | 'badges' | 'datetime'
 /**
  * 속성의 종류. 세 백엔드가 오늘 노출하는 속성 전부를 덮는 최소 집합이다.
  * `string` 과 `text` 는 JSON 타입이 같고 화면 표현(한 줄·여러 줄)만 다르다.
- * 종류를 더하면 이 유니온과, `kind` 로 분기하는 두 곳
- * (`components/resource/field-control.ts`·`lib/form/write.ts`)에 갈래를
- * 하나씩 더한다.
+ * 종류를 더하면 이 유니온과, `kind` 로 분기하는 세 곳(이 파일의
+ * `attributeColumnKind`·`components/resource/field-control.ts` 의
+ * `attributeControlFor`·`lib/form/write.ts` 의 `attributeOutcome`)에 갈래를
+ * 하나씩 더한다 - 셋 다 빠진 갈래를 컴파일이 잡는다.
  */
 export type AttributeKind = 'string' | 'text' | 'enum' | 'int' | 'datetime'
 
@@ -149,34 +150,50 @@ export interface ResourceDef {
   readonly includes: readonly string[]
 }
 
-/** `관계.id` 꼴 필터 키에서 관계 키를 얻는다. 그 꼴이 아니면 `null`. */
-function relationshipKeyOf(filterKey: string): string | null {
+/**
+ * `관계.id` 꼴 필터 키에서 관계 키를 얻는다. 그 꼴이 아니면 `null`.
+ * `deriveFilter` 가 라벨을 유도할 때, 그리고 목록 화면이 관계 필터의 보기
+ * 목록을 어느 자원에서 조회할지 정할 때(`app/(admin)/[slug]/options.ts`)
+ * 같은 판정을 쓴다 - 접미사 `.id` 를 두 곳이 각자 자르면 한쪽만 바뀌는 날
+ * 필터 라벨과 보기 목록이 서로 다른 관계를 가리킨다.
+ */
+export function filterRelationshipKey(filterKey: string): string | null {
   const suffix = '.id'
   return filterKey.endsWith(suffix) ? filterKey.slice(0, -suffix.length) : null
 }
 
 /**
- * 열의 표현 - string·text → text, int → number, enum → badge, datetime →
- * datetime, to-one → badge, to-many → badges. 속성이 관계보다 먼저다. 둘 다
- * 아니면 text 로 떨어진다(불변식 테스트가 잡는다).
+ * 속성 종류 → 열의 표현. 종류를 더하면 `default` 갈래의 `never` 대입이
+ * 컴파일을 깨뜨린다 - 새 종류가 조용히 `text` 로 떨어지는 대신 여기서
+ * 드러난다.
+ */
+function attributeColumnKind(attribute: AttributeDef): ColumnKind {
+  switch (attribute.kind) {
+    case 'string':
+    case 'text':
+      return 'text'
+    case 'int':
+      return 'number'
+    case 'enum':
+      return 'badge'
+    case 'datetime':
+      return 'datetime'
+    default: {
+      const exhaustive: never = attribute
+      return exhaustive
+    }
+  }
+}
+
+/**
+ * 열의 표현 - 속성이 관계보다 먼저다. 둘 다 아니면 text 로 떨어진다(불변식
+ * 테스트가 잡는다).
  */
 function columnKindOf(
   attribute: AttributeDef | undefined,
   relationship: RelationshipDef | undefined,
 ): ColumnKind {
-  if (attribute !== undefined) {
-    switch (attribute.kind) {
-      case 'string':
-      case 'text':
-        return 'text'
-      case 'int':
-        return 'number'
-      case 'enum':
-        return 'badge'
-      case 'datetime':
-        return 'datetime'
-    }
-  }
+  if (attribute !== undefined) return attributeColumnKind(attribute)
   if (relationship !== undefined) return relationship.cardinality === 'one' ? 'badge' : 'badges'
   return 'text'
 }
@@ -193,7 +210,7 @@ function deriveColumn(input: ResourceInput, column: ColumnInput): ColumnDef {
 }
 
 function deriveFilter(input: ResourceInput, filter: FilterInput): FilterDef {
-  const relationshipKey = relationshipKeyOf(filter.key)
+  const relationshipKey = filterRelationshipKey(filter.key)
   const relationship = relationshipKey === null ? undefined : input.relationships[relationshipKey]
   const attribute = input.attributes[filter.key]
   const base: FilterDef = {

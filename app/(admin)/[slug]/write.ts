@@ -18,8 +18,8 @@ import type { ResourceDef } from '@/lib/resources'
  * **본문은 여기서 조립하지 않는다.** `FormData` → JSON:API 문서는 자원을
  * 모르는 순수 변환이라 `lib/form/write.ts` 의 `writeDocument` 가 갖는다 -
  * 이 파일은 그 문서를 요청 옵션에 싣고 경로·메서드·토큰·언어를 붙일 뿐이다.
- * 자원을 인자로 받으므로 어느 자원에도 같은 코드가 동작한다 - 둘째 계획이
- * 이 파일을 `[slug]/write.ts` 로 옮긴다.
+ * 자원을 인자로 받으므로 어느 자원에도 같은 코드가 동작한다 - `actions.ts`
+ * 가 `slug` 로 찾은 선언을 그대로 넘긴다.
  *
  * `accessToken`·`acceptLanguage` 를 이미 구해진 값으로 인자로 받는다 -
  * `headers()`·`cookies()` 를 이 파일이 알면 다시 요청 스코프에 묶여 단위

@@ -366,6 +366,11 @@ components/resource/
 한 줄이 같은 일을 하고, 정적 파라미터 등록이 프리렌더와 얽히는 자리(2.3 의
 `useParams` 절이 그 경계를 설명한다)를 만들지 않는다.
 
+> **정정(2026-09-14, 구현 뒤):** Next 16 의 `params` 가 Promise 라 화면이
+> 먼저 `await` 하고 문자열을 넘긴다 - 실제 이름은 `resourceFromSlug(slug)`
+> 다. 쓰기 Action 의 문지기 `writableResource(slug)` 도 같은 파일
+> (`[slug]/resource.ts`)에 있다.
+
 ### 6.2 목록
 
 ```
@@ -438,6 +443,10 @@ deleteResourceAction.bind(null, slug, id))`. 폭 산수(55.5rem · 34rem · 17re
 - **대시보드 카드**(`section-cards.tsx`): `exampleCount` · `categoryCount` ·
   `tagCount` 세 prop 대신 `counts: { label, href, count }[]` 하나를 받고,
   `app/(admin)/page.tsx` 가 `RESOURCES` 마다 `countRequest` 를 병행한다.
+
+  > **정정(2026-09-14, 구현 뒤):** 읽기 전용 카드의 "읽기 전용" 꼬리를
+  > 그리려고 `writable` 을 더한 `{ label, href, count, writable }` 이다.
+
   **최근 표는 그대로 둔다** - `RecentRow` 가 `title` · `status` · `score` ·
   `updatedAt` 에 묶여 있고 그 표는 블록의 드래그 부품과 함께 온 것이다. 차트와
   같은 층위의 "표본"으로 루트 `AGENTS.md` 의 "화면에는 보이지 않는 계약"
@@ -486,6 +495,10 @@ input 의 `name` 은 속성 키·관계 키 그대로다. 오늘 `form-state.ts`
 에는 반드시 `items` 를 넘긴다(오늘 `edit-form.tsx` 와 `filter-bar.tsx` 가
 실측한 결함 - 넘기지 않으면 트리거에 UUID 가 뜬다).
 
+> **정정(2026-09-14, 구현 뒤):** 관계 `Select` 에만 해당한다 - enum 의 값과
+> 라벨은 같은 문자열이라 `items` 가 필요 없다(`components/resource/resource-form.tsx`
+> 의 `AttributeField`).
+
 `ResourceForm` 의 props: `resource` · `action`(bind 된 Server Action) ·
 `options: Record<관계 키, OptionItem[]>` · `initialValues?`. `initialValues`
 는 `{ attributes: Record<string, string>, relationships: Record<string,
@@ -515,6 +528,10 @@ relationships } }` 를 돌려준다. "빈 값"은 앞뒤 공백을 지운 결과
 문자열을 그대로 보내는 이유는 `Number('abc')` 가 `NaN` 이고 `JSON.stringify`
 가 `NaN` 을 `null` 로 쓰기 때문이다 - 그러면 잘못 적은 값이 "없음"으로
 둔갑한다. 원문을 보내면 백엔드가 타입 오류를 그 필드 아래 낸다.
+
+> **정정(2026-09-14, 구현 뒤):** 정규식은 앞뒤 공백을 지운 값에 적용하고,
+> `^-?\d+$` 에 맞아도 `Number.isSafeInteger` 를 넘으면 원문 문자열 그대로
+> 보낸다.
 
 ### 7.3 폼 상태와 판단 - `lib/form/form-state.ts` · `flow.ts` · `values.ts`
 
@@ -581,6 +598,11 @@ id)`(수정·삭제) 로 넘긴다. bind 된 인자는 문자열이라 직렬화
 | `app/(admin)/[slug]/loading.tsx` 셋           | `'use client'`            | `useParams`                                                                                       |
 | `app/(admin)/[slug]/actions.ts`               | `'use server'`            | 동기 함수는 두지 않는다. 튜플 조립은 `write.ts`                                                    |
 
+> **정정(2026-09-14, 구현 뒤):** `components/resource/resource-detail.tsx`
+> 행의 그 실측은 `[id]/page.tsx` 머리말이 아니라 `resource-detail.tsx`
+> 머리말에 있다 - `useRenderElement` 가 ref 병합 훅 호출을
+> `typeof document !== 'undefined'` 로 감싼다.
+
 `test/unit/components/boundary-policy.test.ts` 두 방향(비-클라이언트가
 클라이언트 값을 호출하지 않는다 · `'use client'` 파일이 `settings.ts` 에
 닿지 않는다)은 저장소 전체를 훑으므로 손대지 않아도 새 파일을 본다.
@@ -602,6 +624,11 @@ id)`(수정·삭제) 로 넘긴다. bind 된 인자는 문자열이라 직렬화
 | `test/unit/components/site-header-title.test.ts`  | slug 기반 문구 규칙. 없는 slug 는 빈 문자열                                                                  |
 | `test/unit/components/sidebar.test.ts`            | 항목이 `RESOURCES` 순서·개수와 같다                                                                          |
 
+> **정정(2026-09-14, 구현 뒤):** `test/unit/slug/` 행의 `resource.test` 는
+> "없으면 undefined" 가 아니라 "없으면 `notFound()` 로 던진다" 를 잰다 -
+> `notFound()` 가 요청 스코프 없이 던지므로 단위에서 그대로 부른다.
+> `write.test` 는 옛 `actions.test` 다.
+
 ### 10.2 E2E - 오늘 시나리오가 회귀망이다
 
 URL 이 오늘과 같으므로(`/examples` · `/examples/new` · `/examples/<id>`)
@@ -620,6 +647,10 @@ URL 이 오늘과 같으므로(`/examples` · `/examples/new` · `/examples/<id>
 
 세 백엔드 매트릭스(`.github/workflows/ci.yml`)는 그대로 돈다.
 
+> **정정(2026-09-14, 구현 뒤):** `examples.spec.ts` 도 바뀌었다 - 생성
+> 시나리오가 목록의 "새로 만들기"로 진입하고, 빈 점수 시나리오(11장 3번의
+> 실측)가 늘었다. 시나리오는 열다섯이다.
+
 ## 11. 구현 중에 실측해 사실 문장으로 남길 것
 
 스펙은 아래 다섯을 참으로 **전제하지 않는다.** 구현이 재고, 결과를 그 자리의
@@ -628,14 +659,50 @@ URL 이 오늘과 같으므로(`/examples` · `/examples/new` · `/examples/<id>
 1. **정적 폴더가 `[slug]` 를 실제 런타임에서도 이긴다.** 정렬기 소스는 읽었다
    (2.3). 던져 버릴 `app/(admin)/examples/page.tsx` 하나로 `next dev` 와
    `next build` 양쪽에서 확인하고 지운다. 결과를 `app/AGENTS.md` 에 적는다.
+
+   > **정정(2026-09-14, 구현 뒤):** 이겼다. 프로덕션 빌드에서 `/examples`
+   > 는 정적 화면을, `/categories` 는 그대로 `[slug]` 의 제네릭 목록(h1
+   > `분류`)을 그렸다. `next dev` + curl 로 세션 쿠키를 실어 같은 두 경로를
+   > 요청했을 때도 같은 순서였다(`static-override` 일치 줄이 `/examples`
+   > 1개·`/categories` 0개). 그 상태의 `pnpm build` 라우트 목록에는
+   > `ƒ /[slug]` 와 `ƒ /examples` 가 나란히 남았다 - 정적 폴더가 이겨도
+   > `[slug]` 항목이 목록에서 사라지지 않는다.
+
 2. **`'use client'` 인 `loading.tsx` 안의 `useParams` 가 Suspense 대체 UI 로
    동작한다** - 목록으로 이동할 때 열 수가 맞는 스켈레톤이 뜨는지.
+
+   > **정정(2026-09-14, 구현 뒤):** 맞았다. `/tags` 로 이동하는 동안
+   > `div.bg-muted > [data-slot="skeleton"]` 가 1개였고 h1 이 `라벨` 이었다
+   > - 분류·라벨 둘 다 열 하나(`columns: [{ key: 'name' }]`)이고
+   > `writable: false` 라 선택 열이 없으므로 선언에서 센 값(1)과 같았다.
+
 3. **필수 `int` 속성을 뺀 POST 에 세 백엔드가 `/data/attributes/<키>`
    포인터로 422 를 낸다**(7.2 의 "키를 뺀다"가 기대는 사실). 하나라도 다르면
    그 백엔드는 `matrix.ts` 의 `KNOWN_DIVERGENCES` 에 적는다.
+
+   > **정정(2026-09-14, 구현 뒤):** 맞았다 - 세 백엔드 전부. 정본 FastAPI
+   > 는 `score` 키를 뺀 `POST /api/v1/examples` 가 422 와 포인터
+   > `/data/attributes/score` 하나를 냈다(curl 로 직접 확인). `nestjs`·
+   > `rails` 도 같은 날 "빈 점수" E2E 시나리오로 **포인터**를 확인했다(점수
+   > 입력의 `aria-invalid`) - 상태 코드는 정본 FastAPI 만 직접 쟀다. 그 E2E
+   > 는 서버 쪽 fetch 의 상태를 볼 수 없다. `matrix.ts` 의
+   > `KNOWN_DIVERGENCES` 는 세 백엔드 다 비어 있다.
+
 4. **slug 를 bind 한 Server Action 이 `useActionState` 를 거쳐 직렬화된다.**
+
+   > **정정(2026-09-14, 구현 뒤):** 됐다. `test/e2e/examples.spec.ts` 의
+   > 생성 시나리오가 `createResourceAction.bind(null, 'examples')` 를
+   > `useActionState` 로 제출했고 생성이 성공해 상세로 넘어갔다. 상태
+   > 코드는 따로 쟀다 - 같은 모양의 문서를 백엔드에 직접 POST 했을 때
+   > 응답이 201 이었다(정본 FastAPI 상대 curl).
+
 5. **라우트를 옮긴 뒤 `TS2307` 이 나면 `rm -rf .next`** - 루트 `AGENTS.md`
    규칙 4 가 이번에 실제로 걸리는 자리다.
+
+   > **정정(2026-09-14, 구현 뒤):** 났다 - 두 번. `app/(admin)/examples/`
+   > 를 지우고 `app/(admin)/[slug]/` 를 만들었을 때 한 번, 이후 던져 버릴
+   > `app/(admin)/examples/page.tsx` 를 지웠을 때 한 번 - 둘 다 `rm -rf
+   > .next` 뒤 초록이 됐다.
 
 ## 12. 문서 수정
 

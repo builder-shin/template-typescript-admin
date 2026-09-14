@@ -1,4 +1,4 @@
-import { resourceByType } from '@/lib/resources'
+import { resourceBySlug } from '@/lib/resources'
 
 /**
  * `site-header.tsx`(`'use client'`)가 아니라 여기 두는 이유 - RSC 경계.
@@ -7,24 +7,23 @@ import { resourceByType } from '@/lib/resources'
  * 서버 컴포넌트가 값으로 직접 호출할 때 "클라이언트 함수를 서버에서
  * 호출했다"로 죽는 자리가 된다(그 파일 머리말이 실측을 남긴 바로 그 사고).
  *
- * 현재 경로에 맞는 제목. 실재하는 네 라우트(`find app -name 'page.tsx'`,
- * `app-sidebar.tsx` 의 `NAV_MAIN_ITEMS` 머리말과 같은 실측) 전부를 짚는다 -
- * 예전에는 "Dashboard" 하나로 고정돼 있어 `/`를 뺀 셋(목록·작성·상세)에서
- * 틀린 제목을 보여줬고, 영어이기도 했다.
+ * 경로의 첫 세그먼트로 선언을 찾는다(`resourceBySlug`) - `/<slug>` 는
+ * `label`, `/<slug>/new` 는 `<label> 만들기`, `/<slug>/<id>` 는 `<label> 상세`,
+ * `/` 는 "대시보드". 못 찾으면 빈 문자열이다 - "예제 상세" 처럼 다른
+ * 자원의 문구를 그리거나 문구를 지어내지 않는다(그 자리는 곧 404 다).
+ * 예전에는 `/examples` 네 경로를 손으로 분기했고, 이 목록에 없는 라우트가
+ * 생기면 조용히 "예제 상세"로 그려졌다 - 이제 새 자원은 선언 하나로 제
+ * 제목을 갖는다.
  *
- * `/examples` 라벨은 문자열로 박지 않고 `resourceByType('examples')!.label`
- * 로 읽는다 - `app-sidebar.tsx` 가 같은 이유로 같은 자리를 읽는다(표·필터가
- * 이미 쓰는 "예제"와 갈라지지 않게).
- *
- * **마지막 갈래(`return '예제 상세'`)는 "그 외 전부"이지 "상세 화면"이
- * 아니다.** 오늘은 `/examples/[id]` 하나만 그 자리에 떨어져 정확하지만,
- * 이 목록에 없는 다섯 번째 라우트가 생기면 이 함수를 먼저 고치지 않는 한
- * 그 라우트도 조용히 "예제 상세"로 그려진다 - 새 라우트를 추가하는 사람은
- * 이 함수에 분기를 먼저 추가해야 한다.
+ * 문구 규칙(`만들기`·`상세`)은 그대로다 - E2E 가 `예제 만들기` 제목을 찾는다
+ * (`test/e2e/auth.spec.ts`·`examples.spec.ts`).
  */
 export function titleFor(pathname: string): string {
   if (pathname === '/') return '대시보드'
-  if (pathname === '/examples') return resourceByType('examples')!.label
-  if (pathname === '/examples/new') return '예제 만들기'
-  return '예제 상세'
+  const [slug, second] = pathname.split('/').filter((segment) => segment !== '')
+  const resource = slug === undefined ? undefined : resourceBySlug(slug)
+  if (resource === undefined) return ''
+  if (second === undefined) return resource.label
+  if (second === 'new') return `${resource.label} 만들기`
+  return `${resource.label} 상세`
 }

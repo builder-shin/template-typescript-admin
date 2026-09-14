@@ -4,7 +4,9 @@ import { headingLabel } from './values'
 
 /**
  * 관계 선택 목록의 항목 하나 - 폼의 Select·Checkbox 와 그리드의 필터 Select 가
- * 같은 모양을 쓴다.
+ * 같은 모양을 쓴다. `components/grid/filter-bar.tsx` 의 `FilterOption` 이 같은
+ * 모양이고 목록 화면(`app/(admin)/[slug]/page.tsx`)이 그 구조적 호환에 기댄다 -
+ * 한쪽을 바꾸면 그 화면에서 타입 오류로 드러난다.
  */
 export interface OptionItem {
   readonly id: string

@@ -2,11 +2,14 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 
 /**
- * RESOURCE_NOT_FOUND 오류를 받은 화면이 Next 의 notFound() 를 부르면 이
- * 파일이 뜬다 - 이 저장소엔 아직 그 호출부가 없다(실제 자원 화면이 생기면
- * notFound() 를 부른다). "찾을 수 없다"는 사실 자체는 백엔드 code 가 이미
- * 확정했으므로, 이 화면은 문구를 새로 만들지 않고 다음 행동(홈으로)만
- * 제공한다 - error.tsx 와 달리 이건 프론트가 자기 문구를 갖는 예외가 아니다.
+ * `notFound()` 를 부르는 자리는 셋이다 - 선언에 없는 slug(`app/(admin)/[slug]/
+ * resource.ts` 의 `resourceFromSlug`), 읽기 전용 자원의 생성 경로
+ * (`[slug]/new/page.tsx`), 그리고 없는 id 의 상세(`[slug]/[id]/page.tsx` -
+ * RESOURCE_NOT_FOUND 또는 200 인데 `data: null`). 셋 다 이 파일이 받는다 -
+ * `(admin)` 셸 밖에서 뜬다(루트 `AGENTS.md` 규칙 2). "찾을 수 없다"는 사실
+ * 자체는 라우터·백엔드가 이미 확정했으므로, 이 화면은 문구를 새로 만들지
+ * 않고 다음 행동(홈으로)만 제공한다 - error.tsx 와 달리 이건 프론트가 자기
+ * 문구를 갖는 예외가 아니다.
  *
  * 상호작용이 링크 하나뿐이라 Client Component 가 필요 없다.
  */

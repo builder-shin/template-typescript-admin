@@ -69,7 +69,7 @@
   말고 없다. 그 파일 자신의 주석(`filterParameter` 앞, 예: "그래서 규칙을
   이 함수 하나에 둔다")은 원본 저장소에서는 참이지만 여기서는 아니다 -
   **실제로 살아 있는 질의 조립기는 `lib/grid/query.ts` 의 `gridQuery`**
-  (`app/(admin)/examples/list.ts`·`app/(admin)/recent.ts` 가 부른다)다. 이
+  (`app/(admin)/[slug]/list.ts`·`app/(admin)/recent.ts` 가 부른다)다. 이
   둘의 필터 연산자 어휘(`FilterOperator`)가 겹치는 것도 우연이 아니라
   의도된 중복이다 - `lib/resources/define.ts` 가 내부 모듈을 하나도 import
   하지 않는다는 그 디렉터리 자신의 계약 때문에, `lib/resources` 가 아는

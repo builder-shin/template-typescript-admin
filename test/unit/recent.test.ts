@@ -90,7 +90,7 @@ describe('buildRecentRows', () => {
 
   it('문서의 행 순서를 그대로 보존한다 - "정렬을 바꾸면 첫 행이 바뀐다"의 절반을 잰다', () => {
     // 나머지 절반(백엔드가 실제로 정렬해서 돌려주는지)은 이 저장소의 단위
-    // 테스트가 볼 수 없는 영역이다(E2E 의 몫, examples/page.tsx 의 headers()
+    // 테스트가 볼 수 없는 영역이다(E2E 의 몫, app/(admin)/page.tsx 의 headers()
     // 와 같은 이유) - 이 테스트는 "이 변환이 순서를 뒤섞지 않는다"만
     // 보장한다. recentExamplesRequest 가 URL 의 sort 를 질의에 그대로
     // 옮긴다는 위 테스트와 합치면, 정렬을 바꿨을 때 표의 첫 행이 바뀌는

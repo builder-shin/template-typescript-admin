@@ -8,7 +8,7 @@ import type { BulkOutcome, BulkOutcomeBucket } from '@/lib/bulk/executor'
 //
 // `failed` 는 `bucket` 을 4번째 인자로 **필수로** 받는다 - `summarize` 가
 // 더 이상 `actionForErrors` 를 불러 오류로부터 통을 추론하지 않기 때문이다
-// (판정은 `app/(admin)/examples/bulk-outcome.ts` 의 `bucketForFailure` 로
+// (판정은 `app/(admin)/[slug]/bulk-outcome.ts` 의 `bucketForFailure` 로
 // 옮겨져 Server Action 이 이미 끝내 둔다 - components/grid/bulk-result.tsx
 // 머리말). 기본값을 두지 않는 이유는 각 테스트가 무엇을 시뮬레이션하는지
 // 호출부에서 바로 보이게 하기 위해서다.

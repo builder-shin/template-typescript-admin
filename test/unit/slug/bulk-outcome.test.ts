@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { bucketForFailure, isAlreadyGone } from '@/app/(admin)/examples/bulk-outcome'
+import { bucketForFailure, isAlreadyGone } from '@/app/(admin)/[slug]/bulk-outcome'
 
 describe('bucketForFailure', () => {
   it('RESOURCE_NOT_FOUND 는 alreadyGone 이다 - 재시도해도 지우려던 목적은 이미 달성됐다', () => {
@@ -26,7 +26,7 @@ describe('bucketForFailure', () => {
 })
 
 describe('isAlreadyGone', () => {
-  // 단건 삭제(app/(admin)/examples/actions.ts 의 deleteExampleAction)와
+  // 단건 삭제(app/(admin)/[slug]/actions.ts 의 deleteResourceAction)와
   // 일괄 삭제(bucketForFailure 의 alreadyGone 갈래) 둘 다 이 판정을 공유한다 -
   // 여기서 한 번만 잰다.
   it('RESOURCE_NOT_FOUND 면 참이다 - 그 행은 이미 없다', () => {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { operatorFromDocument, operatorFromResult, operatorRequest } from '@/app/(admin)/operator'
+import { DASHBOARD_NAV_ITEM, resourceNavItems } from '@/components/nav-items'
+import { RESOURCES } from '@/lib/resources'
 
 describe('operatorRequest', () => {
   it('accessToken 을 Authorization 으로 싣는다', () => {
@@ -57,5 +59,25 @@ describe('operatorFromResult', () => {
 
   it('204(본문 없음)면 null 이다', () => {
     expect(operatorFromResult({ ok: true, status: 204, document: null })).toBeNull()
+  })
+})
+
+describe('사이드바 항목', () => {
+  it('대시보드 항목은 루트를 가리킨다', () => {
+    expect(DASHBOARD_NAV_ITEM).toEqual({ title: '대시보드', url: '/' })
+  })
+
+  it('자원 항목은 RESOURCES 와 개수·순서가 같고 라벨과 slug 를 그대로 쓴다', () => {
+    const items = resourceNavItems()
+    expect(items).toHaveLength(RESOURCES.length)
+    expect(items.map((item) => item.title)).toEqual(RESOURCES.map((r) => r.label))
+    expect(items.map((item) => item.url)).toEqual(RESOURCES.map((r) => `/${r.slug}`))
+  })
+
+  it('읽기 전용 자원도 항목에 있다 - 선언된 자원은 전부 화면을 갖는다', () => {
+    const readOnly = RESOURCES.filter((r) => !r.writable)
+    expect(readOnly.length).toBeGreaterThan(0)
+    const urls = new Set(resourceNavItems().map((item) => item.url))
+    for (const resource of readOnly) expect(urls.has(`/${resource.slug}`)).toBe(true)
   })
 })

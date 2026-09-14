@@ -97,7 +97,7 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       # 아래 한 스텝이 세 갈래 전부를 돈다 - docker compose 로 이 백엔드
-      # 스택을 빌드·기동하고(test/e2e/stack.ts), 브라우저로 세 스펙 파일을
+      # 스택을 빌드·기동하고(test/e2e/stack.ts), 브라우저로 네 스펙 파일을
       # 실행한 뒤 스택을 내린다. "알려진 계약 드리프트" 는 스택 기동 직후
       # test/e2e/global-setup.ts 가 reportKnownDivergences() 를 불러 이
       # 로그에 자동으로 남긴다 - 0건이어도 "0건"이 찍힌다(matrix.ts). 이

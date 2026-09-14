@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createRequest, deleteRequest, updateRequest } from '@/app/(admin)/examples/write'
+import { createRequest, deleteRequest, updateRequest } from '@/app/(admin)/[slug]/write'
 import { resourceByType } from '@/lib/resources'
 
 /**
- * 네 쓰기 Action(`createExampleAction`·`updateExampleAction`·
- * `deleteExampleAction`·`bulkDeleteExampleAction`, `actions.ts`) 자신은
+ * 네 쓰기 Action(`createResourceAction`·`updateResourceAction`·
+ * `deleteResourceAction`·`bulkDeleteResourceAction`, `actions.ts`) 자신은
  * `requireSession()` 안의 `cookies()`가 요청 스코프를 요구해 이 저장소의
  * 단위 테스트 계층에서 부를 수 없다 - 그래서 그 네 Action 이 실제로
  * `accessToken` 을 싣는지는 여기서 직접 재지 못한다.
@@ -85,7 +85,7 @@ describe('updateRequest', () => {
 })
 
 describe('deleteRequest', () => {
-  // deleteExampleAction 과 bulkDeleteExampleAction 둘 다 이 함수 하나로
+  // deleteResourceAction 과 bulkDeleteResourceAction 둘 다 이 함수 하나로
   // 조립한다(actions.ts 의 같은 이름 함수 주석) - 결과를 다루는 방식만
   // 갈릴 뿐 요청 자체는 같으므로 여기 하나로 두 Action 모두를 잰다.
   it('accessToken 이 옵션에 그대로 실린다', () => {

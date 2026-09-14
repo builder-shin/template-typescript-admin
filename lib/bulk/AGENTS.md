@@ -97,6 +97,6 @@
 위에서 설명한 이유로 `import type`으로 가져온다(값 import는 아니다). 그 밖의
 `lib/`·`app/`은 import하지 않는다. 소비자는 JSON:API 결과를
 `BulkOutcome`으로 바꾸는 `run` 콜백을 채워 `runBulk`을 부르는 Server
-Action(`app/(admin)/examples/actions.ts`)과 그 결과를 그리는 화면이다.
+Action(`app/(admin)/[slug]/actions.ts`)과 그 결과를 그리는 화면이다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

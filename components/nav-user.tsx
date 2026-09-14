@@ -79,7 +79,7 @@ export function NavUser({ operator }: { operator: Operator | null }) {
 
               `logoutAction`(app/(auth)/actions.ts)을 직접 호출한다 -
               `<form action>` 이 아니라 이 파일의 다른 예(resource-grid.tsx 의
-              `bulkDeleteExampleAction`)와 같은 방식이다. 인자도 폼 상태도
+              `bulkDeleteResourceAction`)와 같은 방식이다. 인자도 폼 상태도
               필요 없는 Action 이라(그 파일 머리말 - "useFormStatus 도 필요
               없고, 진입점은 평범한 <form action={logoutAction}> 이면
               된다") 어느 쪽으로 불러도 쿠키 삭제 순서·리다이렉트는 같다.

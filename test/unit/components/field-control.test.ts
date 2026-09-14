@@ -37,6 +37,7 @@ describe('defaultAttributeValue', () => {
     expect(defaultAttributeValue(ATTRIBUTES.name!)).toBe('')
     expect(defaultAttributeValue(ATTRIBUTES.body!)).toBe('')
     expect(defaultAttributeValue(ATTRIBUTES.rank!)).toBe('')
+    expect(defaultAttributeValue(ATTRIBUTES.createdAt!)).toBe('')
   })
 
   it('values 가 빈 enum 도 던지지 않고 빈 값이다 - 불변식 테스트가 그 선언을 막는다', () => {

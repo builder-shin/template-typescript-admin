@@ -1,4 +1,4 @@
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # template-typescript-admin 작업 지침
 
@@ -25,6 +25,7 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
 | `components/grid/`     | 자원 선언을 읽어 만드는 획일 그리드 UI                                        | 자원별 분기             |
 | `lib/form/`            | 선언 + `FormData` → JSON:API 쓰기 문서, 응답 문서 → 폼 초기값, 오류 → 폼 상태 | JSX, `fetch`, 자원 분기 |
 | `components/resource/` | 자원 선언을 읽어 만드는 획일 폼·상세 UI                                       | 자원별 분기             |
+| `app/(admin)/[slug]/`  | 선언된 자원 전부의 세 화면 한 벌, Server Action 넷, 요청 조립 튜플            | `fetch`, 쿼리 조립      |
 
 **위반의 정의:**
 
@@ -64,7 +65,9 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
 4. **라우트 파일을 옮기거나 지운 뒤 게이트가 `TS2307`로 죽으면 `rm -rf .next`
    부터 한다.** `.next/dev`만 지워서는 안 되고, `pnpm build`만 돌려서는 안
    보이고 `[1/9] typecheck`에서만 드러난다 - 캐시된 라우트 타입이 남기
-   때문이다.
+   때문이다. 실측(2026-09-14, `app/(admin)/examples/` 를 지우고
+   `app/(admin)/[slug]/` 를 만들 때): `TS2307` 이 실제로 났고 `rm -rf .next`
+   뒤 초록이 됐다 - 두 번, 라우트 폴더를 지울 때마다.
 
 5. **`shadcn add`를 다시 돌리면 `table.tsx`·`label.tsx`에 `'use client'`가
    되살아난다.** 되살아난 것을 보면 다시 뺀다 -
@@ -117,7 +120,7 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
    - `components/grid/format.ts` - `resource-grid.tsx`(`'use client'`)가
      export하던 `relationshipLabel`·`formatDateTime`을 옮겼다. 서버
      컴포넌트인 상세 화면이 이 함수들을 값으로 직접 호출해야 했다.
-   - `app/(admin)/examples/write.ts` - `actions.ts`(`'use server'`)에 있던
+   - `app/(admin)/[slug]/write.ts` - `actions.ts`(`'use server'`)에 있던
      쓰기 요청 조립 함수들을 옮겼다. Server Action은 반드시 async 함수여야
      하는데 이 함수들은 순수 동기 함수였다("Server Actions must be async
      functions").
@@ -131,7 +134,7 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
    다음에 이 저장소에서 순수 함수를 "그냥 옆에 있는 Action·컴포넌트
    파일"에 두고 싶은 유혹이 들면 이 절을 먼저 읽을 것.
 
-## 화면에는 보이지 않는 계약 둘
+## 화면에는 보이지 않는 계약 셋
 
 **`/`(대시보드)의 표(`components/data-table.tsx`, `app/(admin)/page.tsx`가
 렌더한다) 드래그 정렬은 서버에 남지 않는다.** 드래그로 바꾼 순서는
@@ -155,6 +158,15 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
 뜻이고, 그 표시를 지우거나 실제 배선처럼 보이게 고치지 않는다. 카드(`section-cards`)와
 표(`data-table`)는 이미 실제 자원 카운트·`examples`로 배선돼 있다 - 표본으로
 남은 것은 이 차트 하나뿐이다.
+
+**`/`(대시보드)의 최근 표는 `examples` 에 묶여 있다.** 카운트 카드는
+`RESOURCES` 를 돌아 새 자원이 선언 하나로 카드를 얻지만, 최근 표의 행
+(`app/(admin)/recent.ts` 의 `RecentRow`)은 `title`·`status`·`score`·`updatedAt`
+을 알고 `app/(admin)/page.tsx` 가 `resourceByType('examples')` 로 그 자원을
+직접 든다 - 그 표는 블록의 드래그 부품과 함께 온 것이라 차트와 같은
+층위의 표본으로 남겼다. **`examples` 선언을 지우거나 그 속성을 바꾸면
+대시보드가 그 자리에서 깨진다** - 그때는 그 표를 지우거나 그 자원에 맞춰
+다시 쓴다. 이 자리가 `app/` 에서 자원 이름을 코드로 아는 유일한 곳이다.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

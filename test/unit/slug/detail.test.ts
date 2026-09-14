@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detailRequest } from '@/app/(admin)/examples/[id]/detail'
+import { detailRequest } from '@/app/(admin)/[slug]/[id]/detail'
 import { resourceByType } from '@/lib/resources'
 
 const EXAMPLES = resourceByType('examples')!

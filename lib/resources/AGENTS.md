@@ -46,14 +46,20 @@ sortable 열 ∈ sorts, includes ⊆ 관계, 관계 type ∈ RESOURCES, enum val
 `nullable` 도 거짓인 것(`isRequiredAttribute`)이다 - 별도 폼 스키마는 두지
 않는다(`docs/superpowers/specs/2026-09-14-declarative-resources-design.md` 4.2).
 
-## 새 자원을 더하는 절차 - 세 단계, 전부 손으로
+## 새 자원을 더하는 절차 - 두 단계
 
 1. 선언 파일을 만든다(`example.ts`가 본이다). 열·필터·정렬·include는 백엔드
    소스에서 실측해 옮겨 적는다 - 기억으로 채우지 않는다. 연산자 이름은
    백엔드의 `FilterField` 정책이 정한다 - 화면이 바라는 이름을 지어내면 그
    선언은 이 디렉터리의 테스트에서만 통과하고 실제 백엔드에서 거절당한다.
 2. `index.ts`의 `RESOURCES` 배열에 손으로 더한다.
-3. `app/`에 그 자원의 라우트를 손으로 만든다.
+
+그러면 `/<slug>` 목록·`/<slug>/new` 생성·`/<slug>/<id>` 상세와 사이드바
+항목·대시보드 카드가 생긴다(`app/(admin)/[slug]/`, `components/nav-items.ts`,
+`app/(admin)/page.tsx`). `app/` 에 그 자원의 파일을 만들지 않는다 - 예전에는
+셋째 단계 "`app/`에 그 자원의 라우트를 손으로 만든다"가 있었다. 화면을
+다르게 그리고 싶을 때만 `app/(admin)/<slug>/` 정적 폴더를 만든다
+(`app/AGENTS.md` 의 "덮어쓰기").
 
 **자동 탐색(glob·`import.meta.glob`·동적 `import`)을 쓰지 않는다.**
 `RESOURCES`에 없는 자원은 존재하지 않는 것과 같다는 것이 이 계층의 계약이다.
@@ -80,6 +86,7 @@ sortable 열 ∈ sorts, includes ⊆ 관계, 관계 type ∈ RESOURCES, enum val
 자원의 선언과 위 불변식 아홉은 `test/unit/resources/index.test.ts`가
 모든 자원에 대해 확인한다. 최종 검증은 `./scripts/check.sh`다.
 
-소비자는 `lib/grid/`·`lib/form/`·`components/grid/`·`components/resource/`·`app/`이다.
+소비자는 `lib/grid/`·`lib/form/`·`components/grid/`·`components/resource/`·`app/`·
+`components/nav-items.ts`·`components/site-header-title.ts`이다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

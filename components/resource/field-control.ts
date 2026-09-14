@@ -13,6 +13,7 @@ import type { AttributeDef, RelationshipDef } from '@/lib/resources'
 
 export type AttributeControl = 'text' | 'textarea' | 'select' | 'number' | 'datetime'
 
+/** 갈래가 빠지면 반환 타입 검사가 컴파일을 깨뜨린다 - `default` 가 필요 없다. */
 export function attributeControlFor(attribute: AttributeDef): AttributeControl {
   switch (attribute.kind) {
     case 'string':

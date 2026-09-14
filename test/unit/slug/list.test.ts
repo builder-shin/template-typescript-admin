@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { listRequest, toSearchParams } from '@/app/(admin)/examples/list'
+import { listRequest, toSearchParams } from '@/app/(admin)/[slug]/list'
 import { gridQuery } from '@/lib/grid/query'
 import { readGridState } from '@/lib/grid/state'
 import { resourceByType } from '@/lib/resources'

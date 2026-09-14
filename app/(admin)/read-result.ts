@@ -6,8 +6,8 @@ import { actionForErrors } from '@/lib/jsonapi/errors'
  *
  * `app/error.tsx` 자신의 주석은 그 파일에 transport(client.ts 가 합성한 오류 -
  * 실제로 백엔드에 못 닿은 경우)만 온다고 적어 두었지만, 이 저장소의 네 읽기
- * 호출부(`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/options.ts`·
- * `examples/[id]/page.tsx`)는 전부 `!result.ok` 를 무조건 던졌다 - 진짜
+ * 호출부(`app/(admin)/page.tsx`·`[slug]/page.tsx`·`[slug]/options.ts`·
+ * `[slug]/[id]/page.tsx`)는 전부 `!result.ok` 를 무조건 던졌다 - 진짜
  * 백엔드가 응답해 거절한 경우(검증 오류·500 등)까지 전부 error.tsx 로
  * 갔고, 그 파일은 `error.message`(백엔드가 준 진짜 설명)를 읽지 않고 고정
  * 문구 "백엔드에 연결할 수 없습니다"를 그린다 - 백엔드가 실제로 응답했는데도
