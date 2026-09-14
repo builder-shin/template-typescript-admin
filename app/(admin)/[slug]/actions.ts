@@ -18,7 +18,10 @@ import { createRequest, deleteRequest, updateRequest } from './write'
  * 선언된 어느 자원에든 쓰는 생성·수정·삭제 Server Action 넷. 어느 자원인지는
  * 첫 인자 `slug` 가 정한다 - 화면이 `action.bind(null, resource.slug)`(생성) ·
  * `.bind(null, resource.slug, id)`(수정·삭제)로 넘기고, bind 된 인자는
- * 문자열이라 직렬화에 문제가 없다(스펙 7.4). 넷 다 첫 줄이
+ * 문자열이라 직렬화에 문제가 없다(스펙 7.4) - 실측(2026-09-14):
+ * `test/e2e/examples.spec.ts` 의 생성 시나리오가
+ * `createResourceAction.bind(null, 'examples')` 를 `useActionState` 로 제출해
+ * 201 을 받았다. 넷 다 첫 줄이
  * `writableResource(slug)` 다(./resource.ts) - 선언에 없거나 읽기 전용이면
  * 던진다. 화면이 그 경로를 제공하지 않으므로 사용자 문구는 두지 않는다.
  *

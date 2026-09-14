@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # test/ 작업 지침
 
@@ -14,16 +14,16 @@
 
 ## `test/e2e/`의 파일별 역할
 
-| 파일                                             | 역할                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `stack.ts`                                       | `docker-compose.e2e.yml` 기동·정리. 포트(`WEB_PORT`·`API_PORT`)와 백엔드 선택(`BACKEND_KIND`)의 정본.                                                                                                                                                                                                                         |
-| `matrix.ts`                                      | `BackendKind` 타입과 런타임 검증(`resolveBackendKind`), `KNOWN_DIVERGENCES`와 `reportKnownDivergences` - "오늘 이 백엔드가 정본과 어디서 갈리는가"를 실행마다 로그로 남긴다(0건이어도 "0건"을 찍는다).                                                                                                                        |
-| `global-setup.ts`                                | Playwright 전체 실행 전 한 번 - 스택을 띄우고 `reportKnownDivergences`를 부른다.                                                                                                                                                                                                                                              |
-| `global-teardown.ts`                             | 실패한 실행 뒤에도 돈다 - 스택을 내려 러너에 컨테이너를 남기지 않는다.                                                                                                                                                                                                                                                        |
-| `fixtures.ts`                                    | `consoleGuard`(선언되지 않은 콘솔 오류·경고·4xx/5xx를 자동으로 실패시키는 픽스처, `auto: true`)와 `provisionAndSignIn`(운영자 프로비저닝 + 화면을 통한 실제 로그인).                                                                                                                                                          |
-| `probe-email.ts`                                 | RFC 5321 로컬 파트 64자 상한을 지키며 접두사 + `randomUUID()`로 고유 이메일을 만드는 `probeEmail()`.                                                                                                                                                                                                                          |
-| `seed/`                                          | `docker-compose.e2e.yml`의 `seed-*` 서비스가 마이그레이션 직후 넣는 SQL. Rails만 분류·라벨·조인 테이블 이름이 달라(`example_categories`·`example_tags`·`example_taggings`) `examples.sql`(FastAPI·NestJS 공용)과 `examples.rails.sql` 두 벌이 있다 - 값을 바꾸면 **둘 다** 고친다(자동 동기화 없음, 근거는 `seed/README.md`). |
-| `auth.spec.ts`·`bulk.spec.ts`·`examples.spec.ts` | 세 시나리오 스위트 - 아래 "새 시나리오를 쓸 때" 참고.                                                                                                                                                                                                                                                                         |
+| 파일                                                                 | 역할                                                                                                                                                                                                                                                                                                                          |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `stack.ts`                                                           | `docker-compose.e2e.yml` 기동·정리. 포트(`WEB_PORT`·`API_PORT`)와 백엔드 선택(`BACKEND_KIND`)의 정본.                                                                                                                                                                                                                         |
+| `matrix.ts`                                                          | `BackendKind` 타입과 런타임 검증(`resolveBackendKind`), `KNOWN_DIVERGENCES`와 `reportKnownDivergences` - "오늘 이 백엔드가 정본과 어디서 갈리는가"를 실행마다 로그로 남긴다(0건이어도 "0건"을 찍는다).                                                                                                                        |
+| `global-setup.ts`                                                    | Playwright 전체 실행 전 한 번 - 스택을 띄우고 `reportKnownDivergences`를 부른다.                                                                                                                                                                                                                                              |
+| `global-teardown.ts`                                                 | 실패한 실행 뒤에도 돈다 - 스택을 내려 러너에 컨테이너를 남기지 않는다.                                                                                                                                                                                                                                                        |
+| `fixtures.ts`                                                        | `consoleGuard`(선언되지 않은 콘솔 오류·경고·4xx/5xx를 자동으로 실패시키는 픽스처, `auto: true`)와 `provisionAndSignIn`(운영자 프로비저닝 + 화면을 통한 실제 로그인).                                                                                                                                                          |
+| `probe-email.ts`                                                     | RFC 5321 로컬 파트 64자 상한을 지키며 접두사 + `randomUUID()`로 고유 이메일을 만드는 `probeEmail()`.                                                                                                                                                                                                                          |
+| `seed/`                                                              | `docker-compose.e2e.yml`의 `seed-*` 서비스가 마이그레이션 직후 넣는 SQL. Rails만 분류·라벨·조인 테이블 이름이 달라(`example_categories`·`example_tags`·`example_taggings`) `examples.sql`(FastAPI·NestJS 공용)과 `examples.rails.sql` 두 벌이 있다 - 값을 바꾸면 **둘 다** 고친다(자동 동기화 없음, 근거는 `seed/README.md`). |
+| `auth.spec.ts`·`bulk.spec.ts`·`examples.spec.ts`·`reference.spec.ts` | 네 시나리오 스위트 - 아래 "새 시나리오를 쓸 때" 참고. `reference.spec.ts` 는 읽기 전용 자원(분류)의 목록·상세와 선언에 없는 슬러그를 잰다 - 행을 만들지 않고 씨앗 분류 이름의 접두사 `프로브` 로 좁힌다.                                                                                                                      |
 
 ## 새 시나리오를 쓸 때 - 기존 세 파일이 실제로 따르는 규칙 셋
 
@@ -42,12 +42,12 @@
    씨앗 데이터나 다른 시나리오가 만든 행과 섞이면 단언이 우연히 통과하거나
    우연히 실패한다. 그래서 각 스펙 파일이 자기 접두사 상수를 하나 선언하고
    (`examples.spec.ts`의 `SEED_PREFIX = 'probe-seed'`·`CREATE_PREFIX =
-'probe-create'`, `bulk.spec.ts`의 `BULK_PREFIX = 'probe-bulk'`), 목록
+'probe-create'`, `bulk.spec.ts`의 `BULK_PREFIX = 'probe-bulk'`, `reference.spec.ts`의 `SEED_NAME_PREFIX = '프로브'`(행을 만들지 않아 씨앗 이름의 접두사를 그대로 쓴다)), 목록
    질의(`title=` 필터 등)와 화면 단언 양쪽을 그 상수로 좁힌다. **새 접두사는
    기존 셋과 겹치면 안 된다** - 접두사가 겹치면 한 시나리오가 만든 행이 다른
    시나리오의 단언에 끼어든다.
 
-세 파일 다 이 셋을 공통 규칙으로 문서화해 두고 있다(각 파일 머리말의 "픽스처
+네 파일 다 이 셋을 공통 규칙으로 문서화해 두고 있다(각 파일 머리말의 "픽스처
 규칙"·"씨앗과 격리" 절). 새 시나리오를 추가할 때 이 셋을 벗어나면, 그
 시나리오가 실제로 무엇을 재는지부터 다시 확인한다.
 

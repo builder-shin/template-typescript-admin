@@ -20,6 +20,10 @@ import { resourceBySlug } from '@/lib/resources'
  * 을 받을 때만 그린다) - 스켈레톤도 같은 칸 수를 그린다. 툴바 오른쪽도
  * 같다 - 쓰기 가능이면 "새로 만들기"와 "열" 둘, 아니면 "열" 하나. 텍스트는
  * 두지 않는다.
+ *
+ * 실측(2026-09-14, 프로덕션 빌드 + 3초 임시 지연): `/tags` 로 이동하는
+ * 동안 표 머리에 스켈레톤 칸 1개(열 하나, 선택 열 없음)가 그려졌다 -
+ * `useParams` 가 Suspense 대체 UI 안에서 slug 를 실제로 읽는다.
  */
 export default function Loading() {
   const { slug } = useParams<{ slug: string }>()

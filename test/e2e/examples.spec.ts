@@ -201,7 +201,13 @@ test.describe('생성 폼', () => {
 
     const title = uniqueTitle('happy')
 
-    await page.goto('/examples/new')
+    // 목록의 "새로 만들기"로 들어간다 - 예전에는 이 경로로 가는 링크가 화면
+    // 어디에도 없어 주소를 직접 쳐야 했다. 링크지만 button 역할로 찾는다 -
+    // base UI Button 이 `nativeButton={false}` 인 <a> 에 role="button" 을
+    // 얹는다(app/not-found.tsx 의 실측).
+    await page.goto('/examples')
+    await page.getByRole('button', { name: '새로 만들기' }).click()
+    await expect(page).toHaveURL(/\/examples\/new$/)
     await expect(page.getByRole('heading', { name: '예제 만들기' })).toBeVisible()
 
     await page.getByLabel('제목').fill(title)
@@ -251,8 +257,7 @@ test.describe('생성 폼', () => {
     // 폼의 분류 트리거도 **이름**을 보여야 한다. 이 화면은 저장된 값을 들고
     // 새로 서므로 base UI 가 값(UUID)에서 라벨을 되찾아야 하고, 그 통로는
     // `items` prop 뿐이다(resource-form.tsx 의 `OneField` 가 만드는 `items`).
-    // 그것이 없던
-    // 동안 이 자리에 UUID 가 그려졌고, 위 요약 카드만 보는 단언으로는
+    // 그것이 없던 동안 이 자리에 UUID 가 그려졌고, 위 요약 카드만 보는 단언으로는
     // 잡히지 않았다 - 요약은 `included` 를 직접 읽기 때문이다.
     // `getByLabel('분류')` 이 아니라 role 로 좁힌다 - `getByLabel` 은 접근성
     // 이름을 **부분 문자열**로 맞춰서, 옛 group 이름 "분류와 라벨"에는 그
@@ -313,5 +318,27 @@ test.describe('다국어 오류', () => {
     expect(english, '두 언어가 같은 문구면 Accept-Language 가 전달되지 않은 것이다').not.toBe(
       korean,
     )
+  })
+})
+
+test.describe('필수 정수', () => {
+  /**
+   * 빈 `int` 는 `0` 이 아니라 **키를 빼서** 보낸다(`lib/form/write.ts`) -
+   * 그러면 백엔드가 "필수 속성이 없다"를 그 필드 아래(`/data/attributes/score`)
+   * 오류로 돌려주고, 폼이 점수 입력 아래에 그린다는 것이 스펙 7.2 가 기대는
+   * 사실이다. 세 백엔드가 실제로 그렇게 답하는지는 이 시나리오가 CI
+   * 매트릭스에서 잰다 - 갈리는 백엔드가 있으면 `matrix.ts` 의
+   * `KNOWN_DIVERGENCES` 절차를 따른다.
+   */
+  test('점수를 비우고 만들면 점수 입력 아래에 오류가 뜨고 만들어지지 않는다', async ({ page }) => {
+    await provisionAndSignIn(page, uniqueEmail('score'), PASSWORD)
+    await page.goto('/examples/new')
+
+    await page.getByLabel('제목').fill(uniqueTitle('score'))
+    // 점수는 비워 둔다 - 새 폼의 기본값이 이미 빈 문자열이다.
+    await page.getByRole('button', { name: '만들기' }).click()
+
+    await expect(page.getByLabel('점수')).toHaveAttribute('aria-invalid', 'true')
+    await expect(page).toHaveURL(/\/examples\/new$/)
   })
 })

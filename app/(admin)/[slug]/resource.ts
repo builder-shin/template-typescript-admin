@@ -19,6 +19,13 @@ import { resourceBySlug, type ResourceDef } from '@/lib/resources'
  *
  * 지시어가 없다 - `actions.ts`(`'use server'`)가 `writableResource` 를 값으로
  * 부르고, 그 파일은 동기 함수를 export 할 수 없다(루트 `AGENTS.md` 규칙 6).
+ *
+ * 실측(2026-09-14, 정본 FastAPI 스택의 프로덕션 빌드): 선언에 없는 슬러그
+ * `/nope` 의 응답 상태는 200 이고 루트 `app/not-found.tsx` 가 그려졌다.
+ * Next 문서(`not-found.md`)대로 스트리밍 응답이면 200 이 온다 -
+ * `app/loading.tsx`·`[slug]/loading.tsx` 가 Suspense 경계를 만들어 이 앱의
+ * 응답은 스트리밍이다. E2E(`test/e2e/reference.spec.ts`)는 그래서 상태
+ * 코드가 아니라 화면을 단언한다.
  */
 export function resourceFromSlug(slug: string): ResourceDef {
   const resource = resourceBySlug(slug)
