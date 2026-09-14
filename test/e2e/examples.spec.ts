@@ -239,7 +239,7 @@ test.describe('생성 폼', () => {
     // primitive 의 스타일 슬롯 - 으로 찾았는데, 설명을 가진 카드가 그 화면에
     // 하나 더 생기는 순간 Playwright strict mode 위반으로 깨졌다. 테스트가
     // 레이아웃을 못 건드리게 잠그는 결합이라 이름으로 바꿨다.
-    const summary = page.getByRole('group', { name: '분류와 라벨' })
+    const summary = page.getByRole('group', { name: '관계' })
     await expect(summary).toContainText('프로브 분류 하나')
     await expect(summary).toContainText('프로브 라벨 하나')
     // "분류 없음"이 아니라 "없음" 자체를 본다 - 분류·라벨 어느 쪽이 빠져도
@@ -254,7 +254,7 @@ test.describe('생성 폼', () => {
     // 동안 이 자리에 UUID 가 그려졌고, 위 요약 카드만 보는 단언으로는
     // 잡히지 않았다 - 요약은 `included` 를 직접 읽기 때문이다.
     // `getByLabel('분류')` 이 아니라 role 로 좁힌다 - `getByLabel` 은 접근성
-    // 이름을 **부분 문자열**로 맞추므로 위 group(`분류와 라벨`)까지 함께
+    // 이름을 **부분 문자열**로 맞추므로 위 group(`관계`)까지 함께
     // 걸려 strict mode 위반이 난다(실측). 생성 화면의 같은 호출(위 Select
     // 열기)은 그 화면에 그 group 이 없어 여전히 하나만 맞는다.
     const categoryTrigger = page.getByRole('combobox', { name: '분류' })

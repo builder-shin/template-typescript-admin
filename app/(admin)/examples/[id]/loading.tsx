@@ -1,23 +1,17 @@
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formAttributes, readOnlyAttributes, resourceByType } from '@/lib/resources'
 
 /**
- * 상세 화면의 로딩 스켈레톤 - 텍스트를 쓰지 않는다(전역 규칙,
- * ../loading.tsx 와 같은 원칙).
- *
- * 카드 껍데기를 손으로 그리지 않고 `Card`·`CardHeader`·`CardContent` 를
- * 그대로 쓴다 - 여백·모서리·테두리를 흉내 낸 클래스를 따로 적으면 그 사본이
- * 카드 primitive 와 조용히 어긋나고, 어긋난 쪽이 로딩에서 본문으로 넘어갈 때
- * 화면이 튀는 것으로만 드러난다. 같은 이유로 두 열의 트랙 폭과 경계(`xl`),
- * 그리고 가운데로 모으는 래퍼 폭(`max-w-[55.5rem]`·`mx-auto`)은 `page.tsx`
- * 와 같은 값을 쓴다 - 한쪽만 가운데면 로딩에서 본문으로 넘어갈 때 화면이
- * 좌우로 튄다(그 화면 머리말이 왜 34rem·17rem·55.5rem·`xl` 인지를 적어 둔다).
- *
- * 폼 입력 6개(제목·설명·상태·점수·분류·라벨) 자리를 센다 -
- * `[id]/edit-form.tsx` 의 입력 개수가 바뀌면 이 숫자도 함께 살펴야 한다.
+ * 상세 화면의 스켈레톤 - `page.tsx` 와 같은 두 열 레이아웃(폭 산수는 그 파일
+ * 머리말). 왼쪽 폼의 필드 수, 오른쪽 관계 묶음의 수, 읽기 전용 값의 수를
+ * 전부 선언에서 센다. 텍스트는 두지 않는다.
  */
 export default function Loading() {
-  const fieldCount = 6
+  const resource = resourceByType('examples')!
+  const relationshipCount = Object.keys(resource.relationships).length
+  const fieldCount = formAttributes(resource).length + relationshipCount
+  const readOnlyCount = readOnlyAttributes(resource).length
 
   return (
     <div className="mx-auto flex w-full max-w-[55.5rem] flex-col gap-6 px-4 py-4 lg:px-6 lg:py-6">
@@ -41,7 +35,7 @@ export default function Loading() {
                 <Skeleton className="h-8 w-full" />
               </div>
             ))}
-            <div className="flex gap-2 pt-2">
+            <div className="grid grid-cols-2 gap-2 pt-2">
               <Skeleton className="h-8 w-full" />
               <Skeleton className="h-8 w-full" />
             </div>
@@ -55,18 +49,17 @@ export default function Loading() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Skeleton className="h-3 w-8" />
-                  <Skeleton className="h-5 w-24" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Skeleton className="h-3 w-8" />
-                  <Skeleton className="h-5 w-32" />
-                </div>
+                {Array.from({ length: relationshipCount }, (_, index) => (
+                  <div key={index} className="flex flex-col gap-1.5">
+                    <Skeleton className="h-3 w-8" />
+                    <Skeleton className="h-5 w-24" />
+                  </div>
+                ))}
               </div>
               <div className="flex flex-col gap-2 border-t pt-4">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
+                {Array.from({ length: readOnlyCount }, (_, index) => (
+                  <Skeleton key={index} className="h-4 w-full" />
+                ))}
               </div>
             </CardContent>
           </Card>
@@ -77,7 +70,7 @@ export default function Loading() {
             </CardHeader>
             <CardContent className="flex flex-col items-start gap-3">
               <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-7 w-14" />
+              <Skeleton className="h-8 w-16" />
             </CardContent>
           </Card>
         </div>

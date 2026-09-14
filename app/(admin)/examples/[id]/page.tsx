@@ -2,44 +2,42 @@ import { ArrowLeftIcon } from 'lucide-react'
 import { headers } from 'next/headers'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import type { ReactNode } from 'react'
 import { FormBanner } from '@/components/form/form-banner'
 import { ConfirmedDeleteForm } from '@/components/grid/bulk-confirm'
-import { formatDateTime, relationshipLabel } from '@/components/grid/format'
+import { AttributeTable, RelationshipBadges } from '@/components/resource/resource-detail'
+import { ResourceForm } from '@/components/resource/resource-form'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { initialFormValues } from '@/lib/form/values'
 import { request } from '@/lib/jsonapi/client'
-import type { Attributes, CollectionDocument, SingleDocument } from '@/lib/jsonapi/document'
+import type { CollectionDocument, SingleDocument } from '@/lib/jsonapi/document'
 import { actionForErrors } from '@/lib/jsonapi/errors'
-import { indexResources, resolveToMany, resolveToOne } from '@/lib/jsonapi/normalize'
-import { resourceByType } from '@/lib/resources'
+import { indexResources } from '@/lib/jsonapi/normalize'
+import { readOnlyAttributes, resourceByType } from '@/lib/resources'
 import { messageForReadFailure } from '../../read-result'
 import { deleteExampleAction, updateExampleAction } from '../actions'
-import { optionsFromDocument } from '@/lib/form/options'
-import { optionsRequest, unwrapOptionsResult } from '../options'
+import { optionsByRelationship, relationshipOptionRequests } from '../options'
 import { detailRequest } from './detail'
-import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
 
 /**
- * `examples` 상세·인라인 편집 화면.
+ * `examples` 상세·인라인 편집 화면. 폼·관계 배지·읽기 전용 값 표는
+ * `components/resource/` 의 부품이 선언에서 그린다 - 이 파일에는 fetch 와
+ * JSX 만 둔다.
  *
- * 세 요청(상세 하나 + 선택 목록 둘)을 병행한다 - 서로 의존하지 않는다
+ * 상세 하나 + 관계마다 선택 목록 하나를 병행한다 - 서로 의존하지 않는다
  * (app/(admin)/page.tsx 가 다섯 요청을 Promise.all 로 묶는 것과 같은 이유).
  * `detailRequest` 는 `include=category,tags` 를 반드시 싣는다(그 파일
- * 머리말) - `components/grid/format.ts` 의 `relationshipLabel` 을 그대로
- * 가져와 그 `included` 를 실제로 읽어 현재 분류·라벨을 이름으로 보여준다.
- * 이것을 빼면 실측된 결함(배지가 UUID 로 그려지거나 조용히 "분류 없음"이
- * 됨)이 바로 이 자리에서 재현된다.
+ * 머리말) - `RelationshipBadges` 가 그 `included` 를 실제로 읽어 현재
+ * 분류·라벨을 이름으로 보여준다. 이것을 빼면 실측된 결함(배지가 UUID 로
+ * 그려지거나 조용히 "없음"이 됨)이 바로 이 자리에서 재현된다.
  *
- * **`relationshipLabel`·`formatDateTime` 를 `resource-grid.tsx` 가 아니라
- * `format.ts` 에서 가져온다.** `resource-grid.tsx` 는 `'use client'` 라 그
- * 파일의 모든 export(컴포넌트가 아닌 평범한 함수도)가 RSC 클라이언트
- * 참조가 된다 - 이 화면(서버 컴포넌트)이 거기서 직접 값으로 import 해
- * 호출하면 "Attempted to call ... from the server" 로 프로덕션 빌드에서
- * 죽는다(실측, Task 13 - 관계가 있든 없든 상세 화면 전부가 이 자리에서
- * 죽었었다). `format.ts` 에는 그 지시어가 없어 서버·클라이언트 어느 쪽에서
- * import 해도 안전하다.
+ * **값으로 부르는 함수는 전부 지시어 없는 모듈의 것이다** - `initialFormValues`
+ * (lib/form)·`readOnlyAttributes`(lib/resources)·`indexResources`(lib/jsonapi).
+ * `'use client'` 모듈의 export 를 서버 컴포넌트가 값으로 호출하면 프로덕션
+ * 빌드에서 죽는다(루트 `AGENTS.md` 규칙 6 - `components/grid/format.ts` 가
+ * 생긴 이유). 클라이언트 부품(`ResourceForm`·`ConfirmedDeleteForm`)은 JSX 로만
+ * 그린다.
  *
  * ## 레이아웃 - 두 열의 폭은 계산해서 나온 값이다
  *
@@ -48,7 +46,7 @@ import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
  * 한 열로 쌓인다.
  *
  * **왼쪽 트랙 `34rem` 은 임의의 값이 아니다.** 폼이 자기 너비를 스스로
- * 정하고(`edit-form.tsx` 의 `max-w-lg` = 32rem), 카드의 좌우 여백이
+ * 정하고(`resource-form.tsx` 의 `max-w-lg` = 32rem), 카드의 좌우 여백이
  * `--card-spacing`(1rem) 두 배다 - 34rem 이 그 둘을 정확히 합한 값이라
  * 폼이 카드 안을 꽉 채운다. 더 넓게 두면 카드 오른쪽에 폼이 닿지 못하는
  * 빈 띠가 남는다(그래서 `1fr` 도 쓰지 않는다 - 넓은 화면에서 그 띠가
@@ -61,51 +59,33 @@ import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
  * 둘이 제 폭을 갖는다. 두 트랙을 그래도 `minmax(0,...)` 로 두는 이유는
  * 사이드바가 펼쳐진 좁은 `xl` 에서 넘치는 대신 줄어들게 하기 위해서다.
  *
- * ## `Badge` 를 서버 컴포넌트에서 그려도 되는 이유(실측)
- *
- * `components/ui/badge.tsx` 는 지시어가 없는데 `useRender()` 를 자기 본문에서
- * 부른다 - 그 사슬 끝(`@base-ui/utils` 의 `useRefWithInit`)은 `'use client'`
- * 파일이라, 서버 렌더에서 그 훅까지 내려가면 루트 `AGENTS.md` 규칙 6번 표의
- * 첫째 위반과 똑같이 죽는다. 죽지 않는 이유를 base-ui 소스에서 확인했다:
- * `useRenderElement` 가 ref 병합 훅 호출을 `typeof document !== 'undefined'`
- * 로 감싸 서버에서는 건너뛴다(node_modules/@base-ui/react/internals/
- * useRenderElement.mjs:65, 주석까지 그 의도를 밝힌다 - "This also skips the
- * useMergedRefs call on the server"). `components/ui/breadcrumb.tsx` 도 같은
- * `useRender` 를 지시어 없이 쓴다.
- *
- * ## `role="group" aria-label="분류와 라벨"` 은 테스트가 이름으로 찾는 자리다
- *
- * E2E(`test/e2e/examples.spec.ts`)가 이 이름으로 그 구획을 찾아 "폼에서 고른
- * 분류·라벨이 상세에 실제로 보이는가"를 잰다(숨은 input 이 비면 그 자리가
- * "없음"으로 그려져 그 단언이 죽는다). 이전에는
- * `[data-slot="card-description"]` 으로 찾았는데, 그것은 카드 primitive 의
- * 스타일 슬롯이라 설명을 가진 카드가 화면에 하나 더 생기는 순간 Playwright
- * strict mode 위반으로 깨진다 - 레이아웃을 못 건드리게 만드는 결합이었다.
- * **이 이름을 바꾸면 그 테스트도 함께 고쳐야 한다.**
+ * 머리글은 `heading` 속성 값이 h1, enum 속성들의 값이 그 옆 배지, id 가
+ * 그 아래다. h1 은 값 하나만 담는다 - E2E 가 `heading level 1` 의 마지막
+ * 것을 제목과 비교한다. 상태 배지는 제목 **바로 옆**에 둔다 -
+ * `justify-between` 으로 양 끝에 벌려 두면 넓은 화면에서 배지가 제목에서
+ * 멀어져 무엇의 상태인지 읽히지 않는다(실측, 1600px). 관계 묶음의
+ * `aria-label="관계"` 는 E2E 가 이름으로 찾는 자리다 - 근거는
+ * `components/resource/resource-detail.tsx` 머리말.
  *
  * 읽기 실패는 던진다(`error.tsx`/`notFound()` 가 받는다) - 이 화면 안에서
  * 사용자가 스스로 고칠 수 있는 것이 없다(examples/page.tsx 와 같은 선택).
  * 유일한 예외는 "이 id 의 자원이 없다"(RESOURCE_NOT_FOUND, 또는 200 인데
- * `data: null`) - 이건 `notFound()` 로 보낸다(app/not-found.tsx 가 바로 이
- * 호출부를 기다리고 있었다).
+ * `data: null`) - 이건 `notFound()` 로 보낸다.
  *
  * 삭제는 `ConfirmedDeleteForm`(components/grid/bulk-confirm.tsx) 으로 확인을
  * 거친다 - 확인 전에는 작은 트리거 버튼만 보인다(그 파일 머리말: 색만으로
  * 파괴적 동작을 구별하지 않는다). 저장 버튼과는 아예 다른 카드에 있어 오조준
- * 자체가 어렵다. 여전히 `deleteExampleAction` 을 `<form action>` 으로
- * 부르므로, 실패를 던져 `error.tsx` 가 받는 그 계약은 그대로다.
+ * 자체가 어렵다.
  */
 export default async function ExampleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const resource = resourceByType('examples')!
-  const categoriesResource = resourceByType('exampleCategories')!
-  const tagsResource = resourceByType('exampleTags')!
   const lang = (await headers()).get('accept-language')
+  const plans = relationshipOptionRequests(resource, lang)
 
-  const [detailResult, categoriesResult, tagsResult] = await Promise.all([
+  const [detailResult, optionResults] = await Promise.all([
     request<SingleDocument>(...detailRequest(resource, id, lang)),
-    request<CollectionDocument>(...optionsRequest(categoriesResource, lang)),
-    request<CollectionDocument>(...optionsRequest(tagsResource, lang)),
+    Promise.all(plans.map((plan) => request<CollectionDocument>(...plan.request))),
   ])
 
   if (!detailResult.ok) {
@@ -129,13 +109,12 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
     notFound()
   }
 
-  // 분류·라벨 선택 목록도 같은 기준으로 가른다 - 상세 자체는 받았는데 이
-  // 둘 중 하나가 실패하면 폼을 반쪽으로 그리는 대신 화면 전체를 배너로
-  // 바꾼다(부분 렌더가 아니라 "이 화면 전체가 지금 믿을 만하지 않다"는
-  // 신호를 준다).
-  for (const result of [categoriesResult, tagsResult]) {
-    if (result.ok) continue
-    const message = messageForReadFailure(result.errors, '선택 목록을 불러오지 못했습니다.')
+  // 선택 목록도 같은 기준으로 가른다 - 상세 자체는 받았는데 이 중 하나가
+  // 실패하면 폼을 반쪽으로 그리는 대신 화면 전체를 배너로 바꾼다(부분
+  // 렌더가 아니라 "이 화면 전체가 지금 믿을 만하지 않다"는 신호를 준다).
+  const outcome = optionsByRelationship(plans, optionResults)
+  if (!outcome.ok) {
+    const message = messageForReadFailure(outcome.errors, '선택 목록을 불러오지 못했습니다.')
     return (
       <div className="p-4 lg:p-6">
         <FormBanner messages={[message]} />
@@ -143,22 +122,21 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
     )
   }
 
-  const categories = unwrapOptionsResult(categoriesResult)
-  const tags = unwrapOptionsResult(tagsResult)
-
   const object = detailResult.document.data
   const index = indexResources(detailResult.document.included)
-  const categoryTarget = resolveToOne(object.relationships?.category, index)
-  const tagTargets = resolveToMany(object.relationships?.tags, index)
+  const initialValues = initialFormValues(resource, object)
 
-  const initialValues: ExampleFormInitialValues = {
-    title: stringAttr(object.attributes, 'title'),
-    description: nullableStringAttr(object.attributes, 'description'),
-    status: stringAttr(object.attributes, 'status'),
-    score: numberAttr(object.attributes, 'score'),
-    categoryId: categoryTarget?.id ?? null,
-    tagIds: tagTargets.map((target) => target.id),
-  }
+  const headingValue = object.attributes?.[resource.heading]
+  const title =
+    typeof headingValue === 'string' && headingValue !== '' ? headingValue : '(이름 없음)'
+  // enum 속성은 배지로 - 그리드와 같은 표기(`variant="outline"`, 와이어 값
+  // 그대로). 한국어 표시 라벨을 여기서 지어내면 목록·필터와 화면마다 다른
+  // 이름이 생긴다(lib/resources/example.ts).
+  const badges = Object.entries(resource.attributes).flatMap(([key, attribute]) => {
+    if (attribute.kind !== 'enum') return []
+    const value = object.attributes?.[key]
+    return typeof value === 'string' && value !== '' ? [{ key, value }] : []
+  })
 
   return (
     // `max-w-[55.5rem]` 은 아래 두 트랙의 합이다 - 34rem + 1.5rem(gap) +
@@ -181,24 +159,15 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
         </Button>
 
         <div className="flex min-w-0 flex-col gap-1.5">
-          {/* 상태 배지는 제목 **바로 옆**에 둔다 - `justify-between` 으로
-              양 끝에 벌려 두면 넓은 화면에서 배지가 제목에서 1000px 가까이
-              떨어져 무엇의 상태인지 읽히지 않는다(실측, 1600px). */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            {/* h1 은 제목 하나만 담는다 - E2E 가 `heading level 1` 의 전체
-                텍스트를 그 예제의 제목과 같은지로 잰다(셸 헤더의 h1 다음에
-                오는 마지막 h1). id·상태를 이 안에 넣으면 그 단언이 깨진다. */}
             <h1 className="text-2xl leading-tight font-semibold tracking-tight text-balance">
-              {initialValues.title || '(제목 없음)'}
+              {title}
             </h1>
-            {initialValues.status === '' ? null : (
-              // 그리드와 같은 표기다(`kind: 'badge'` · `variant="outline"`) -
-              // 와이어 값을 그대로 보여준다. 한국어 표시 라벨을 여기서 지어내면
-              // 목록·필터와 화면마다 다른 이름이 생긴다(lib/resources/example.ts).
-              <Badge variant="outline" className="h-6 shrink-0 px-2.5">
-                {initialValues.status}
+            {badges.map((badge) => (
+              <Badge key={badge.key} variant="outline" className="h-6 shrink-0 px-2.5">
+                {badge.value}
               </Badge>
-            )}
+            ))}
           </div>
           {/* 운영자가 백엔드 로그·다른 도구와 맞춰 볼 수 있는 유일한 값이다 -
               목록 그리드에는 id 열이 없다. */}
@@ -212,10 +181,10 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
             <CardTitle>내용 수정</CardTitle>
           </CardHeader>
           <CardContent>
-            <ExampleForm
+            <ResourceForm
+              resource={resource}
               action={updateExampleAction.bind(null, id)}
-              categories={optionsFromDocument(categoriesResource, categories)}
-              tags={optionsFromDocument(tagsResource, tags)}
+              options={outcome.options}
               initialValues={initialValues}
             />
           </CardContent>
@@ -227,44 +196,13 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
               <CardTitle>지금 저장된 값</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div role="group" aria-label="분류와 라벨" className="flex flex-col gap-3">
-                <MetaField label="분류">
-                  {categoryTarget === null ? (
-                    <EmptyValue />
-                  ) : (
-                    <Badge variant="outline">
-                      {relationshipLabel(categoryTarget, categoriesResource.heading)}
-                    </Badge>
-                  )}
-                </MetaField>
-                <MetaField label="라벨">
-                  {tagTargets.length === 0 ? (
-                    <EmptyValue />
-                  ) : (
-                    tagTargets.map((target) => (
-                      <Badge key={target.id} variant="outline">
-                        {relationshipLabel(target, tagsResource.heading)}
-                      </Badge>
-                    ))
-                  )}
-                </MetaField>
-              </div>
-
-              {/* 값을 오른쪽 끝으로 밀지 않는다(`justify-between`·`text-right`
-                  둘 다 쓰지 않는 이유) - 한 열로 쌓이는 좁은 화면에서 카드가
-                  화면 폭만큼 넓어지면 라벨과 값이 서로 멀어져 어느 값이 어느
-                  라벨의 것인지 눈으로 잇기 어려워진다(실측, 900px). 라벨
-                  트랙을 `auto` 로 두어 값이 라벨 바로 뒤에 붙게 한다. */}
-              <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 border-t pt-4 text-sm">
-                <dt className="text-muted-foreground">생성일</dt>
-                <dd className="tabular-nums">
-                  {formatDateTime(stringAttr(object.attributes, 'createdAt'))}
-                </dd>
-                <dt className="text-muted-foreground">수정일</dt>
-                <dd className="tabular-nums">
-                  {formatDateTime(stringAttr(object.attributes, 'updatedAt'))}
-                </dd>
-              </dl>
+              <RelationshipBadges resource={resource} object={object} index={index} />
+              <AttributeTable
+                resource={resource}
+                object={object}
+                keys={readOnlyAttributes(resource).map(([key]) => key)}
+                className="border-t pt-4"
+              />
             </CardContent>
           </Card>
 
@@ -278,7 +216,7 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
                   줄은 공백에서만 나뉘고, 이 문장의 가장 긴 낱말도 카드 폭보다
                   짧아 넘칠 일이 없다. */}
               <p className="text-sm break-keep text-muted-foreground">
-                삭제하면 이 예제가 목록에서 사라집니다. 되돌리는 엔드포인트는 없습니다.
+                삭제하면 이 항목이 목록에서 사라집니다. 되돌리는 엔드포인트는 없습니다.
               </p>
               <ConfirmedDeleteForm action={deleteExampleAction.bind(null, id)} />
             </CardContent>
@@ -287,38 +225,4 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
       </div>
     </div>
   )
-}
-
-/** 오른쪽 카드의 한 줄 - 라벨 하나와 그 아래 배지들(또는 "없음"). */
-function MetaField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <div className="flex flex-wrap gap-1">{children}</div>
-    </div>
-  )
-}
-
-/**
- * 값이 없는 자리. 문구를 "없음" 하나로 통일한 것이 E2E 의 뮤테이션 방어가
- * 기대는 자리다 - 그 테스트는 위 group 안에 "없음"이 **하나도** 없는지를
- * 본다(분류·라벨 중 어느 쪽이 배선에서 빠져도 잡힌다).
- */
-function EmptyValue() {
-  return <span className="text-sm text-muted-foreground">없음</span>
-}
-
-function stringAttr(attributes: Attributes | undefined, key: string): string {
-  const value = attributes?.[key]
-  return typeof value === 'string' ? value : ''
-}
-
-function nullableStringAttr(attributes: Attributes | undefined, key: string): string | null {
-  const value = attributes?.[key]
-  return typeof value === 'string' ? value : null
-}
-
-function numberAttr(attributes: Attributes | undefined, key: string): number {
-  const value = attributes?.[key]
-  return typeof value === 'number' ? value : 0
 }

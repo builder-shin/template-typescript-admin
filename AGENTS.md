@@ -121,11 +121,12 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
      쓰기 요청 조립 함수들을 옮겼다. Server Action은 반드시 async 함수여야
      하는데 이 함수들은 순수 동기 함수였다("Server Actions must be async
      functions").
-   - `app/(admin)/examples/form-state.ts` - 런타임 import를 **0개**로
-     유지한다. 폼 상수·타입을 클라이언트 컴포넌트가 값으로 가져가야 하는데,
-     오류 판단 로직을 같은 파일에 두면 `lib/jsonapi/errors` →
-     `lib/jsonapi/client` → `lib/config/settings`(서버 전용, `process.env`를
-     읽는다)까지 클라이언트 번들이 끌어들이는 자리가 된다.
+   - `lib/form/form-state.ts` - 런타임 import를 **0개**로 유지한다. 폼
+     상태·타입·초기값을 클라이언트 컴포넌트(`components/resource/resource-form.tsx`)
+     가 값으로 가져가야 하는데, 오류 판단 로직을 같은 파일에 두면
+     `lib/jsonapi/errors` → `lib/jsonapi/client` → `lib/config/settings`
+     (서버 전용, `process.env`를 읽는다)까지 클라이언트 번들이 끌어들이는
+     자리가 된다. 판단은 `lib/form/flow.ts` 가 갖는다.
 
    다음에 이 저장소에서 순수 함수를 "그냥 옆에 있는 Action·컴포넌트
    파일"에 두고 싶은 유혹이 들면 이 절을 먼저 읽을 것.

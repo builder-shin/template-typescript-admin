@@ -33,13 +33,13 @@ Action, 라우팅. 배정하지 않은 것: `fetch` 직접 호출, 쿼리 조립
 값을 단위 테스트의 `toEqual` 하나가 고정하고, 화면에 남는 무방비는 그 펼침
 한 줄뿐이다.
 
-| 파일                              | 조립하는 것                                                                                                       |
-| --------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `(admin)/examples/list.ts`        | 목록 요청(`listRequest`) - 경로·`gridQuery`·언어                                                                  |
-| `(admin)/examples/[id]/detail.ts` | 상세 요청(`detailRequest`) - `list.ts`와 같은 모양, `resource.includes`를 싣는다                                  |
-| `(admin)/examples/options.ts`     | 생성·수정 폼의 분류·라벨 선택지 요청(`optionsRequest`) - `listRequest`를 재사용하지 않는다(include 정책이 다르다) |
-| `(admin)/count.ts`                | 대시보드 카드의 자원 총합 요청(`countRequest`) - `page[size]=1`+`page[totals]=true`                               |
-| `(admin)/health.ts`               | 대시보드 상태 카드의 헬스 요청과 판정                                                                             |
+| 파일                              | 조립하는 것                                                                                                                                                                                                                                    |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `(admin)/examples/list.ts`        | 목록 요청(`listRequest`) - 경로·`gridQuery`·언어                                                                                                                                                                                               |
+| `(admin)/examples/[id]/detail.ts` | 상세 요청(`detailRequest`) - `list.ts`와 같은 모양, `resource.includes`를 싣는다                                                                                                                                                               |
+| `(admin)/examples/options.ts`     | 관계 선택 목록 요청(`optionsRequest`) - `listRequest`를 재사용하지 않는다(include 정책이 다르다). 관계마다 대상 자원의 요청 계획을 만드는 `relationshipOptionRequests`, 그 결과를 관계 키별 목록으로 접는 `optionsByRelationship` 도 여기 있다 |
+| `(admin)/count.ts`                | 대시보드 카드의 자원 총합 요청(`countRequest`) - `page[size]=1`+`page[totals]=true`                                                                                                                                                            |
+| `(admin)/health.ts`               | 대시보드 상태 카드의 헬스 요청과 판정                                                                                                                                                                                                          |
 
 **이 함수들을 `lib/resources/`로 옮기지 마라.** `lib/resources/`는 어떤 내부
 모듈도 import하지 않는 순수 선언 계층이다(`lib/resources/AGENTS.md`) -
@@ -53,14 +53,14 @@ Action, 라우팅. 배정하지 않은 것: `fetch` 직접 호출, 쿼리 조립
 
 - `(admin)/examples/write.ts` - `actions.ts`(`'use server'`)가 쓰는 쓰기 요청
   조립. Server Action은 반드시 async 함수여야 해서, 순수 동기 함수인 조립
-  함수를 같은 파일에 두면 빌드가 죽는다.
-- `(admin)/examples/form-state.ts` - 폼 상수·타입·초기값. 런타임 import가
-  **0개**다. 오류 판단(`examplesFormState`)은 `flow.ts`가 대신 갖는다 - 같은
-  파일에 두면 그 함수가 값으로 끌어오는 `lib/jsonapi/errors` →
-  `lib/jsonapi/client` → `lib/config/settings`(서버 전용)까지 클라이언트
-  컴포넌트(`[id]/edit-form.tsx`·`new/page.tsx`)의 번들에 실린다.
-- `(admin)/examples/flow.ts` - 위 오류 판단이 사는 자리. `lib/auth/flow.ts`와
-  같은 분리, 같은 이유다.
+  함수를 같은 파일에 두면 빌드가 죽는다. 본문 자체(`FormData` → JSON:API
+  문서)는 자원을 모르는 `lib/form/write.ts` 의 `writeDocument` 가 만들고, 이
+  파일은 경로·메서드·토큰·언어만 붙인다.
+- 폼 상태·판단은 이 디렉터리에 없다 - `lib/form/form-state.ts`(런타임
+  import **0개**, 클라이언트 폼 `components/resource/resource-form.tsx` 가
+  값으로 가져간다)와 `lib/form/flow.ts`(오류 판단, Server Action 만 부른다)가
+  갖는다. 예전에는 `(admin)/examples/form-state.ts`·`flow.ts` 가 같은 경계를
+  `examples` 전용으로 갖고 있었다 - 근거는 `lib/form/AGENTS.md`.
 
 **클라이언트 컴포넌트에 `proxy.ts`를 값으로 넘기지 않는다.** `ResourceGrid`
 (`components/grid/resource-grid.tsx`, `'use client'`)가 로그인 복귀 경로를
