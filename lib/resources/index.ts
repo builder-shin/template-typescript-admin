@@ -3,7 +3,12 @@ import { exampleCategoriesResource } from './category'
 import { examplesResource } from './example'
 import { exampleTagsResource } from './tag'
 
-export { formAttributes, isRequiredAttribute, readOnlyAttributes } from './define'
+export {
+  filterRelationshipKey,
+  formAttributes,
+  isRequiredAttribute,
+  readOnlyAttributes,
+} from './define'
 export type {
   AttributeDef,
   AttributeKind,

@@ -149,8 +149,14 @@ export interface ResourceDef {
   readonly includes: readonly string[]
 }
 
-/** `관계.id` 꼴 필터 키에서 관계 키를 얻는다. 그 꼴이 아니면 `null`. */
-function relationshipKeyOf(filterKey: string): string | null {
+/**
+ * `관계.id` 꼴 필터 키에서 관계 키를 얻는다. 그 꼴이 아니면 `null`.
+ * `deriveFilter` 가 라벨을 유도할 때, 그리고 목록 화면이 관계 필터의 보기
+ * 목록을 어느 자원에서 조회할지 정할 때(`app/(admin)/[slug]/options.ts`)
+ * 같은 판정을 쓴다 - 접미사 `.id` 를 두 곳이 각자 자르면 한쪽만 바뀌는 날
+ * 필터 라벨과 보기 목록이 서로 다른 관계를 가리킨다.
+ */
+export function filterRelationshipKey(filterKey: string): string | null {
   const suffix = '.id'
   return filterKey.endsWith(suffix) ? filterKey.slice(0, -suffix.length) : null
 }
@@ -193,7 +199,7 @@ function deriveColumn(input: ResourceInput, column: ColumnInput): ColumnDef {
 }
 
 function deriveFilter(input: ResourceInput, filter: FilterInput): FilterDef {
-  const relationshipKey = relationshipKeyOf(filter.key)
+  const relationshipKey = filterRelationshipKey(filter.key)
   const relationship = relationshipKey === null ? undefined : input.relationships[relationshipKey]
   const attribute = input.attributes[filter.key]
   const base: FilterDef = {

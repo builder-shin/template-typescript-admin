@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   defineResource,
+  filterRelationshipKey,
   formAttributes,
   isRequiredAttribute,
   readOnlyAttributes,
@@ -163,5 +164,13 @@ describe('formAttributes · readOnlyAttributes · isRequiredAttribute', () => {
     expect(isRequiredAttribute(def.attributes.name!)).toBe(true)
     expect(isRequiredAttribute(def.attributes.body!)).toBe(false)
     expect(isRequiredAttribute(def.attributes.createdAt!)).toBe(false)
+  })
+})
+
+describe('filterRelationshipKey', () => {
+  it('관계.id 꼴이면 관계 키, 아니면 null 이다', () => {
+    expect(filterRelationshipKey('owner.id')).toBe('owner')
+    expect(filterRelationshipKey('name')).toBeNull()
+    expect(filterRelationshipKey('id')).toBeNull()
   })
 })

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  filterOptionsFromResults,
   optionsByRelationship,
   optionsRequest,
+  relationshipFilterRequests,
   relationshipOptionRequests,
   unwrapOptionsResult,
-} from '@/app/(admin)/examples/options'
+} from '@/app/(admin)/[slug]/options'
 import type { JsonApiResult } from '@/lib/jsonapi/client'
 import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
@@ -146,5 +148,78 @@ describe('optionsByRelationship', () => {
 
   it('계획과 결과의 수가 다르면 던진다 - 호출부의 버그다', () => {
     expect(() => optionsByRelationship(plans, [])).toThrow('내부 오류')
+  })
+
+  it('계획이 없으면(관계 없는 자원) 빈 보기 목록으로 성공한다', () => {
+    expect(optionsByRelationship([], [])).toEqual({ ok: true, options: {} })
+  })
+})
+
+describe('relationshipFilterRequests', () => {
+  it('키가 관계.id 인 필터마다 대상 자원의 요청을 만든다 - 계획의 key 는 필터 키다', () => {
+    const plans = relationshipFilterRequests(EXAMPLES, 'ko')
+    expect(plans.map((plan) => plan.key)).toEqual(['category.id'])
+    expect(plans[0]!.target.type).toBe('exampleCategories')
+    expect(plans[0]!.request[0]).toBe('/api/v1/categories')
+    expect(plans[0]!.request[1].acceptLanguage).toBe('ko')
+  })
+
+  it('속성 필터뿐인 자원은 빈 배열이다', () => {
+    expect(relationshipFilterRequests(CATEGORIES, null)).toEqual([])
+  })
+
+  it('관계.id 꼴이지만 그 관계가 선언에 없으면 건너뛴다 - 유도가 던지지 않는 규칙과 같다', () => {
+    const odd = defineResource({
+      ...SAMPLE_INPUT,
+      filters: [{ key: 'ghost.id', operators: ['exact'], uiOperator: 'exact' }],
+    })
+    expect(relationshipFilterRequests(odd, null)).toEqual([])
+  })
+
+  it('대상 자원이 선언에 없으면 던진다', () => {
+    const ghost = defineResource({
+      ...SAMPLE_INPUT,
+      relationships: {
+        owner: { cardinality: 'one', type: 'nowhere', label: '소유자', nullable: true },
+      },
+    })
+    expect(() => relationshipFilterRequests(ghost, null)).toThrow('nowhere')
+  })
+})
+
+describe('filterOptionsFromResults', () => {
+  const plans = relationshipFilterRequests(EXAMPLES, null)
+
+  it('성공한 결과를 필터 키별 보기 목록으로 편다', () => {
+    const results: JsonApiResult<CollectionDocument>[] = [
+      {
+        ok: true,
+        status: 200,
+        document: {
+          data: [{ type: 'exampleCategories', id: 'c1', attributes: { name: '분류 하나' } }],
+        },
+      },
+    ]
+    expect(filterOptionsFromResults(plans, results)).toEqual({
+      'category.id': [{ id: 'c1', name: '분류 하나' }],
+    })
+  })
+
+  it('실패한 결과는 그 키를 빼서 접는다 - 목록 화면은 배너로 바뀌지 않고 그 필터만 텍스트 입력이 된다', () => {
+    const results: JsonApiResult<CollectionDocument>[] = [
+      { ok: false, status: 500, errors: [{ status: '500', code: 'INTERNAL' }] },
+    ]
+    expect(filterOptionsFromResults(plans, results)).toEqual({})
+  })
+
+  it('204 와 빈 목록도 키를 뺀다 - 보기 없는 Select("전체"뿐)를 그리지 않는다', () => {
+    expect(filterOptionsFromResults(plans, [{ ok: true, status: 204, document: null }])).toEqual({})
+    expect(
+      filterOptionsFromResults(plans, [{ ok: true, status: 200, document: { data: [] } }]),
+    ).toEqual({})
+  })
+
+  it('계획과 결과의 수가 다르면 던진다 - 호출부의 버그다', () => {
+    expect(() => filterOptionsFromResults(plans, [])).toThrow('내부 오류')
   })
 })

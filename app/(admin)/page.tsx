@@ -9,7 +9,7 @@ import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
 import { countRequest, readTotal } from './count'
 import { classifyHealth, healthRequest } from './health'
-import { toSearchParams } from './examples/list'
+import { toSearchParams } from './[slug]/list'
 import { messageForReadFailure } from './read-result'
 import { buildRecentRows, recentExamplesRequest } from './recent'
 
