@@ -3,11 +3,11 @@ import type { CollectionDocument } from '@/lib/jsonapi/document'
 import type { ResourceDef } from '@/lib/resources'
 
 /**
- * 자원 하나의 총합만 조회하는 요청 조립 - `listRequest`(app/(admin)/examples/list.ts)
+ * 자원 하나의 총합만 조회하는 요청 조립 - `listRequest`(app/(admin)/[slug]/list.ts)
  * 와 같은 튜플 모양을 낸다(실측 app/controllers/concerns/crud_actions.py:162,179-213).
  *
  * `lib/resources/` 가 아니라 대시보드 화면 옆에 두는 이유는 `listRequest` 가
- * `app/(admin)/examples/list.ts` 에 있는 이유와 같다 - 요청 조립은 그것을 쓰는
+ * `app/(admin)/[slug]/list.ts` 에 있는 이유와 같다 - 요청 조립은 그것을 쓰는
  * 화면 옆에 둔다. `lib/resources/` 는 어떤 내부 모듈도 import 하지 않는 순수
  * 선언 계층이라(lib/resources/AGENTS.md), `RequestOptions`·`withAcceptLanguage`
  * 를 값으로 끌어오는 이 함수를 그 디렉터리에 두면 그 규칙이 깨진다 - 처음에는

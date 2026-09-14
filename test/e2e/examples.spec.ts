@@ -228,7 +228,7 @@ test.describe('생성 폼', () => {
 
     await page.getByRole('button', { name: '만들기' }).click()
 
-    // 착지 - 성공하면 상세로 간다(actions.ts 의 createExampleAction).
+    // 착지 - 성공하면 상세로 간다(actions.ts 의 createResourceAction).
     await expect(page).toHaveURL(/\/examples\/[^/]+$/)
     // h1 이 둘이다 - 셸 헤더(site-header.tsx)가 경로별 제목("예제 상세")을
     // 먼저 그리고, 화면 고유의 제목(이 예제 자신의 title)이 그 뒤에 온다.

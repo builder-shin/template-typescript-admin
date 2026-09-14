@@ -30,7 +30,8 @@ import { createRequest, deleteRequest, updateRequest } from './write'
  * 던진다. 화면이 그 경로를 제공하지 않으므로 사용자 문구는 두지 않는다.
  *
  * 판단은 이미 다른 파일에 있다 - 필드 배치는 `lib/jsonapi/errors.ts`,
- * 실패/성공 분류는 `resourceFormState`(lib/form/flow.ts), 요청 조립은
+ * 성공·실패 분류는 이 파일의 `result.ok` 검사이고 그 실패의 `errors` 를
+ * 폼 상태로 바꾸는 것은 `resourceFormState`(lib/form/flow.ts), 요청 조립은
  * `createRequest`·`updateRequest`·`deleteRequest`(./write.ts), 본문은
  * `lib/form/write.ts` 의 `writeDocument`. 이 파일은 그것들을 기계적으로
  * 잇기만 한다 - `app/(auth)/actions.ts` 가 `lib/auth/flow.ts` 를 잇기만 하는

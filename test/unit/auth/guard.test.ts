@@ -24,7 +24,7 @@ describe('requireSession', () => {
     //
     // ⚠️ **E2E 도 이 자리(그 안의 분기)를 못 덮는다 - 호출부가 없어서가
     // 아니라 시나리오가 없어서다.** `requireSession()` 의 프로덕션 호출부는
-    // 이제 넷이다(`app/(admin)/examples/actions.ts` 의 네 쓰기 Action - 커밋
+    // 이제 넷이다(`app/(admin)/[slug]/actions.ts` 의 네 쓰기 Action - 커밋
     // edc01f7 이 accessToken 배선을 고치며 추가했다). "호출부가 0개"라는
     // 주장은 그 커밋 이전에는 참이었지만 지금은 거짓이다 - 여기 적어 두고
     // 다시 보지 않은 사이 사실이 바뀌었다. 그래도 진짜 공백은 남아 있다:

@@ -10,7 +10,7 @@ import type { ResourceIdentifier, ResourceObject } from '@/lib/jsonapi/document'
  * 함수든 가리지 않는다)를 "클라이언트 참조"로 바꾼다 - 렌더링에 쓰이는
  * `<Component>` 자리가 아니라 값으로 직접 호출하면 그 자리에서 던진다.
  *
- * 실측(실제 프로덕션 빌드+실제 브라우저): `app/(admin)/examples/[id]/page.tsx`
+ * 실측(실제 프로덕션 빌드+실제 브라우저): `app/(admin)/[slug]/[id]/page.tsx`
  * (서버 컴포넌트)가 상세 화면의 분류·라벨·생성일·수정일을 그리려고 이 두
  * 함수를 `resource-grid.tsx` 에서 가져다 **직접 호출**했다 - 관계가 없는
  * 행이든 있는 행이든 상관없이 **모든** 상세 화면 요청이 이 에러로 죽었다:

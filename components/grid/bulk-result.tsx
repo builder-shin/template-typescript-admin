@@ -19,7 +19,7 @@ import type { ErrorObject } from '@/lib/jsonapi/document'
  * 일괄 실행 결과의 표시 - 판정은 하지 않는다.
  *
  * `runBulk`(lib/bulk/executor.ts)은 순수 실행기라 재시도 가능 여부를 모른다 -
- * `run` 콜백(`app/(admin)/examples/actions.ts` 의 `bulkDeleteExampleAction`)이
+ * `run` 콜백(`app/(admin)/[slug]/actions.ts` 의 `bulkDeleteResourceAction`)이
  * 돌려준 `BulkOutcome` 을 모을 뿐이다. **재시도 가능 여부(`bucket`)도 이제
  * 그 Server Action 이 이미 정해서 결과에 실어 보낸다** - `lib/jsonapi/errors.ts`
  * 의 `actionForErrors` 를 다시 부르지 않는다.
@@ -46,7 +46,7 @@ export interface BulkSummary {
 
 /**
  * 이미 분류된 `outcome.bucket` 을 센다 - `classify` 는 더 이상 없다(판정
- * 자체가 `bucketForFailure`, `app/(admin)/examples/bulk-outcome.ts` 로
+ * 자체가 `bucketForFailure`, `app/(admin)/[slug]/bulk-outcome.ts` 로
  * 옮겨져 Server Action 이 이미 끝내 둔다).
  */
 export function summarize(report: BulkReport): BulkSummary {

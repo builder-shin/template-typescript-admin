@@ -342,7 +342,7 @@ export function ResourceGrid(props: {
    * 상수를 여기서 값으로 import 하면 `proxy.ts` 가 `lib/auth/session.ts` 를
    * 통해 값으로 끌어오는 `next/headers` 까지 클라이언트 번들에 끌려
    * 들어간다(실측: `pnpm build` 가 "Server Components 밖에서 next/headers"
-   * 로 깨진다). 서버 컴포넌트인 호출부(`app/(admin)/examples/page.tsx`)는
+   * 로 깨진다). 서버 컴포넌트인 호출부(`app/(admin)/[slug]/page.tsx`)는
    * 그 경로 조립을 안전하게 할 수 있으므로 완성된 문자열만 받는다.
    */
   reauthHref: string
@@ -350,7 +350,7 @@ export function ResourceGrid(props: {
    * 있으면 행을 눌러 `<이 값>/<자원 id>` 상세로 간다. 없으면 행은 지금처럼
    * 눌리지 않는다 - **이 파일이 자원 이름으로 분기해서 "examples 면 상세가
    * 있다"를 판단하지 않는다.** 상세 라우트가 있는지는 화면이 아는 사실이고
-   * (`app/(admin)/examples/page.tsx` 가 넘긴다), 오늘은 선언된 자원 전부가 상세
+   * (`app/(admin)/[slug]/page.tsx` 가 넘긴다), 오늘은 선언된 자원 전부가 상세
    * 화면을 가지므로 호출부가 항상 넘기지만, 이 파일은 여전히 그 사실을 모른다.
    *
    * **함수가 아니라 문자열인 이유(실측으로 겪었다).** 처음에는

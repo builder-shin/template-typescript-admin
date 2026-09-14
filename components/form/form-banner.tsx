@@ -16,8 +16,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
  * 못한다.
  *
  * **이 파일에는 지시어가 없어야 한다.** 서버 컴포넌트 넷
- * (`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/new/page.tsx`·
- * `examples/[id]/page.tsx`)이 읽기 실패를 이 배너로 그린다 - `'use client'`
+ * (`app/(admin)/page.tsx`·`[slug]/page.tsx`·`[slug]/new/page.tsx`·
+ * `[slug]/[id]/page.tsx`)이 읽기 실패를 이 배너로 그린다 - `'use client'`
  * 가 붙으면 그 넷이 클라이언트 참조를 렌더하게 된다. 그래서 `alert` 를
  * 골랐고(레지스트리 확인: 지시어 없음, `cn` 만 import), 훅을 쓰는
  * `field` 계열은 이 파일에 들이지 않는다.

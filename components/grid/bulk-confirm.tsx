@@ -78,7 +78,7 @@ export function BulkConfirmPanel(
 }
 
 /**
- * 단건 삭제 전용 - `app/(admin)/examples/[id]/page.tsx` 가 쓴다.
+ * 단건 삭제 전용 - `app/(admin)/[slug]/[id]/page.tsx` 가 쓴다.
  *
  * 확인 전에는 작은 트리거 버튼만 보인다 - 저장 버튼(`SubmitButton`, `w-full`)
  * 과 폭·위치를 공유하지 않는다(그 화면에서 둘은 아예 다른 카드에 있다). 색만
@@ -87,7 +87,7 @@ export function BulkConfirmPanel(
  * `<form>` 안에서 확인 문구 + 진짜 제출 버튼으로 바뀐다.
  *
  * `action` 은 여전히 `<form action>` 으로 불린다 - 실패를 던져 `error.tsx` 가
- * 받는 `deleteExampleAction` 의 기존 계약을 그대로 유지하기 위해서다. 확인
+ * 받는 `deleteResourceAction` 의 기존 계약을 그대로 유지하기 위해서다. 확인
  * 버튼을 누른 뒤 이 함수를 직접 호출하는 방식으로 바꾸면 그 던지기가 화면
  * 밖으로 전달되지 않는다 - 반드시 같은 `<form>` 안의 진짜 제출 버튼이어야
  * 한다.

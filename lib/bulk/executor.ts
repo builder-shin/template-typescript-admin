@@ -37,7 +37,7 @@ export const MAX_BULK_ITEMS = 50
  * **이 파일은 이 값의 뜻을 모른다 - 그저 실어 나른다.** 어떤 실패가
  * `alreadyGone` 인지 `sessionLost` 인지 `retryable` 인지 판정하는 것은
  * `actionForErrors`(lib/jsonapi/errors.ts)의 일이고, 그 함수를 부르는
- * 것은 `app/(admin)/examples/bulk-outcome.ts`(Server Action 이 쓴다)다 -
+ * 것은 `app/(admin)/[slug]/bulk-outcome.ts`(Server Action 이 쓴다)다 -
  * 이 파일은 그 판정을 값 import 없이 타입으로만 표현한다.
  */
 export type BulkOutcomeBucket = 'ok' | 'alreadyGone' | 'sessionLost' | 'retryable'
@@ -51,7 +51,7 @@ export type BulkOutcomeBucket = 'ok' | 'alreadyGone' | 'sessionLost' | 'retryabl
  * `undefined` 를 돌려주고 화면은 "—" 만 그린다 - 실패는 확실한데 **왜**
  * 실패했는지 운영자가 알 방법이 없는 행이 생긴다.
  *
- * 이 저장소에 있는 유일한 생성 지점(`actions.ts` 의 `bulkDeleteExampleAction`)
+ * 이 저장소에 있는 유일한 생성 지점(`actions.ts` 의 `bulkDeleteResourceAction`)
  * 은 사실 이미 이 계약을 지키고 있었다 - `request()` 가 돌려주는
  * `JsonApiResult`(lib/jsonapi/client.ts) 자체가 `{ ok: false; errors:
  * ErrorObject[] }` 라 `errors` 가 필수라서다. 그 사실을 `BulkOutcome` 의

@@ -25,7 +25,7 @@
 | `seed/`                                                              | `docker-compose.e2e.yml`의 `seed-*` 서비스가 마이그레이션 직후 넣는 SQL. Rails만 분류·라벨·조인 테이블 이름이 달라(`example_categories`·`example_tags`·`example_taggings`) `examples.sql`(FastAPI·NestJS 공용)과 `examples.rails.sql` 두 벌이 있다 - 값을 바꾸면 **둘 다** 고친다(자동 동기화 없음, 근거는 `seed/README.md`). |
 | `auth.spec.ts`·`bulk.spec.ts`·`examples.spec.ts`·`reference.spec.ts` | 네 시나리오 스위트 - 아래 "새 시나리오를 쓸 때" 참고. `reference.spec.ts` 는 읽기 전용 자원(분류)의 목록·상세와 선언에 없는 슬러그를 잰다 - 행을 만들지 않고 씨앗 분류 이름의 접두사 `프로브` 로 좁힌다.                                                                                                                      |
 
-## 새 시나리오를 쓸 때 - 기존 세 파일이 실제로 따르는 규칙 셋
+## 새 시나리오를 쓸 때 - 기존 네 파일이 실제로 따르는 규칙 셋
 
 1. **실전값과 구별되는 값을 쓴다.** 픽스처가 기본값·정상 경로와 같은 값을
    쓰면 그 시나리오가 통과하는지 실패하는지가 같은 결과로 보인다 -
