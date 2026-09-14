@@ -52,7 +52,12 @@ export default function Loading() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {relationshipCount > 0 ? relationshipRows : null}
-            <div className="flex flex-col gap-2">
+            {/* 구분선 유무는 page.tsx 와 같다 - hasRelationships 일 때만 넣어 본문으로 넘어갈 때 뛰지 않는다 */}
+            <div
+              className={
+                relationshipCount > 0 ? 'flex flex-col gap-2 border-t pt-4' : 'flex flex-col gap-2'
+              }
+            >
               {Array.from({ length: attributeCount }, (_, index) => (
                 <Skeleton key={index} className="h-4 w-full" />
               ))}
@@ -93,7 +98,13 @@ export default function Loading() {
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {relationshipCount > 0 ? relationshipRows : null}
-              <div className="flex flex-col gap-2 border-t pt-4">
+              <div
+                className={
+                  relationshipCount > 0
+                    ? 'flex flex-col gap-2 border-t pt-4'
+                    : 'flex flex-col gap-2'
+                }
+              >
                 {Array.from({ length: readOnlyCount }, (_, index) => (
                   <Skeleton key={index} className="h-4 w-full" />
                 ))}

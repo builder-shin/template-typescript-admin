@@ -51,6 +51,12 @@ export function headingLabel(
   return target.id
 }
 
+/**
+ * 문자열·숫자만 폼 값이 된다. `null`·누락·그 밖의 타입(불리언·객체)은 전부
+ * `''` 다 - 선언의 다섯 종류가 문자열 아니면 정수뿐이라 그 밖의 값은
+ * 계약 위반이고, 그때 폼에 무엇을 채워 넣어도 거짓이다. 빈 값이면 저장할
+ * 때 `writeDocument` 의 빈 값 규칙이 적용된다.
+ */
 function attributeText(value: unknown): string {
   if (typeof value === 'string') return value
   if (typeof value === 'number') return String(value)

@@ -66,6 +66,20 @@ describe('defineResource - 유도', () => {
     }
   })
 
+  it('선언에 없는 필터 키는 던지지 않고 키 이름을 라벨로, options 없이 떨어진다 - 불변식 테스트가 잡을 자리다', () => {
+    const odd = defineResource({
+      ...SAMPLE_INPUT,
+      filters: [{ key: 'ghost', operators: ['exact'], uiOperator: 'exact' }],
+    })
+    expect(odd.filters[0]).toEqual({
+      key: 'ghost',
+      label: 'ghost',
+      operators: ['exact'],
+      uiOperator: 'exact',
+    })
+    expect(odd.filters[0]).not.toHaveProperty('options')
+  })
+
   it('연산자와 기본 연산자는 적은 대로 옮긴다', () => {
     const name = def.filters.find((filter) => filter.key === 'name')!
     expect(name.operators).toEqual(['exact', 'contains'])

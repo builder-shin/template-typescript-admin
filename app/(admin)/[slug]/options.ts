@@ -79,7 +79,13 @@ export interface OptionRequestPlan {
   readonly request: [path: string, options: RequestOptions]
 }
 
-/** 계획과 결과의 수가 다를 때의 문구 - 두 접기 함수가 같은 문장으로 던진다. */
+/**
+ * 계획과 결과의 수가 다를 때의 문구 - 길이가 다르면 두 접기 함수 모두 이
+ * 문구로 던진다. 길이가 같은데 원소 하나가 `undefined` 인 경우(희소 배열)는
+ * 둘이 다르다 - `optionsByRelationship` 은 그때도 이 문구로 던지고,
+ * `filterOptionsFromResults` 는 실패한 결과처럼 접어 건너뛴다(그 함수의
+ * `continue` 옆 주석).
+ */
 const PLAN_RESULT_MISMATCH = '내부 오류: 요청 계획과 결과의 수가 다릅니다.'
 
 /**
@@ -176,6 +182,9 @@ export function filterOptionsFromResults(
   const options: Record<string, readonly OptionItem[]> = {}
   for (const [position, plan] of plans.entries()) {
     const result = results[position]
+    // 원소 누락(길이는 같은데 undefined)도 실패한 결과와 똑같이 접어
+    // 건너뛴다 - 목록 화면은 필터 보기 목록 문제로 막히지 않는다.
+    // optionsByRelationship 은 같은 경우에도 던진다(PLAN_RESULT_MISMATCH).
     if (result === undefined || !result.ok || result.document === null) continue
     const items = optionsFromDocument(plan.target, result.document)
     if (items.length > 0) options[plan.key] = items

@@ -77,14 +77,24 @@ function attributeOutcome(attribute: AttributeDef, raw: string): AttributeOutcom
     if (attribute.nullable) return { present: true, value: null }
     return attribute.kind === 'int' ? { present: false } : { present: true, value: '' }
   }
-  if (attribute.kind === 'int') {
-    const parsed = Number(trimmed)
-    return {
-      present: true,
-      value: INTEGER.test(trimmed) && Number.isSafeInteger(parsed) ? parsed : raw,
+  switch (attribute.kind) {
+    case 'int': {
+      const parsed = Number(trimmed)
+      return {
+        present: true,
+        value: INTEGER.test(trimmed) && Number.isSafeInteger(parsed) ? parsed : raw,
+      }
+    }
+    case 'string':
+    case 'text':
+    case 'enum':
+    case 'datetime':
+      return { present: true, value: raw }
+    default: {
+      const exhaustive: never = attribute
+      return exhaustive
     }
   }
-  return { present: true, value: raw }
 }
 
 function relationshipData(
