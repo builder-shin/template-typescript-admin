@@ -3,26 +3,31 @@
 
 # lib/ 작업 지침
 
-여섯 하위 디렉터리로 나뉜 순수 함수 계층을 모은다. 각자의 로컬 계약(자원을
+일곱 하위 디렉터리로 나뉜 순수 함수 계층을 모은다. 각자의 로컬 계약(자원을
 모른다, JSX를 두지 않는다 등)은 자신의 `AGENTS.md`가 소유한다 - 이 파일은
-**그 여섯 사이의 의존 방향**, 즉 누가 누구를 import할 수 있는가만 소유한다.
+**그 일곱 사이의 의존 방향**, 즉 누가 누구를 import할 수 있는가만 소유한다.
 
 ## 의존 방향
 
-| 디렉터리         | import할 수 있는 내부 모듈                                                             |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| `lib/config/`    | 없음 - 기반 계층이다.                                                                  |
-| `lib/resources/` | 없음 - 자원을 선언만 하는 순수 계층이다. `lib/jsonapi/`조차 소비하지 않는다.           |
-| `lib/jsonapi/`   | `lib/config/`(설정을 읽어 요청을 조립한다)                                             |
-| `lib/grid/`      | `lib/resources/`가 내보내는 `ResourceDef` **타입**만(`import type`). 값 import는 없다. |
-| `lib/bulk/`      | `lib/jsonapi/document.ts`의 `ErrorObject` **타입**만(`import type`). 값 import는 없다. |
-| `lib/auth/`      | `lib/jsonapi/`, `lib/config/settings.ts`                                               |
+| 디렉터리         | import할 수 있는 내부 모듈                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lib/config/`    | 없음 - 기반 계층이다.                                                                                                                                                                                                                                                                                                                                                               |
+| `lib/resources/` | 없음 - 자원을 선언만 하는 순수 계층이다. `lib/jsonapi/`조차 소비하지 않는다.                                                                                                                                                                                                                                                                                                        |
+| `lib/jsonapi/`   | `lib/config/`(설정을 읽어 요청을 조립한다)                                                                                                                                                                                                                                                                                                                                          |
+| `lib/grid/`      | `lib/resources/`가 내보내는 `ResourceDef` **타입**만(`import type`). 값 import는 없다.                                                                                                                                                                                                                                                                                              |
+| `lib/bulk/`      | `lib/jsonapi/document.ts`의 `ErrorObject` **타입**만(`import type`). 값 import는 없다.                                                                                                                                                                                                                                                                                              |
+| `lib/auth/`      | `lib/jsonapi/`, `lib/config/settings.ts`                                                                                                                                                                                                                                                                                                                                            |
+| `lib/form/`      | `lib/resources/`(타입과 `formAttributes` 등 값), `lib/jsonapi/document.ts`(타입), `lib/jsonapi/normalize.ts`·`lib/jsonapi/errors.ts`(값). **`lib/jsonapi/client.ts` 는 쓰지 않는다** - 그 파일은 `lib/config/settings.ts`(서버 전용)에 닿는데, `lib/form/form-state.ts` 는 클라이언트 폼이 값으로 가져가므로 런타임 import 가 0개여야 하고 나머지 파일도 그 사슬에 들어가지 않는다. |
 
 화살표로 그리면 `lib/config/` → `lib/jsonapi/` → `lib/auth/`가 값을 주고받는
 한 줄기이고, `lib/resources/` → `lib/grid/`·`lib/bulk/`가 타입만 주고받는
 독립된 줄기다. 두 줄기는 서로 만나지 않는다 - `lib/grid/`·`lib/bulk/`는
 `lib/jsonapi/`를 값으로 쓰지 않고(요청을 만드는 것이 이 둘의 일이 아니므로),
 `lib/resources/`는 그 무엇도 소비하지 않는다.
+
+`lib/form/`은 예외적으로 두 줄기에 모두 닿는다 - `lib/resources/`의 선언을
+읽어 `lib/jsonapi/`의 문서 모양으로 조립하는 것이 그 디렉터리의 일 자체라서다.
+그래도 `lib/jsonapi/client.ts`(→ `lib/config/`)에는 닿지 않는다.
 
 ## 실제로 틀렸던 자리 둘
 
@@ -43,7 +48,7 @@
 
 ## 검증
 
-여섯 하위 디렉터리는 각자 `test/unit/`의 대응하는 하위 디렉터리가 지킨다.
+일곱 하위 디렉터리는 각자 `test/unit/`의 대응하는 하위 디렉터리가 지킨다.
 최종 검증은 `./scripts/check.sh`다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->
