@@ -15,24 +15,24 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from '@/components/ui/sidebar'
-import { resourceByType } from '@/lib/resources'
+import { DASHBOARD_NAV_ITEM, resourceNavItems } from '@/components/nav-items'
 import { LayoutDashboardIcon, ListIcon, CommandIcon } from 'lucide-react'
 
 /**
- * 실재하는 라우트 둘뿐이다(실측 2026-09-12, `find app -name 'page.tsx'`) -
- * `/examples/[id]`·`/examples/new`·`/login`은 사이드바에 올릴 만한 목적지가
- * 아니다(상세·작성은 `/examples` 화면 안에서 이동하고, 로그인은 이미 들어온
- * 사람에게 보일 이유가 없다). 블록이 남긴 다섯 항목·`navClouds`·`navSecondary`·
- * `documents`(합쳐 `url: '#'` 20개)는 전부 여기서 지운다 - 대체할 수 있는
- * 것은 이 둘뿐이었다(Task 15, `docs/superpowers/plans/
- * 2026-09-12-admin-template.md`의 Step 1 표).
+ * 항목은 대시보드 + 선언된 자원 전부(`RESOURCES` 순서)다 - 재료는
+ * `components/nav-items.ts` 가 만들고 여기서는 아이콘만 붙인다. 자원 아이콘은
+ * 전부 `ListIcon` 하나다 - 선언에 아이콘을 두지 않는다(스펙 4.5). 새 자원은
+ * 선언 파일과 `lib/resources/index.ts` 한 줄로 이 목록에 들어온다 - 이
+ * 파일을 고칠 일이 없다.
  *
- * `examples`의 라벨은 하드코딩하지 않고 `lib/resources`(자원 선언의 정본)에서
- * 읽는다 - 표·필터가 이미 쓰는 "예제"와 여기 문구가 갈라지는 것을 막는다.
+ * 상세·작성·로그인은 사이드바에 올릴 목적지가 아니다(상세·작성은 목록
+ * 안에서 이동하고, 로그인은 이미 들어온 사람에게 보일 이유가 없다).
+ * 블록이 남긴 `navClouds`·`navSecondary`·`documents`(전부 `url: '#'`)는
+ * 지웠다 - 대체할 화면이 없다.
  */
 const NAV_MAIN_ITEMS = [
-  { title: '대시보드', url: '/', icon: <LayoutDashboardIcon /> },
-  { title: resourceByType('examples')!.label, url: '/examples', icon: <ListIcon /> },
+  { ...DASHBOARD_NAV_ITEM, icon: <LayoutDashboardIcon /> },
+  ...resourceNavItems().map((item) => ({ ...item, icon: <ListIcon /> })),
 ]
 
 /**
