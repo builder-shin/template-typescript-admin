@@ -21,7 +21,10 @@ import { createRequest, deleteRequest, updateRequest } from './write'
  * 문자열이라 직렬화에 문제가 없다(스펙 7.4) - 실측(2026-09-14):
  * `test/e2e/examples.spec.ts` 의 생성 시나리오가
  * `createResourceAction.bind(null, 'examples')` 를 `useActionState` 로 제출해
- * 201 을 받았다. 넷 다 첫 줄이
+ * 생성이 성공하고 상세로 넘어갔다. 그 시나리오는 상태 코드를 보지 않는다 -
+ * 성공 판정은 `resourceFormState`(lib/form/flow.ts)가 `result.ok` 로 하기
+ * 때문이다. 상태 코드는 따로 쟀다: 같은 모양의 문서를 백엔드에 직접 POST
+ * 했을 때 응답이 201 이었다(2026-09-14, 정본 FastAPI 상대 curl). 넷 다 첫 줄이
  * `writableResource(slug)` 다(./resource.ts) - 선언에 없거나 읽기 전용이면
  * 던진다. 화면이 그 경로를 제공하지 않으므로 사용자 문구는 두지 않는다.
  *
