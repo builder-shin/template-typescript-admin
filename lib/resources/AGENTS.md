@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # lib/resources/ 작업 지침
 
@@ -10,8 +10,9 @@ nullable·readOnly)·관계(cardinality·대상 타입·라벨)·대표 속성(`
 ## 선언은 데이터다
 
 `lib/resources/*.ts`에 JSX를 두지 않는다. 이 디렉터리가 아는 것은 "자원이
-무엇인가"이지 "어떻게 그리는가"가 아니다 - 렌더링은 `app/`과
-`components/grid/`의 일이다. `fetch`도 두지 않는다 - 요청 조립은
+무엇인가"이지 "어떻게 그리는가"가 아니다 - 렌더링은
+`app/`·`components/grid/`·`components/resource/`의 일이다. `fetch`도 두지
+않는다 - 요청 조립은
 `lib/grid/`·`lib/jsonapi/`의 일이다. 이 디렉터리 자신은 아무 내부 모듈도
 import하지 않는다 - `lib/jsonapi/`조차 소비하지 않는 순수 선언 계층이다.
 
@@ -79,6 +80,6 @@ sortable 열 ∈ sorts, includes ⊆ 관계, 관계 type ∈ RESOURCES, enum val
 자원의 선언과 위 불변식 아홉은 `test/unit/resources/index.test.ts`가
 모든 자원에 대해 확인한다. 최종 검증은 `./scripts/check.sh`다.
 
-소비자는 `lib/grid/`·`components/grid/`·`app/`이다.
+소비자는 `lib/grid/`·`lib/form/`·`components/grid/`·`components/resource/`·`app/`이다.
 
 <!-- MANUAL: Any manually added notes below this line are preserved on regeneration -->

@@ -31,7 +31,7 @@ import { probeEmail } from './probe-email'
  *
  * ## Step 7b - Base UI 가 정말 FormData 에 값을 넣는가
  *
- * `createExampleAction`(`app/(admin)/examples/actions.ts`)은 `FormData.get`/
+ * `lib/form/write.ts` 의 `writeDocument`(생성 Action 이 부른다)는 `FormData.get`/
  * `.getAll` 로 분류·라벨을 읽는데, Base UI 의 `Select`·`Checkbox` 는 네이티브
  * 입력이 아니라 숨은 `<input>` 을 곁에 렌더해 폼에 참여한다(근거:
  * `node_modules/@base-ui/react` 의 `SelectRoot.d.ts`·`CheckboxRoot.d.ts`). 이
@@ -250,13 +250,15 @@ test.describe('생성 폼', () => {
 
     // 폼의 분류 트리거도 **이름**을 보여야 한다. 이 화면은 저장된 값을 들고
     // 새로 서므로 base UI 가 값(UUID)에서 라벨을 되찾아야 하고, 그 통로는
-    // `items` prop 뿐이다(components/resource/resource-form.tsx 의 `OneField` 가 만드는 `items`). 그것이 없던
+    // `items` prop 뿐이다(resource-form.tsx 의 `OneField` 가 만드는 `items`).
+    // 그것이 없던
     // 동안 이 자리에 UUID 가 그려졌고, 위 요약 카드만 보는 단언으로는
     // 잡히지 않았다 - 요약은 `included` 를 직접 읽기 때문이다.
     // `getByLabel('분류')` 이 아니라 role 로 좁힌다 - `getByLabel` 은 접근성
-    // 이름을 **부분 문자열**로 맞추므로 위 group(`관계`)까지 함께
-    // 걸려 strict mode 위반이 난다(실측). 생성 화면의 같은 호출(위 Select
-    // 열기)은 그 화면에 그 group 이 없어 여전히 하나만 맞는다.
+    // 이름을 **부분 문자열**로 맞춰서, 옛 group 이름 "분류와 라벨"에는 그
+    // 호출이 group 까지 함께 걸려 strict mode 위반이 났다(실측). 이름이
+    // "관계"로 바뀌어 오늘은 겹치지 않지만, 부분 문자열 매칭에 기대지 않는
+    // role 로케이터가 여전히 더 견고하다.
     const categoryTrigger = page.getByRole('combobox', { name: '분류' })
     await expect(categoryTrigger).toContainText('프로브 분류 하나')
     await expect(categoryTrigger, 'items 를 넘기지 않으면 여기 UUID 가 그려진다').not.toContainText(

@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-14 -->
 
 # lib/bulk/ 작업 지침
 
@@ -62,13 +62,13 @@
 
 ## 값 import 를 두지 않는다 - `import type`은 허용한다
 
-`lib/auth/form-state.ts`·`app/(admin)/examples/form-state.ts`는 다른 모듈의
+`lib/auth/form-state.ts`·`lib/form/form-state.ts`는 다른 모듈의
 타입을 쓸 일이 없어서 애초에 import 문이 없다. `executor.ts`는 사정이
 다르다 - `BulkOutcome.errors`가 `lib/jsonapi/document.ts`의 `ErrorObject`를
 그대로 들고 가야 해서 다른 파일의 타입이 실제로 필요하다. 이 타입은
 `import type { ErrorObject } from '@/lib/jsonapi/document'`로 가져온다 -
 `lib/jsonapi/errors.ts`·`lib/auth/flow.ts`·`lib/auth/credentials.ts`·
-`app/(admin)/examples/flow.ts`가 이미 같은 타입을 같은 방식으로 가져오는
+`lib/form/flow.ts`가 이미 같은 타입을 같은 방식으로 가져오는
 그대로다.
 
 지켜야 할 성질은 **값 import가 없다**이지 "import 문이 없다"가 아니다 -

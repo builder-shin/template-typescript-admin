@@ -31,7 +31,8 @@ import {
  * - 정수가 아닌 `int` 는 원문 문자열 그대로 보낸다. `Number('abc')` 은 `NaN`
  *   이고 `JSON.stringify` 는 `NaN` 을 `null` 로 쓴다 - 잘못 적은 값이
  *   "없음"으로 둔갑한다. 원문을 보내면 백엔드가 타입 오류를 그 필드 아래
- *   낸다.
+ *   낸다. 안전 정수 범위(`Number.isSafeInteger`)를 넘는 정수 문자열도 같다 -
+ *   `Number` 가 반올림한 값은 운영자가 적은 값이 아니다.
  * - to-one 은 `''`(폼의 "없음" 항목)이면 `{ data: null }`, 아니면 대상 자원의
  *   `type` 과 id. to-many 는 같은 name 의 값마다 식별자이고 없으면 `[]` 다.
  *
@@ -77,7 +78,11 @@ function attributeOutcome(attribute: AttributeDef, raw: string): AttributeOutcom
     return attribute.kind === 'int' ? { present: false } : { present: true, value: '' }
   }
   if (attribute.kind === 'int') {
-    return { present: true, value: INTEGER.test(trimmed) ? Number(trimmed) : raw }
+    const parsed = Number(trimmed)
+    return {
+      present: true,
+      value: INTEGER.test(trimmed) && Number.isSafeInteger(parsed) ? parsed : raw,
+    }
   }
   return { present: true, value: raw }
 }

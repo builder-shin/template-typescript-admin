@@ -10,11 +10,14 @@ import { cn } from '@/lib/utils'
  * 상세 화면이 "지금 저장된 값"을 그리는 부품 둘 - 관계는 배지, 속성은 `<dl>`.
  * 어느 자원인지는 모른다 - 선언의 관계·속성을 순서대로 돌 뿐이다.
  *
- * **지시어가 없다.** 서버 컴포넌트인 상세 화면이 그린다. 훅도 핸들러도 없고,
- * `Badge` 는 지시어 없이 서버에서 안전하다는 실측이 있다(`app/(admin)/
- * examples/[id]/page.tsx` 머리말 - base-ui 의 `useRenderElement` 가 서버에서
- * ref 병합 훅을 건너뛴다). `relationshipLabel`·`formatDateTime` 도 지시어
- * 없는 `components/grid/format.ts` 의 순수 함수라 값으로 불러도 된다.
+ * **지시어가 없다.** 서버 컴포넌트인 상세 화면이 그린다. 훅도 핸들러도 없다.
+ * `Badge`(`components/ui/badge.tsx`)는 지시어 없이 `useRender()` 를 부르지만
+ * 서버에서 안전하다 - base-ui 의 `useRenderElement` 가 ref 병합 훅 호출을
+ * `typeof document !== 'undefined'` 로 감싸 서버 렌더에서는 건너뛴다(실측
+ * 2026-09-13, `node_modules/@base-ui/react/internals/useRenderElement.mjs` -
+ * 주석까지 그 의도를 밝힌다). `components/ui/breadcrumb.tsx` 도 같은
+ * `useRender` 를 지시어 없이 쓴다. `relationshipLabel`·`formatDateTime` 도
+ * 지시어 없는 `components/grid/format.ts` 의 순수 함수라 값으로 불러도 된다.
  *
  * ## `role="group" aria-label="관계"` 는 테스트가 이름으로 찾는 자리다
  *

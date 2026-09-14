@@ -31,8 +31,8 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
 - `lib/jsonapi/` · `lib/grid/` · `lib/bulk/`에 이 저장소의 실제 자원 이름을
   가리키는 문자열 리터럴이 **코드로**(주석의 설명적 언급이 아니라) 나타나면
   위반이다.
-- `lib/resources/*.ts` · `lib/grid/*.ts` · `lib/bulk/*.ts`에 JSX가 있으면
-  위반이다.
+- `lib/resources/*.ts` · `lib/grid/*.ts` · `lib/bulk/*.ts` · `lib/form/*.ts`에
+  JSX가 있으면 위반이다.
 - `app/`에서 `fetch`를 직접 부르면 위반이다.
 - `components/grid/*`에 자원 이름으로 분기하는 코드가 있으면 위반이다.
 - `lib/form/*` · `components/resource/*`에 이 저장소의 실제 자원 이름이나

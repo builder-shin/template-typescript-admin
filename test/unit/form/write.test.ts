@@ -59,6 +59,11 @@ describe('writeDocument - 속성', () => {
     expect(writeDocument(SAMPLE_RESOURCE, form([['rank', '4.5']])).data.attributes.rank).toBe('4.5')
   })
 
+  it('안전 정수 범위를 넘는 정수 문자열은 원문 그대로 보낸다 - Number 가 반올림한 값은 적은 값이 아니다', () => {
+    const huge = '99999999999999999999'
+    expect(writeDocument(SAMPLE_RESOURCE, form([['rank', huge]])).data.attributes.rank).toBe(huge)
+  })
+
   it('폼에 없는 속성은 빈 값으로 다룬다', () => {
     const { attributes } = writeDocument(SAMPLE_RESOURCE, form([])).data
     expect(attributes).toEqual({ name: '', body: null, state: '', weight: null })
