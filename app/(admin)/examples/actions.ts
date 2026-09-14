@@ -5,20 +5,22 @@ import { redirect } from 'next/navigation'
 import type { BulkOutcome } from '@/lib/bulk/executor'
 import { LOGIN_PATH, requireSession } from '@/lib/auth/guard'
 import { clearSession } from '@/lib/auth/session'
+import { resourceFormState } from '@/lib/form/flow'
+import type { ResourceFormState } from '@/lib/form/form-state'
 import { request } from '@/lib/jsonapi/client'
 import type { ErrorObject, SingleDocument } from '@/lib/jsonapi/document'
 import { actionForErrors } from '@/lib/jsonapi/errors'
+import { resourceByType } from '@/lib/resources'
 import { bucketForFailure, isAlreadyGone } from './bulk-outcome'
-import { examplesFormState } from './flow'
-import type { ExamplesFormState } from './form-state'
-import { createExampleRequest, deleteExampleRequest, updateExampleRequest } from './write'
+import { createRequest, deleteRequest, updateRequest } from './write'
 
 /**
  * `examples` 의 생성·수정·삭제 Server Action.
  *
  * 판단은 이미 다른 파일에 있다 - 필드 배치는 `lib/jsonapi/errors.ts`(Task 2),
- * 실패/성공 분류는 `examplesFormState`(./flow.ts), 요청 조립은
- * `createExampleRequest`·`updateExampleRequest`·`deleteExampleRequest`(./write.ts).
+ * 실패/성공 분류는 `resourceFormState`(lib/form/flow.ts), 요청 조립은
+ * `createRequest`·`updateRequest`·`deleteRequest`(./write.ts). 본문은
+ * `lib/form/write.ts` 의 `writeDocument` 가 만든다.
  * 이 파일은 그것들을 기계적으로 잇기만 한다 - `app/(auth)/actions.ts` 가
  * `lib/auth/flow.ts` 를 잇기만 하는 것과 같은 이유다(이 파일도 headers()·
  * `requireSession()` 안의 `cookies()`·redirect() 가 요청 스코프를 요구해
@@ -83,7 +85,7 @@ import { createExampleRequest, deleteExampleRequest, updateExampleRequest } from
  * `redirectToLoginOnSessionDeath` 가 세 단건 Action(`createExampleAction`·
  * `updateExampleAction`·`deleteExampleAction`) 에서 공유하는 이유는 셋 다
  * "실패를 어떻게 보여줄지" 이전에 먼저 "이 실패가 세션이 죽은 것인지"부터
- * 갈라야 하기 때문이다 - `examplesFormState`(그리기)나 `throw`(오류 페이지)로
+ * 갈라야 하기 때문이다 - `resourceFormState`(그리기)나 `throw`(오류 페이지)로
  * 넘기기 전에 검사한다. 이 함수를 `bulkDeleteExampleAction` 에는 쓰지
  * 않는다 - 그 Action 의 실패는 `components/grid/bulk-result.tsx` 가 이미
  * `sessionLost` 버킷(재시도 버튼 숨김 + "다시 로그인" 링크)으로 온전히
@@ -102,6 +104,9 @@ import { createExampleRequest, deleteExampleRequest, updateExampleRequest } from
  * 일어나는지는 e2e 계층의 몫으로 남는다(아직 그 e2e 는 없다 - 정본 백엔드에
  * 대고 회전 경합을 재현해야 해서 이번 라운드 범위 밖으로 남겼다).
  */
+
+/** 이 파일의 네 Action 이 다루는 자원. 둘째 계획이 slug 인자로 바꾼다. */
+const EXAMPLES = resourceByType('examples')!
 
 /**
  * `errors` 가 세션이 죽어서 난 것이면 쿠키를 지우고 로그인으로 보낸다 -
@@ -146,18 +151,18 @@ const DELETE_FETCH_TIMEOUT_MS = 10_000
 
 /** 성공하면 만들어진 자원의 상세로 보낸다(스펙 표) - 실측: `POST /api/v1/examples` -> 201. */
 export async function createExampleAction(
-  _previous: ExamplesFormState,
+  _previous: ResourceFormState,
   formData: FormData,
-): Promise<ExamplesFormState> {
+): Promise<ResourceFormState> {
   const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<SingleDocument>(
-    ...createExampleRequest(formData, session.accessToken, acceptLanguage),
+    ...createRequest(EXAMPLES, formData, session.accessToken, acceptLanguage),
   )
 
   if (!result.ok) {
     await redirectToLoginOnSessionDeath(result.errors)
-    return examplesFormState(result.errors)
+    return resourceFormState(result.errors)
   }
   // status(리터럴)가 아니라 document 자체로 좁힌다(client.ts 의 문서화된
   // 함정 - JsonApiResult<T> 는 판별자가 섞여 있어 status 비교로는 멤버를
@@ -174,25 +179,25 @@ export async function createExampleAction(
 /** 성공하면 상세를 갱신한다(스펙 표) - 실측: `PATCH /api/v1/examples/{id}` -> 200. */
 export async function updateExampleAction(
   id: string,
-  _previous: ExamplesFormState,
+  _previous: ResourceFormState,
   formData: FormData,
-): Promise<ExamplesFormState> {
+): Promise<ResourceFormState> {
   const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<SingleDocument>(
-    ...updateExampleRequest(id, formData, session.accessToken, acceptLanguage),
+    ...updateRequest(EXAMPLES, id, formData, session.accessToken, acceptLanguage),
   )
 
   if (!result.ok) {
     await redirectToLoginOnSessionDeath(result.errors)
-    return examplesFormState(result.errors)
+    return resourceFormState(result.errors)
   }
   redirect(`/examples/${id}`)
 }
 
 /**
  * 성공하면 목록으로 보낸다(스펙 표) - 실측: `DELETE /api/v1/examples/{id}`
- * -> 204, 본문 없음. 실패는 폼 필드가 없는 동작이라 examplesFormState 로
+ * -> 204, 본문 없음. 실패는 폼 필드가 없는 동작이라 resourceFormState 로
  * 받지 않고 던진다 - `app/error.tsx`가 받는다(읽기 경로와 같은 선택,
  * lib/jsonapi/client.ts 의 request() 문서화된 선택지).
  *
@@ -216,7 +221,8 @@ export async function deleteExampleAction(id: string): Promise<void> {
   const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<never>(
-    ...deleteExampleRequest(
+    ...deleteRequest(
+      EXAMPLES,
       id,
       session.accessToken,
       acceptLanguage,
@@ -271,7 +277,8 @@ export async function bulkDeleteExampleAction(id: string): Promise<BulkOutcome> 
   const session = await requireSession()
   const acceptLanguage = (await headers()).get('accept-language')
   const result = await request<never>(
-    ...deleteExampleRequest(
+    ...deleteRequest(
+      EXAMPLES,
       id,
       session.accessToken,
       acceptLanguage,
