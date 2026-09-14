@@ -8,12 +8,13 @@
 
 ## 하위 구성
 
-| 위치                  | 무엇인가                                                                                                                                       |
-| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `components/ui/`      | shadcn 레지스트리가 그대로 넣은 부품(`base-nova` 스타일). 아래 "`'use client'` 정책" 참고                                                      |
-| `components/grid/`    | 자원을 모르는 그리드 UI(그리드·필터 바·선택 바·일괄 확인·결과 표) - 아래 "자원 이름으로 분기하지 않는다" 참고                                  |
-| `components/form/`    | 화면 공용 폼 UI(제출 버튼·필드 오류·폼 배너) - 자원을 모른다                                                                                   |
-| 그 밖의 최상위 `.tsx` | `dashboard-01` 블록이 들여온 대시보드·사이드바 부품(`section-cards`·`site-header`·`chart-area-interactive`·`app-sidebar`·`nav-*`·`data-table`) |
+| 위치                   | 무엇인가                                                                                                                                        |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/ui/`       | shadcn 레지스트리가 그대로 넣은 부품(`base-nova` 스타일). 아래 "`'use client'` 정책" 참고                                                       |
+| `components/grid/`     | 자원을 모르는 그리드 UI(그리드·필터 바·선택 바·일괄 확인·결과 표) - 아래 "자원 이름으로 분기하지 않는다" 참고                                   |
+| `components/form/`     | 화면 공용 폼 UI(제출 버튼·필드 오류·폼 배너) - 자원을 모른다                                                                                    |
+| `components/resource/` | 자원을 모르는 폼·상세 부품(`resource-form`·`resource-detail`·`field-control`) - 선언의 속성·관계를 순서대로 돌 뿐 자원 이름으로 분기하지 않는다 |
+| 그 밖의 최상위 `.tsx`  | `dashboard-01` 블록이 들여온 대시보드·사이드바 부품(`section-cards`·`site-header`·`chart-area-interactive`·`app-sidebar`·`nav-*`·`data-table`)  |
 
 **사이드바 부품 다섯 중 셋만 호출된다**(Task 15, 실측 2026-09-12) - `app-sidebar.tsx`
 는 `nav-main.tsx`·`nav-user.tsx`만 부른다. `nav-documents.tsx`·`nav-secondary.tsx`는
@@ -31,11 +32,14 @@
 
 ## 자원 이름으로 분기하지 않는다
 
-`components/grid/*`에 이 저장소의 실제 자원 이름(`examples`·`exampleCategories`·
+`components/grid/*`·`components/resource/*`에 이 저장소의 실제 자원 이름(`examples`·`exampleCategories`·
 `exampleTags` 등)을 가리키는 문자열 리터럴이나 그 이름에 의존하는 분기가
 코드로 나타나면 위반이다(주석의 설명적 언급은 대상이 아니다 - 실측
 2026-09-12, 코드상 0건). `ResourceGrid`는 `ResourceDef`와 Server Action
 참조만 받아 그린다 - 어떤 자원을 그리는지는 호출부(`app/`)만 안다.
+`ResourceForm`·`RelationshipBadges`·`AttributeTable`(`components/resource/`)도
+같다 - `ResourceDef` 와 화면이 조회해 넘긴 보기 목록·응답 객체만 받아
+그린다. 종류(`kind`)·cardinality 로 갈라 그리는 것은 자원 분기가 아니다.
 
 ## `'use client'` 정책 - 레지스트리 부품
 
@@ -73,20 +77,22 @@ add table` 또는 `add label`을 다시 돌리면 되살아나므로, 되살아�
 어느 쪽인지는 이 기준(프리미티브 의존 여부)으로 판단한다 - 파일 안에 훅이
 있는지만 보지 않는다.
 
-`components/grid/*`·`components/form/*`는 상호작용(선택·드래그·폼 입력)이
+`components/grid/*`·`components/form/*`·`components/resource/*`는 상호작용(선택·드래그·폼 입력)이
 실제로 필요해서 `'use client'`를 스스로 선언한 것들이다. 이 부류는 레지스트리
-판정표 대상이 아니다. 지시어가 **없는** 예외 셋과 그 이유는 서로 다르다 -
+판정표 대상이 아니다. 지시어가 **없는** 예외 다섯과 그 이유는 서로 다르다 -
 같은 줄에 묶어 두면 하나가 바뀔 때 나머지도 같이 바뀐 것처럼 읽힌다:
 
-| 파일                              | 왜 지시어가 없나                                                                                                                                                                                                                                                                                                                                              |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `components/grid/format.ts`       | 서버 컴포넌트인 상세 화면이 이 함수들을 **값으로 호출**한다(루트 `AGENTS.md` 규칙 6번의 첫째 사례가 여기서 나왔다)                                                                                                                                                                                                                                            |
-| `components/form/form-banner.tsx` | 서버 컴포넌트 **넷**이 읽기 실패를 이 배너로 그린다(`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/new/page.tsx`·`examples/[id]/page.tsx`). 그래서 껍데기로 `alert`(지시어 없음)를 골랐고 `field` 계열은 들이지 않는다                                                                                                                                  |
-| `components/form/field-error.tsx` | 지시어를 선언하지 않았을 뿐, **서버에서는 쓸 수 없다** - 레지스트리 `field`(`'use client'`)의 `FieldError` 를 값으로 가져오기 때문이다. 읽는 곳이 클라이언트 컴포넌트 둘뿐이라 문제가 되지 않는다(실측 2026-09-14: `app/(admin)/examples/[id]/edit-form.tsx`·`app/(auth)/credentials-form.tsx`). 서버 컴포넌트가 이것을 그리려 하면 그 순간 규칙 6번 위반이다 |
+| 파일                                      | 왜 지시어가 없나                                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `components/grid/format.ts`               | 서버 컴포넌트인 상세 화면이 이 함수들을 **값으로 호출**한다(루트 `AGENTS.md` 규칙 6번의 첫째 사례가 여기서 나왔다)                                                                                                                                                                                                                                          |
+| `components/form/form-banner.tsx`         | 서버 컴포넌트 **넷**이 읽기 실패를 이 배너로 그린다(`app/(admin)/page.tsx`·`examples/page.tsx`·`examples/new/page.tsx`·`examples/[id]/page.tsx`). 그래서 껍데기로 `alert`(지시어 없음)를 골랐고 `field` 계열은 들이지 않는다                                                                                                                                |
+| `components/form/field-error.tsx`         | 지시어를 선언하지 않았을 뿐, **서버에서는 쓸 수 없다** - 레지스트리 `field`(`'use client'`)의 `FieldError` 를 값으로 가져오기 때문이다. 읽는 곳이 클라이언트 컴포넌트 둘뿐이라 문제가 되지 않는다(실측 2026-09-14: `components/resource/resource-form.tsx`·`app/(auth)/credentials-form.tsx`). 서버 컴포넌트가 이것을 그리려 하면 그 순간 규칙 6번 위반이다 |
+| `components/resource/field-control.ts`    | 순수 판단(kind → 컨트롤)만 있다. `components/grid/filter-control.ts` 와 같은 꼴로, 단위 테스트가 직접 부르고 서버가 값으로 불러도 안전하다                                                                                                                                                                                                                  |
+| `components/resource/resource-detail.tsx` | 서버 컴포넌트인 상세 화면이 그린다. 훅·핸들러가 없고, 값으로 부르는 것(`relationshipLabel`·`formatDateTime`·`relationshipHeading`)이 전부 지시어 없는 모듈이다. `resource-form.tsx` 만 `useActionState` 때문에 `'use client'` 다                                                                                                                            |
 
 ## 검증
 
-`components/grid/`의 순수 헬퍼(`format.ts`)는 `test/unit/`이 지킨다. 선택·
+`components/grid/`의 순수 헬퍼(`format.ts`·`filter-control.ts`)와 `components/resource/field-control.ts` 는 `test/unit/`이 지킨다. 선택·
 일괄 작업·폼 참여 같은 실제 DOM 동작은 `test/e2e/`만 지킨다(이 저장소에는
 DOM 테스트 하네스가 없다). 지시어 경계(위 "`'use client'` 정책"과 별개로,
 루트 `AGENTS.md` 규칙 6번 - 비-클라이언트 모듈이 `'use client'` 모듈의 값을

@@ -1,11 +1,14 @@
+import { optionsFromDocument, type OptionItem } from '@/lib/form/options'
 import { withAcceptLanguage, type JsonApiResult, type RequestOptions } from '@/lib/jsonapi/client'
-import type { CollectionDocument } from '@/lib/jsonapi/document'
-import type { ResourceDef } from '@/lib/resources'
+import type { CollectionDocument, ErrorObject } from '@/lib/jsonapi/document'
+import { resourceByType, type ResourceDef } from '@/lib/resources'
 
 /**
- * 생성·수정 폼의 선택 목록(분류·라벨)을 조회하는 요청 - `count.ts`·`health.ts`
+ * 생성·수정 폼의 관계 선택 목록을 조회하는 요청 - `count.ts`·`health.ts`
  * 와 같은 이유로 화면 옆에 둔다(lib/resources/ 는 어떤 내부 모듈도 import
- * 하지 않는 순수 선언 계층이다, lib/resources/AGENTS.md).
+ * 하지 않는 순수 선언 계층이다, lib/resources/AGENTS.md). 문서 → 항목 변환
+ * (`optionsFromDocument`)은 `lib/form/options.ts` 에 있다 - 그것은 순수
+ * 변환이라 요청 조립과 층이 다르다.
  *
  * `listRequest`(../list.ts)를 재사용하지 않는다 - 이유는 include 다. 실측
  * (2026-09-12): `exampleCategories`·`exampleTags` 는 `includes` 허용 목록이
@@ -30,26 +33,8 @@ export function optionsRequest(
   return [resource.path, withAcceptLanguage({ query }, acceptLanguage)]
 }
 
-export interface OptionItem {
-  readonly id: string
-  readonly name: string
-}
-
 /**
- * 목록 문서를 선택 목록으로 바꾼다. `name` 이 문자열이 아니면(계약 위반) id
- * 로 대신한다 - components/grid/format.ts 의 `relationshipLabel` 과 같은
- * 방어다.
- */
-export function optionsFromDocument(document: CollectionDocument): OptionItem[] {
-  return document.data.map((object) => {
-    const name = object.attributes?.name
-    return { id: object.id, name: typeof name === 'string' ? name : object.id }
-  })
-}
-
-/**
- * `optionsRequest` 의 결과를 문서로 좁힌다 - `[id]/page.tsx`·`new/page.tsx` 가
- * 분류·라벨 각각에 이 함수를 부른다.
+ * `optionsRequest` 의 결과를 문서로 좁힌다.
  *
  * **호출부가 `!result.ok` 를 먼저 걸렀다고 가정한다.** 예전에는 이 함수
  * 자신이 `result.errors[0]?.detail` 을 메시지에 실어 던졌다 - 그러면
@@ -71,4 +56,58 @@ export function unwrapOptionsResult(result: JsonApiResult<CollectionDocument>): 
     throw new Error('선택 목록 응답에 본문이 없습니다.')
   }
   return result.document
+}
+
+/** 관계 하나의 보기 목록 요청 계획 - 관계 키, 대상 자원, 그 자원의 `optionsRequest` 튜플. */
+export interface OptionRequestPlan {
+  readonly key: string
+  readonly target: ResourceDef
+  readonly request: [path: string, options: RequestOptions]
+}
+
+/**
+ * 자원의 관계마다 대상 자원의 보기 목록 요청을 만든다 - 선언 순서대로.
+ * 화면은 이 계획들을 `Promise.all` 로 함께 보내고 `optionsByRelationship`
+ * 으로 접는다. 대상 자원이 `RESOURCES` 에 없으면 던진다 - 불변식 테스트가
+ * 그 선언을 막지만, 이 자리가 조용히 빈 목록을 그리는 것보다 던지는 것이
+ * 낫다(관계 선택기가 비어 있으면 운영자는 그 관계를 걸 수 없다).
+ */
+export function relationshipOptionRequests(
+  resource: ResourceDef,
+  acceptLanguage: string | null,
+): readonly OptionRequestPlan[] {
+  return Object.entries(resource.relationships).map(([key, relationship]) => {
+    const target = resourceByType(relationship.type)
+    if (target === undefined) {
+      throw new Error(`관계 ${key} 의 대상 자원 ${relationship.type} 이 선언에 없습니다.`)
+    }
+    return { key, target, request: optionsRequest(target, acceptLanguage) }
+  })
+}
+
+export type OptionsOutcome =
+  | { readonly ok: true; readonly options: Readonly<Record<string, readonly OptionItem[]>> }
+  | { readonly ok: false; readonly errors: readonly ErrorObject[] }
+
+/**
+ * 계획들과 그 결과를 관계 키별 보기 목록으로 접는다. 하나라도 실패하면 그
+ * 오류를 돌려주고 화면이 배너로 바꾼다 - 폼을 반쪽으로 그리지 않는다
+ * (보기 없이 만들면 관계가 조용히 빠진다). 204 는 `unwrapOptionsResult` 가
+ * 던진다.
+ */
+export function optionsByRelationship(
+  plans: readonly OptionRequestPlan[],
+  results: readonly JsonApiResult<CollectionDocument>[],
+): OptionsOutcome {
+  if (plans.length !== results.length) {
+    throw new Error('내부 오류: 요청 계획과 결과의 수가 다릅니다.')
+  }
+  const options: Record<string, readonly OptionItem[]> = {}
+  for (const [position, plan] of plans.entries()) {
+    const result = results[position]
+    if (result === undefined) throw new Error('내부 오류: 요청 계획과 결과의 수가 다릅니다.')
+    if (!result.ok) return { ok: false, errors: result.errors }
+    options[plan.key] = optionsFromDocument(plan.target, unwrapOptionsResult(result))
+  }
+  return { ok: true, options }
 }

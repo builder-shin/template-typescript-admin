@@ -14,6 +14,7 @@
 | 위치                                                          | 소유하는 것                                            |
 | -------------------------------------------------------------- | --------------------------------------------------------- |
 | `superpowers/specs/2026-09-12-admin-template-design.md`         | 설계 - **왜** 이 계층 계약인가. 계층 소유권의 운용 정본은 구현 뒤 루트 `AGENTS.md`가 갖는다(그 문서 0장이 스스로 그렇게 넘긴다). |
+| `superpowers/specs/2026-09-14-declarative-resources-design.md`  | 선언 하나로 자원 화면 전부를 만드는 설계 - 원 스펙 10절의 "제네릭 화면 생성기" 제외를 뒤집는다. 원 스펙 5.1·10절에 이 문서를 가리키는 정정 註가 있다. |
 | `superpowers/plans/2026-09-12-admin-template.md`                | 그 설계를 과업 단위로 쪼갠 구현 계획.                    |
 | `provenance/copied-core.json`                                   | 복사해 온 코어(`lib/jsonapi`·`lib/auth`·`lib/config`·`proxy.ts`)의 출처 커밋·경로 기록. `scripts/check-provenance.sh`가 매 게이트 실행마다 이 파일의 존재와 형식, 기록된 경로의 실재를 확인한다. |
 

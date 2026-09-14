@@ -23,8 +23,8 @@ import { FieldError as FieldErrorPrimitive } from '@/components/ui/field'
  *
  * `components/form/form-banner.tsx` 와 달리 이 파일은 `'use client'` 모듈
  * (`field.tsx`)에서 값을 가져온다. 그래도 되는 이유는 이 컴포넌트를 읽는
- * 곳이 클라이언트 컴포넌트 둘뿐이기 때문이다(실측: `app/(admin)/examples/[id]/
- * edit-form.tsx`·`app/(auth)/credentials-form.tsx`). 서버 컴포넌트가 이
+ * 곳이 클라이언트 컴포넌트 둘뿐이기 때문이다(실측: `components/resource/
+ * resource-form.tsx`·`app/(auth)/credentials-form.tsx`). 서버 컴포넌트가 이
  * 컴포넌트를 그리려 하면 그 순간 루트 `AGENTS.md` 규칙 6번의 첫째 위반이
  * 된다 - 그때는 배너처럼 지시어 없는 부품으로 다시 내려와야 한다.
  */

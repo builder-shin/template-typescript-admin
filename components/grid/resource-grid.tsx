@@ -30,7 +30,12 @@ import {
   type GridState,
 } from '@/lib/grid/state'
 import { runBulk, type BulkOutcome, type BulkReport } from '@/lib/bulk/executor'
-import type { ColumnDef, ColumnKind, ResourceDef } from '@/lib/resources'
+import {
+  relationshipHeading,
+  type ColumnDef,
+  type ColumnKind,
+  type ResourceDef,
+} from '@/lib/resources'
 import type { CollectionDocument, ResourceObject } from '@/lib/jsonapi/document'
 import {
   indexResources,
@@ -125,12 +130,17 @@ export function extractCell(
   column: ColumnDef,
   object: ResourceObject,
   index: ResourceIndex,
+  headingKey: string | undefined,
 ): GridCellValue {
   const relationship = object.relationships?.[column.key]
   if (relationship !== undefined) {
-    if (column.kind === 'badges') return resolveToMany(relationship, index).map(relationshipLabel)
+    if (column.kind === 'badges') {
+      return resolveToMany(relationship, index).map((target) =>
+        relationshipLabel(target, headingKey),
+      )
+    }
     const resolved = resolveToOne(relationship, index)
-    return resolved === null ? null : relationshipLabel(resolved)
+    return resolved === null ? null : relationshipLabel(resolved, headingKey)
   }
   const value = object.attributes?.[column.key]
   if (typeof value === 'string' || typeof value === 'number') return value
@@ -142,7 +152,12 @@ export function buildRows(resource: ResourceDef, document: CollectionDocument): 
   return document.data.map((object) => ({
     id: object.id,
     cells: Object.fromEntries(
-      resource.columns.map((column) => [column.key, extractCell(column, object, index)]),
+      resource.columns.map((column) => [
+        column.key,
+        // 관계 열은 대상 자원의 `heading` 으로 이름을 읽는다 - 속성 열에는
+        // `undefined` 가 넘어가고 `extractCell` 이 그 값을 쓰지 않는다.
+        extractCell(column, object, index, relationshipHeading(resource, column.key)),
+      ]),
     ),
   }))
 }

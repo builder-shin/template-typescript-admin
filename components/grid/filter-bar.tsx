@@ -165,7 +165,7 @@ function FilterSelect({
    * **`items` 를 반드시 넘긴다.** 넘기지 않으면 `SelectValue` 가 선택된
    * **값**을 그대로 그린다 - 관계 필터의 값은 UUID 라 URL 에 필터가 실린
    * 상태로 화면이 새로 서면 트리거에 UUID 가 뜬다. 실측으로 겪은 결함이고
-   * (`app/(admin)/examples/[id]/edit-form.tsx` 의 `categoryItems` 머리말),
+   * (`components/resource/resource-form.tsx` 의 `OneField` 머리말),
    * 같은 실수를 여기서 되풀이하지 않는다.
    */
   const items: Record<string, string> = { [ANY]: '전체' }

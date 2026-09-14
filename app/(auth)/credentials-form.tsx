@@ -92,8 +92,8 @@ function CredentialField({
 
   return (
     // `Field` 의 `data-invalid` 가 라벨까지 오류 색으로 물들인다(레지스트리:
-    // `data-[invalid=true]:text-destructive`) - 예제 폼과 같은 규칙이다
-    // (`app/(admin)/examples/[id]/edit-form.tsx` 의 `TextField`).
+    // `data-[invalid=true]:text-destructive`) - 자원 폼과 같은 규칙이다
+    // (`components/resource/resource-form.tsx` 의 `AttributeField`).
     <Field data-invalid={invalid}>
       <FieldLabel htmlFor={inputId}>{label}</FieldLabel>
       <Input

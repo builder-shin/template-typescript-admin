@@ -12,27 +12,32 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
 아래 표는 소유 관계이지 파일 목록이 아니다 - 어떤 위치가 아직 비어 있어도 그
 행의 계약은 이미 유효하다. 어느 파일이 실재하는지는 저장소를 보면 된다.
 
-| 위치               | 소유하는 것                                                     | 소유하지 않는 것        |
-| ------------------ | --------------------------------------------------------------- | ----------------------- |
-| `lib/jsonapi/`     | 문서 파싱, `included` 정규화, 쿼리 직렬화, 오류 분류, HTTP 협상 | 자원별 지식, 화면       |
-| `lib/resources/`   | 자원의 타입·필터·정렬·폼 스키마·표시 라벨                       | JSX, `fetch`            |
-| `lib/grid/`        | URL이 말하는 목록 상태 → 백엔드 질의로의 변환, URL 직렬화       | JSX, `fetch`, 자원 분기 |
-| `lib/bulk/`        | 일괄 실행기 - 순차 실행, 부분 실패 집계, 취소                   | JSX, 자원 분기          |
-| `lib/auth/`        | 쿠키 세션, 토큰 만료 판정, 가드                                 | 화면 이동 결정          |
-| `lib/config/`      | 환경 변수 해석의 정본 - 필수 변수의 시작 실패 판정              | 자원별 지식, 화면       |
-| `proxy.ts`         | 보호 경로 목록, 경로 가드, 토큰 회전                            | 화면, 자원별 지식       |
-| `app/`             | 화면, Server Action, 라우팅                                     | `fetch`, 쿼리 조립      |
-| `components/grid/` | 자원 선언을 읽어 만드는 획일 그리드 UI                          | 자원별 분기             |
+| 위치                   | 소유하는 것                                                                   | 소유하지 않는 것        |
+| ---------------------- | ----------------------------------------------------------------------------- | ----------------------- |
+| `lib/jsonapi/`         | 문서 파싱, `included` 정규화, 쿼리 직렬화, 오류 분류, HTTP 협상               | 자원별 지식, 화면       |
+| `lib/resources/`       | 자원의 타입·필터·정렬·폼 스키마·표시 라벨                                     | JSX, `fetch`            |
+| `lib/grid/`            | URL이 말하는 목록 상태 → 백엔드 질의로의 변환, URL 직렬화                     | JSX, `fetch`, 자원 분기 |
+| `lib/bulk/`            | 일괄 실행기 - 순차 실행, 부분 실패 집계, 취소                                 | JSX, 자원 분기          |
+| `lib/auth/`            | 쿠키 세션, 토큰 만료 판정, 가드                                               | 화면 이동 결정          |
+| `lib/config/`          | 환경 변수 해석의 정본 - 필수 변수의 시작 실패 판정                            | 자원별 지식, 화면       |
+| `proxy.ts`             | 보호 경로 목록, 경로 가드, 토큰 회전                                          | 화면, 자원별 지식       |
+| `app/`                 | 화면, Server Action, 라우팅                                                   | `fetch`, 쿼리 조립      |
+| `components/grid/`     | 자원 선언을 읽어 만드는 획일 그리드 UI                                        | 자원별 분기             |
+| `lib/form/`            | 선언 + `FormData` → JSON:API 쓰기 문서, 응답 문서 → 폼 초기값, 오류 → 폼 상태 | JSX, `fetch`, 자원 분기 |
+| `components/resource/` | 자원 선언을 읽어 만드는 획일 폼·상세 UI                                       | 자원별 분기             |
 
 **위반의 정의:**
 
 - `lib/jsonapi/` · `lib/grid/` · `lib/bulk/`에 이 저장소의 실제 자원 이름을
   가리키는 문자열 리터럴이 **코드로**(주석의 설명적 언급이 아니라) 나타나면
   위반이다.
-- `lib/resources/*.ts` · `lib/grid/*.ts` · `lib/bulk/*.ts`에 JSX가 있으면
-  위반이다.
+- `lib/resources/*.ts` · `lib/grid/*.ts` · `lib/bulk/*.ts` · `lib/form/*.ts`에
+  JSX가 있으면 위반이다.
 - `app/`에서 `fetch`를 직접 부르면 위반이다.
 - `components/grid/*`에 자원 이름으로 분기하는 코드가 있으면 위반이다.
+- `lib/form/*` · `components/resource/*`에 이 저장소의 실제 자원 이름이나
+  필드 이름(`title` · `category` 등)을 가리키는 문자열 리터럴이 **코드로**
+  나타나면 위반이다 - `lib/grid/`와 같은 규칙이다.
 
 `lib/resources/index.ts`는 손으로 채우는 배열이다. **여기 없으면 그 자원은
 존재하지 않는 것과 같다.** 자동 탐색(glob · `import.meta.glob` · 동적
@@ -116,11 +121,12 @@ FastAPI · NestJS · Rails 세 백엔드가 공유하는 JSON:API 계약을 운�
      쓰기 요청 조립 함수들을 옮겼다. Server Action은 반드시 async 함수여야
      하는데 이 함수들은 순수 동기 함수였다("Server Actions must be async
      functions").
-   - `app/(admin)/examples/form-state.ts` - 런타임 import를 **0개**로
-     유지한다. 폼 상수·타입을 클라이언트 컴포넌트가 값으로 가져가야 하는데,
-     오류 판단 로직을 같은 파일에 두면 `lib/jsonapi/errors` →
-     `lib/jsonapi/client` → `lib/config/settings`(서버 전용, `process.env`를
-     읽는다)까지 클라이언트 번들이 끌어들이는 자리가 된다.
+   - `lib/form/form-state.ts` - 런타임 import를 **0개**로 유지한다. 폼
+     상태·타입·초기값을 클라이언트 컴포넌트(`components/resource/resource-form.tsx`)
+     가 값으로 가져가야 하는데, 오류 판단 로직을 같은 파일에 두면
+     `lib/jsonapi/errors` → `lib/jsonapi/client` → `lib/config/settings`
+     (서버 전용, `process.env`를 읽는다)까지 클라이언트 번들이 끌어들이는
+     자리가 된다. 판단은 `lib/form/flow.ts` 가 갖는다.
 
    다음에 이 저장소에서 순수 함수를 "그냥 옆에 있는 Action·컴포넌트
    파일"에 두고 싶은 유혹이 들면 이 절을 먼저 읽을 것.

@@ -1,4 +1,4 @@
-import { isResourceObject } from '@/lib/jsonapi/normalize'
+import { headingLabel } from '@/lib/form/values'
 import type { ResourceIdentifier, ResourceObject } from '@/lib/jsonapi/document'
 
 /**
@@ -10,7 +10,7 @@ import type { ResourceIdentifier, ResourceObject } from '@/lib/jsonapi/document'
  * 함수든 가리지 않는다)를 "클라이언트 참조"로 바꾼다 - 렌더링에 쓰이는
  * `<Component>` 자리가 아니라 값으로 직접 호출하면 그 자리에서 던진다.
  *
- * 실측(Task 13, 실제 프로덕션 빌드+실제 브라우저): `app/(admin)/examples/[id]/page.tsx`
+ * 실측(실제 프로덕션 빌드+실제 브라우저): `app/(admin)/examples/[id]/page.tsx`
  * (서버 컴포넌트)가 상세 화면의 분류·라벨·생성일·수정일을 그리려고 이 두
  * 함수를 `resource-grid.tsx` 에서 가져다 **직접 호출**했다 - 관계가 없는
  * 행이든 있는 행이든 상관없이 **모든** 상세 화면 요청이 이 에러로 죽었다:
@@ -29,18 +29,24 @@ import type { ResourceIdentifier, ResourceObject } from '@/lib/jsonapi/document'
  */
 
 /**
- * 관계 대상의 표시 이름 - included 로 풀렸으면 이름, 식별자뿐이면 id.
+ * 관계 대상의 표시 이름 - included 로 풀렸으면 대상 자원의 `heading` 속성,
+ * 식별자뿐이면 id.
  *
- * `components/grid/resource-grid.tsx`(목록의 관계 배지)와
- * `app/(admin)/examples/[id]/page.tsx`(상세의 현재 분류·라벨) 둘 다 같은
- * 규칙을 쓴다 - "식별자뿐이면 id 로 대신한다"는 판단이 두 벌로 갈리지 않게
- * 여기 한 곳에 둔다.
+ * 규칙 자체는 `lib/form/values.ts` 의 `headingLabel` 이 갖는다 - 폼의 선택
+ * 목록도 같은 규칙을 써야 하는데 `lib/` 는 `components/` 를 import 할 수
+ * 없어 그쪽에 둔다. 이 이름을 남기는 이유는 둘이다 - 목록의 관계 배지
+ * (`resource-grid.tsx`)와 상세의 현재 관계가 이 이름으로 부르고, 위
+ * 머리말의 RSC 경계 기록이 이 이름에 걸려 있다.
+ *
+ * `headingKey` 는 호출부가 `relationshipHeading(resource, key)`
+ * (`lib/resources`)로 얻는다 - 대상 자원이 선언에 없으면 `undefined` 이고
+ * 그때는 id 로 그린다.
  */
-export function relationshipLabel(target: ResourceObject | ResourceIdentifier): string {
-  if (isResourceObject(target) && typeof target.attributes?.name === 'string') {
-    return target.attributes.name
-  }
-  return target.id
+export function relationshipLabel(
+  target: ResourceObject | ResourceIdentifier,
+  headingKey: string | undefined,
+): string {
+  return headingLabel(target, headingKey)
 }
 
 /**
