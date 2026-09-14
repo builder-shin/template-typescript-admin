@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  optionsFromDocument,
+  optionsByRelationship,
   optionsRequest,
+  relationshipOptionRequests,
   unwrapOptionsResult,
 } from '@/app/(admin)/examples/options'
+import type { JsonApiResult } from '@/lib/jsonapi/client'
+import type { CollectionDocument } from '@/lib/jsonapi/document'
 import { resourceByType } from '@/lib/resources'
+import { defineResource } from '@/lib/resources/define'
+import { SAMPLE_INPUT } from '../../fixtures/resources'
 
 const CATEGORIES = resourceByType('exampleCategories')!
 const EXAMPLES = resourceByType('examples')!
@@ -42,32 +47,18 @@ describe('optionsRequest', () => {
   })
 })
 
-describe('optionsFromDocument', () => {
-  it('id 와 attributes.name 을 뽑는다', () => {
-    const document = {
-      data: [{ type: 'exampleCategories', id: 'c1', attributes: { name: '분류 하나' } }],
-    }
-    expect(optionsFromDocument(document)).toEqual([{ id: 'c1', name: '분류 하나' }])
-  })
-
-  it('name 이 문자열이 아니면(누락 포함) id 로 대신한다', () => {
-    const document = { data: [{ type: 'exampleCategories', id: 'c1' }] }
-    expect(optionsFromDocument(document)).toEqual([{ id: 'c1', name: 'c1' }])
-  })
-})
-
 describe('unwrapOptionsResult', () => {
   it('성공하면 문서를 그대로 돌려준다', () => {
     const document = { data: [] }
     expect(unwrapOptionsResult({ ok: true, status: 200, document })).toBe(document)
   })
 
-  // 호출부(`[id]/page.tsx`·`new/page.tsx`)가 `!result.ok` 를 messageForReadFailure
-  // (../read-result.ts)로 먼저 걸러야 한다 - 이 함수 자신은 detail 을 더 이상
-  // 메시지에 싣지 않는다(app/error.tsx 가 백엔드의 진짜 설명을 discard 하고
-  // "연결할 수 없다"는 거짓 문구를 보여주던 자리였다). 실패한 결과가 여기
-  // 도달하는 것 자체가 호출부의 버그이므로, detail 내용과 무관하게 항상 같은
-  // 내부 오류 문구로 던진다.
+  // 호출부가 `!result.ok` 를 messageForReadFailure(../read-result.ts)로 먼저
+  // 걸러야 한다 - 이 함수 자신은 detail 을 더 이상 메시지에 싣지 않는다
+  // (app/error.tsx 가 백엔드의 진짜 설명을 discard 하고 "연결할 수 없다"는
+  // 거짓 문구를 보여주던 자리였다). 실패한 결과가 여기 도달하는 것 자체가
+  // 호출부의 버그이므로, detail 내용과 무관하게 항상 같은 내부 오류 문구로
+  // 던진다.
   it('실패한 결과가 오면(호출부가 걸렀어야 함) 내부 오류로 던진다 - detail 을 담지 않는다', () => {
     expect(() =>
       unwrapOptionsResult({
@@ -82,5 +73,78 @@ describe('unwrapOptionsResult', () => {
     expect(() => unwrapOptionsResult({ ok: true, status: 204, document: null })).toThrow(
       '선택 목록 응답에 본문이 없습니다.',
     )
+  })
+})
+
+describe('relationshipOptionRequests', () => {
+  it('관계마다 대상 자원의 보기 목록 요청을 만든다 - 순서는 선언 순서다', () => {
+    const plans = relationshipOptionRequests(EXAMPLES, 'ko')
+    expect(plans.map((plan) => plan.key)).toEqual(['category', 'tags'])
+    expect(plans.map((plan) => plan.target.type)).toEqual(['exampleCategories', 'exampleTags'])
+    expect(plans[0]!.request[0]).toBe('/api/v1/categories')
+    expect(plans[0]!.request[1].acceptLanguage).toBe('ko')
+  })
+
+  it('관계가 없는 자원은 빈 배열이다', () => {
+    expect(relationshipOptionRequests(CATEGORIES, null)).toEqual([])
+  })
+
+  it('대상 자원이 선언에 없으면 던진다 - 불변식 테스트가 막지만 여기서도 조용히 넘어가지 않는다', () => {
+    const ghost = defineResource({
+      ...SAMPLE_INPUT,
+      relationships: {
+        owner: { cardinality: 'one', type: 'nowhere', label: '소유자', nullable: true },
+      },
+    })
+    expect(() => relationshipOptionRequests(ghost, null)).toThrow('nowhere')
+  })
+})
+
+describe('optionsByRelationship', () => {
+  const plans = relationshipOptionRequests(EXAMPLES, null)
+
+  it('성공한 결과를 관계 키별 보기 목록으로 편다', () => {
+    const results: JsonApiResult<CollectionDocument>[] = [
+      {
+        ok: true,
+        status: 200,
+        document: {
+          data: [{ type: 'exampleCategories', id: 'c1', attributes: { name: '분류 하나' } }],
+        },
+      },
+      {
+        ok: true,
+        status: 200,
+        document: { data: [{ type: 'exampleTags', id: 't1', attributes: { name: '라벨 하나' } }] },
+      },
+    ]
+    expect(optionsByRelationship(plans, results)).toEqual({
+      ok: true,
+      options: {
+        category: [{ id: 'c1', name: '분류 하나' }],
+        tags: [{ id: 't1', name: '라벨 하나' }],
+      },
+    })
+  })
+
+  it('하나라도 실패하면 그 오류를 그대로 돌려준다 - 폼을 반쪽으로 그리지 않는다', () => {
+    const errors = [{ status: '500', code: 'INTERNAL', detail: '망가짐' }]
+    const results: JsonApiResult<CollectionDocument>[] = [
+      { ok: true, status: 200, document: { data: [] } },
+      { ok: false, status: 500, errors },
+    ]
+    expect(optionsByRelationship(plans, results)).toEqual({ ok: false, errors })
+  })
+
+  it('204 는 던진다 - unwrapOptionsResult 의 판단 그대로', () => {
+    const results: JsonApiResult<CollectionDocument>[] = [
+      { ok: true, status: 204, document: null },
+      { ok: true, status: 200, document: { data: [] } },
+    ]
+    expect(() => optionsByRelationship(plans, results)).toThrow('선택 목록 응답에 본문이 없습니다.')
+  })
+
+  it('계획과 결과의 수가 다르면 던진다 - 호출부의 버그다', () => {
+    expect(() => optionsByRelationship(plans, [])).toThrow('내부 오류')
   })
 })

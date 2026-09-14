@@ -124,17 +124,17 @@ describe('sortingStateFromToken / sortTokenFromState', () => {
 describe('extractCell', () => {
   it('attributes 자체가 없는 자원 객체는 던지지 않고 null 을 낸다', () => {
     const object: ResourceObject = { type: 'examples', id: '1' }
-    expect(extractCell(TITLE, object, indexResources([]))).toBeNull()
+    expect(extractCell(TITLE, object, indexResources([]), undefined)).toBeNull()
   })
 
   it('일반 속성은 그대로 옮긴다', () => {
     const object: ResourceObject = { type: 'examples', id: '1', attributes: { title: '제목' } }
-    expect(extractCell(TITLE, object, indexResources([]))).toBe('제목')
+    expect(extractCell(TITLE, object, indexResources([]), undefined)).toBe('제목')
   })
 
   it('관계 키 자체가 응답에 없으면(포함되지 않음) null 을 낸다 - 던지지 않는다', () => {
     const object: ResourceObject = { type: 'examples', id: '1' }
-    expect(extractCell(CATEGORY, object, indexResources([]))).toBeNull()
+    expect(extractCell(CATEGORY, object, indexResources([]), 'name')).toBeNull()
   })
 
   it('to-one 관계가 비어 있으면(data: null) null 을 낸다', () => {
@@ -143,10 +143,10 @@ describe('extractCell', () => {
       id: '1',
       relationships: { category: { data: null } },
     }
-    expect(extractCell(CATEGORY, object, indexResources([]))).toBeNull()
+    expect(extractCell(CATEGORY, object, indexResources([]), 'name')).toBeNull()
   })
 
-  it('included 로 풀린 to-one 관계는 이름을 낸다', () => {
+  it('included 로 풀린 to-one 관계는 대상 자원의 heading 속성을 낸다', () => {
     const object: ResourceObject = {
       type: 'examples',
       id: '1',
@@ -155,7 +155,19 @@ describe('extractCell', () => {
     const index = indexResources([
       { type: 'exampleCategories', id: '7', attributes: { name: '분류A' } },
     ])
-    expect(extractCell(CATEGORY, object, index)).toBe('분류A')
+    expect(extractCell(CATEGORY, object, index, 'name')).toBe('분류A')
+  })
+
+  it('heading 이 name 이 아닌 대상은 그 키로 읽는다 - name 을 박아 읽으면 여기서 드러난다', () => {
+    const object: ResourceObject = {
+      type: 'examples',
+      id: '1',
+      relationships: { category: { data: { type: 'exampleCategories', id: '7' } } },
+    }
+    const index = indexResources([
+      { type: 'exampleCategories', id: '7', attributes: { name: '엉뚱', title: '분류A' } },
+    ])
+    expect(extractCell(CATEGORY, object, index, 'title')).toBe('분류A')
   })
 
   it('included 에 없는 to-one 관계는 식별자 id 를 낸다 - 던지지 않는다', () => {
@@ -164,7 +176,7 @@ describe('extractCell', () => {
       id: '1',
       relationships: { category: { data: { type: 'exampleCategories', id: '7' } } },
     }
-    expect(extractCell(CATEGORY, object, indexResources([]))).toBe('7')
+    expect(extractCell(CATEGORY, object, indexResources([]), 'name')).toBe('7')
   })
 
   it('included 에 없는 to-many 관계는 식별자 id 배열을 낸다 - 던지지 않는다', () => {
@@ -180,7 +192,7 @@ describe('extractCell', () => {
         },
       },
     }
-    expect(extractCell(TAGS, object, indexResources([]))).toEqual(['a', 'b'])
+    expect(extractCell(TAGS, object, indexResources([]), 'name')).toEqual(['a', 'b'])
   })
 
   it('빈 to-many 관계는 빈 배열을 낸다', () => {
@@ -189,14 +201,17 @@ describe('extractCell', () => {
       id: '1',
       relationships: { tags: { data: [] } },
     }
-    expect(extractCell(TAGS, object, indexResources([]))).toEqual([])
+    expect(extractCell(TAGS, object, indexResources([]), 'name')).toEqual([])
   })
 })
 
 describe('relationshipLabel', () => {
-  it('included 로 풀린 자원 객체는 attributes.name 을 낸다', () => {
+  it('included 로 풀린 자원 객체는 heading 속성을 낸다', () => {
     expect(
-      relationshipLabel({ type: 'exampleCategories', id: '7', attributes: { name: '분류A' } }),
+      relationshipLabel(
+        { type: 'exampleCategories', id: '7', attributes: { name: '분류A' } },
+        'name',
+      ),
     ).toBe('분류A')
   })
 
@@ -204,17 +219,25 @@ describe('relationshipLabel', () => {
     // {type, id} 뿐인 값은 isResourceObject 가 false 를 내는 자리다 -
     // extractCell 의 "included 에 없는 관계는 식별자 id 를 낸다" 테스트와
     // 같은 경계를 이 함수 자신에 대해서도 잰다.
-    expect(relationshipLabel({ type: 'exampleCategories', id: '7' })).toBe('7')
+    expect(relationshipLabel({ type: 'exampleCategories', id: '7' }, 'name')).toBe('7')
   })
 
-  it('자원 객체이지만 attributes.name 이 문자열이 아니면(누락 포함) id 로 대신한다', () => {
+  it('자원 객체이지만 heading 속성이 문자열이 아니면(누락 포함) id 로 대신한다', () => {
     // 위 테스트와 다른 경로다 - 여기서는 isResourceObject 가 true 다
-    // (attributes 멤버가 있다). 그런데도 name 이 문자열이 아니라서 여전히
-    // id 로 떨어져야 한다 - "자원 객체인가"와 "이름이 있는가"를 같은
-    // 조건으로 뭉뚱그리면(예: `isResourceObject(target)` 만으로 분기하면)
-    // 이 케이스에서 `target.attributes.name`(undefined)을 그대로 반환해
-    // 실패한다.
-    expect(relationshipLabel({ type: 'exampleCategories', id: '7', attributes: {} })).toBe('7')
+    // (attributes 멤버가 있다). 그런데도 heading 이 문자열이 아니라서 여전히
+    // id 로 떨어져야 한다.
+    expect(relationshipLabel({ type: 'exampleCategories', id: '7', attributes: {} }, 'name')).toBe(
+      '7',
+    )
+  })
+
+  it('heading 키가 undefined 면 id 다 - 대상 자원이 선언에 없을 때', () => {
+    expect(
+      relationshipLabel(
+        { type: 'exampleCategories', id: '7', attributes: { name: '분류A' } },
+        undefined,
+      ),
+    ).toBe('7')
   })
 })
 

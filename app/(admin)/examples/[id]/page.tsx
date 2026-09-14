@@ -16,7 +16,8 @@ import { indexResources, resolveToMany, resolveToOne } from '@/lib/jsonapi/norma
 import { resourceByType } from '@/lib/resources'
 import { messageForReadFailure } from '../../read-result'
 import { deleteExampleAction, updateExampleAction } from '../actions'
-import { optionsFromDocument, optionsRequest, unwrapOptionsResult } from '../options'
+import { optionsFromDocument } from '@/lib/form/options'
+import { optionsRequest, unwrapOptionsResult } from '../options'
 import { detailRequest } from './detail'
 import { ExampleForm, type ExampleFormInitialValues } from './edit-form'
 
@@ -213,8 +214,8 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
           <CardContent>
             <ExampleForm
               action={updateExampleAction.bind(null, id)}
-              categories={optionsFromDocument(categories)}
-              tags={optionsFromDocument(tags)}
+              categories={optionsFromDocument(categoriesResource, categories)}
+              tags={optionsFromDocument(tagsResource, tags)}
               initialValues={initialValues}
             />
           </CardContent>
@@ -231,7 +232,9 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
                   {categoryTarget === null ? (
                     <EmptyValue />
                   ) : (
-                    <Badge variant="outline">{relationshipLabel(categoryTarget)}</Badge>
+                    <Badge variant="outline">
+                      {relationshipLabel(categoryTarget, categoriesResource.heading)}
+                    </Badge>
                   )}
                 </MetaField>
                 <MetaField label="라벨">
@@ -240,7 +243,7 @@ export default async function ExampleDetailPage({ params }: { params: Promise<{ 
                   ) : (
                     tagTargets.map((target) => (
                       <Badge key={target.id} variant="outline">
-                        {relationshipLabel(target)}
+                        {relationshipLabel(target, tagsResource.heading)}
                       </Badge>
                     ))
                   )}

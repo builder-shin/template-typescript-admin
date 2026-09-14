@@ -9,7 +9,8 @@ import { resourceByType } from '@/lib/resources'
 import { messageForReadFailure } from '../../read-result'
 import { createExampleAction } from '../actions'
 import { ExampleForm } from '../[id]/edit-form'
-import { optionsFromDocument, optionsRequest, unwrapOptionsResult } from '../options'
+import { optionsFromDocument } from '@/lib/form/options'
+import { optionsRequest, unwrapOptionsResult } from '../options'
 
 /**
  * `examples` 생성 화면 - 폼 자체는 `[id]/edit-form.tsx` 의 `ExampleForm` 을
@@ -66,8 +67,8 @@ export default async function NewExamplePage() {
 
       <ExampleForm
         action={createExampleAction}
-        categories={optionsFromDocument(categories)}
-        tags={optionsFromDocument(tags)}
+        categories={optionsFromDocument(categoriesResource, categories)}
+        tags={optionsFromDocument(tagsResource, tags)}
       />
     </div>
   )

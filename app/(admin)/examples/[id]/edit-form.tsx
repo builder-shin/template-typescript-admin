@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { resourceByType } from '@/lib/resources'
-import type { OptionItem } from '../options'
+import type { OptionItem } from '@/lib/form/options'
 import {
   CATEGORY_FIELD,
   DESCRIPTION_FIELD,

@@ -7,8 +7,9 @@ import { resourceByType } from '@/lib/resources'
 import { LOGIN_REDIRECT_PARAM } from '@/proxy'
 import { messageForReadFailure } from '../read-result'
 import { bulkDeleteExampleAction } from './actions'
+import { optionsFromDocument } from '@/lib/form/options'
 import { listRequest, toSearchParams } from './list'
-import { optionsFromDocument, optionsRequest } from './options'
+import { optionsRequest } from './options'
 
 /**
  * `examples` 목록 화면 - 이 파일에는 fetch 와 JSX 만 둔다.
@@ -85,7 +86,7 @@ export default async function ExamplesPage({
    */
   const categoryOptions =
     categoriesResult.ok && categoriesResult.document !== null
-      ? optionsFromDocument(categoriesResult.document)
+      ? optionsFromDocument(categoriesResource, categoriesResult.document)
       : []
 
   const currentQuery = currentParams.toString()
