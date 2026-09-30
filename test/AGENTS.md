@@ -71,6 +71,13 @@
 필요하지 않다는 것을 반영한다. `CI` 환경 변수가 있으면 `forbidOnly: true`가
 켜져 `test.only`가 남은 채로 커밋되면 CI가 실패한다.
 
+## 회전을 일으키는 쿠키는 `about:blank`에서 심는다
+
+만료 임박 access 쿠키처럼 `proxy.ts`의 회전을 일으키는 쿠키는 먼저
+`about:blank`로 이동한 뒤 심는다. 로그인 뒤 착지한 화면이 살아 있으면 그 화면의
+링크 prefetch가 심은 쿠키를 싣고 `proxy.ts`를 지나, 같은 refresh 토큰으로 회전이
+겹쳐 세션이 폐기된다. 근거와 실측은 `auth.spec.ts`의 `rotateOnce` 머리말에 있다.
+
 ## 검증과 의존성
 
 `pnpm test:e2e`(Playwright)가 이 디렉터리를 돈다. 의존성은 `docker`(compose
