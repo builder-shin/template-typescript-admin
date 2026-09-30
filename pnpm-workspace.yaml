@@ -1,0 +1,4 @@
+# pnpm 11 은 `.npmrc` 의 `engine-strict` 를 읽지 않는다 - `engines.node` 를 만족하지
+# 않는 Node 에서도 설치가 종료 코드 0 으로 끝난다(실측 2026-09-30, pnpm 11.22.0).
+# 이 자리에 둬야 `ERR_PNPM_UNSUPPORTED_ENGINE` 으로 설치가 실패한다.
+engineStrict: true
