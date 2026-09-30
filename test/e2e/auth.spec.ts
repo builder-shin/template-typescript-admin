@@ -115,11 +115,30 @@ function expectSessionCookieMaxAge(cookies: Cookie[], label: string): void {
  * 태운다. 위조하는 것은 **만료 시각 하나뿐**(앞의 epoch 숫자)이다 - 나머지
  * (구분자·인코딩·JWT)는 백엔드와 Next 가 만든 그대로라, 회전이 실제로
  * 일어났는지를 값 비교로 잴 수 있다.
+ *
+ * ## 심기 전에 `about:blank` 로 떠난다 - 앞 화면의 prefetch 와 경합한다
+ *
+ * 호출부는 로그인 직후 착지한 `/` 에서 이 함수를 부른다. 그 화면은 하이드레이션
+ * 뒤 링크 셋(`/examples`·`/categories`·`/tags`)을 한꺼번에 prefetch 하고, 그
+ * 요청들도 `proxy.ts` 를 지난다. 쿠키를 심은 **뒤에** 그것들이 나가면 같은
+ * refresh 토큰으로 회전이 여러 번 겹친다. 하나만 성공하고 나머지는 재사용
+ * 감지(proxy.ts 의 "요청 간 경합" 절)에 걸려 세션이 통째로 폐기되고, 두 쿠키가
+ * 지워진다.
+ *
+ * 실측(2026-10-01, Rails 스택): prefetch 는 착지 약 0.35초 뒤에 나간다. 심은
+ * 뒤 300·450·600ms 를 기다렸다 이동하게 하자 이 함수를 쓰는 테스트 둘을 4번씩
+ * 돌려 24번 중 23번이 "회전이 거절되면 두 쿠키가 지워진다" 로 죽었다(0·150ms
+ * 는 전부 통과). 기다리지 않으면 로컬에서는 이동이 prefetch 보다 먼저라 드러나지
+ * 않지만, 러너가 느리면 겹친다 - nextjs 템플릿의 같은 테스트가 2026-09-30 main
+ * CI 에서 이렇게 실패했다. 같은 조건에서 먼저 떠나면 24번이 전부 통과했다 -
+ * `about:blank` 에는 요청을 보낼 화면이 없다.
  */
 async function rotateOnce(
   page: Page,
   context: BrowserContext,
 ): Promise<{ accessBefore: string; refreshBefore: string; after: Cookie[] }> {
+  await page.goto('about:blank')
+
   const before = await sessionCookies(context)
   const accessBefore = cookieValue(before, 'session_access')
   const refreshBefore = cookieValue(before, 'session_refresh')
